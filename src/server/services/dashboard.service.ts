@@ -1,12 +1,12 @@
 import { DashboardStats } from "../../types.js";
-import { getShopifyStore } from "../data/mock-store.js";
+import { getShop } from "./shop.service.js";
 import { getMockProducts } from "../data/mock-products.js";
 import { getAgents } from "./agent-registry.service.js";
 import { getApprovals } from "./approval.service.js";
 import { getAuditLogs } from "./audit-log.service.js";
 
-export function getDashboardStats(): DashboardStats {
-  const store = getShopifyStore();
+export async function getDashboardStats(shopDomain?: string): Promise<DashboardStats> {
+  const store = await getShop(shopDomain);
   const agents = getAgents();
   const approvals = getApprovals();
   const auditLogs = getAuditLogs();

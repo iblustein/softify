@@ -47,12 +47,16 @@ export default function App() {
     setIsLoading(true);
     setErrorText(null);
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shopParam = urlParams.get("shop");
+      const shopQuery = shopParam ? `?shop=${encodeURIComponent(shopParam)}` : '';
+
       const [shopRes, agentsRes, approvalsRes, logsRes, statsRes] = await Promise.all([
-        fetch('/api/shop'),
+        fetch(`/api/shop${shopQuery}`),
         fetch('/api/agents'),
         fetch('/api/approvals'),
         fetch('/api/audit-logs'),
-        fetch('/api/dashboard-stats')
+        fetch(`/api/dashboard-stats${shopQuery}`)
       ]);
 
       if (!shopRes.ok || !agentsRes.ok || !approvalsRes.ok || !logsRes.ok || !statsRes.ok) {
@@ -80,15 +84,47 @@ export default function App() {
 
   // Trigger initial synchronization
   useEffect(() => {
-    fetchAllData();
-
-    // Handle query params on redirection callback
     const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get("shopify_connected") === "true") {
-      const shop = urlParams.get("shop") || "Store";
-      window.history.replaceState({}, document.title, window.location.pathname);
-      console.log(`[Shopify OAuth] Store ${shop} connected successfully via OAuth!`);
+    const shopParam = urlParams.get("shop");
+    const hostParam = urlParams.get("host");
+    const embeddedParam = urlParams.get("embedded");
+    const hmacParam = urlParams.get("hmac");
+    const timestampParam = urlParams.get("timestamp");
+
+    const isShopifyLaunch = Boolean(shopParam && (hostParam || embeddedParam || hmacParam || timestampParam));
+
+    async function checkOAuthAndSync() {
+      if (shopParam) {
+        try {
+          const res = await fetch(`/api/shopify/oauth/status?shop=${encodeURIComponent(shopParam)}`);
+          if (res.ok) {
+            const statusData = await res.json();
+            if (statusData.configured) {
+              if (!statusData.connected) {
+                // Redirect browser to trigger installation flow
+                window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(shopParam)}`;
+                return;
+              } else {
+                console.log(`[Shopify OAuth] Shop ${shopParam} is already connected. Loading storefront data.`);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error during Shopify launch verification:", err);
+        }
+      }
+
+      await fetchAllData();
+
+      // Handle query params on redirection callback
+      if (urlParams.get("shopify_connected") === "true") {
+        const shop = urlParams.get("shop") || "Store";
+        window.history.replaceState({}, document.title, window.location.pathname);
+        console.log(`[Shopify OAuth] Store ${shop} connected successfully via OAuth!`);
+      }
     }
+
+    checkOAuthAndSync();
   }, []);
 
   // Sync state stats after approvals/updates

@@ -21,15 +21,26 @@ router.get("/status", async (req, res) => {
   try {
     const configured = isShopifyOAuthConfigured();
     const repos = getRepositories();
+    const { shop } = req.query;
     
-    // Search for any active store connection for our sandbox tenant
-    const connections = await repos.stores.getStoreConnectionsByOrganizationId("demo-org-id");
-    const connectedStore = connections.find(c => c.status === "CONNECTED");
+    let connectedStore = null;
+    if (shop && typeof shop === "string") {
+      const normalized = normalizeShopDomain(shop);
+      const conn = await repos.stores.getStoreConnectionByUrl(normalized);
+      if (conn && conn.status === "CONNECTED") {
+        connectedStore = conn;
+      }
+    } else {
+      // Find any connected store for sandbox demo org
+      const connections = await repos.stores.getStoreConnectionsByOrganizationId("demo-org-id");
+      connectedStore = connections.find(c => c.status === "CONNECTED");
+    }
 
     res.json({
       configured,
       connected: Boolean(connectedStore),
-      shop: connectedStore ? connectedStore.storeUrl : null
+      shop: connectedStore ? connectedStore.storeUrl : null,
+      scopes: connectedStore ? connectedStore.scopes : []
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

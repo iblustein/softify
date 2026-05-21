@@ -3,10 +3,12 @@ import * as shopService from "../services/shop.service.js";
 
 const router = Router();
 
-router.get("/shop", (req, res) => {
+router.get("/shop", async (req, res) => {
   try {
-    const shop = shopService.getShop();
-    res.json(shop);
+    const { shop } = req.query;
+    const shopDomain = typeof shop === "string" ? shop : undefined;
+    const shopData = await shopService.getShop(shopDomain);
+    res.json(shopData);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -22,9 +24,9 @@ router.post("/shop/connect", (req, res) => {
   }
 });
 
-router.post("/shop/disconnect", (req, res) => {
+router.post("/shop/disconnect", async (req, res) => {
   try {
-    const result = shopService.disconnectShop();
+    const result = await shopService.disconnectShop();
     res.json({ success: true, store: result.store });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

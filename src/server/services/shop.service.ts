@@ -2,10 +2,49 @@ import { ShopifyStore } from "../../types.js";
 import { getShopifyStore, setShopifyStore } from "../data/mock-store.js";
 import { writeLog } from "./audit-log.service.js";
 
+import { getRepositories } from "../repositories/repository-provider.js";
+import { isShopifyOAuthConfigured } from "../config/shopify.config.js";
+
 // TODO: Migrate getShop, connectShop, and disconnectShop to StoreRepository under src/server/repositories/store.repository.ts
 // In the future, shop connections and status will be persisted in a relational database instead of in-memory mock-store data.
-export function getShop(): ShopifyStore {
-  return getShopifyStore();
+export async function getShop(shopDomain?: string): Promise<ShopifyStore> {
+  const current = getShopifyStore();
+  if (isShopifyOAuthConfigured()) {
+    try {
+      const repos = getRepositories();
+      let connectedStore = null;
+      if (shopDomain) {
+        const cleanShop = shopDomain.trim().toLowerCase();
+        connectedStore = await repos.stores.getStoreConnectionByUrl(cleanShop);
+        if (connectedStore && connectedStore.status !== "CONNECTED") {
+          connectedStore = null;
+        }
+      }
+      if (!connectedStore) {
+        const connections = await repos.stores.getStoreConnectionsByOrganizationId("demo-org-id");
+        connectedStore = connections.find(c => c.status === "CONNECTED");
+      }
+      if (connectedStore) {
+        const shopName = connectedStore.storeUrl.split(".")[0].replace(/[-_]/g, ' ')
+                          .replace(/\b\w/g, (c) => c.toUpperCase());
+        const synced: ShopifyStore = {
+          url: connectedStore.storeUrl,
+          name: shopName || "Shopify Store",
+          connected: true,
+          connectedAt: connectedStore.connectedAt,
+          plan: connectedStore.plan,
+          currency: connectedStore.currency,
+          scopes: connectedStore.scopes
+        };
+        // Update local mock store cache so subsequent tools/services match
+        setShopifyStore(synced);
+        return synced;
+      }
+    } catch (e) {
+      console.warn("[SHOP SERVICE] OAuth repository sync warning:", e);
+    }
+  }
+  return current;
 }
 
 // TODO: Connect real Shopify OAuth Handshake simulation for production
@@ -46,9 +85,23 @@ export function connectShop(url: string, scopes?: string[]): { success: boolean;
   return { success: true, store: updatedStore };
 }
 
-export function disconnectShop(): { success: boolean; store: ShopifyStore } {
+export async function disconnectShop(): Promise<{ success: boolean; store: ShopifyStore }> {
   const prevUrl = getShopifyStore().url;
   
+  if (isShopifyOAuthConfigured()) {
+    try {
+      const repos = getRepositories();
+      const connections = await repos.stores.getStoreConnectionsByOrganizationId("demo-org-id");
+      for (const conn of connections) {
+        if (conn.status === "CONNECTED") {
+          await repos.stores.updateStoreConnection(conn.id, { status: "DISCONNECTED" });
+        }
+      }
+    } catch (e) {
+      console.warn("[SHOP SERVICE] OAuth repository disconnect warning:", e);
+    }
+  }
+
   const disconnectedStore: ShopifyStore = {
     url: "",
     name: "",
