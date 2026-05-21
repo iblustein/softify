@@ -6,7 +6,7 @@ import { app } from "./app.js";
 
 dotenv.config();
 
-const PORT = 3000;
+const PORT = Number(process.env.PORT || 3000);
 
 async function startServer() {
   // Vite integration
@@ -25,7 +25,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`[Shopify AI Agent Control Center] Running at http://localhost:${PORT}`);
+    console.log(`[Shopify AI Agent Control Center] Listening on port ${PORT}`);
   });
 }
 

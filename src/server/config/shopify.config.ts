@@ -21,7 +21,7 @@ export function getShopifyConfig(): ShopifyConfig {
     .map(s => s.trim())
     .filter(Boolean);
     
-  const appUrl = process.env.SHOPIFY_APP_URL || "";
+  const appUrl = process.env.SHOPIFY_APP_URL || process.env.APP_URL || "";
   const oauthCallbackPath = process.env.SHOPIFY_OAUTH_CALLBACK_PATH || "/api/shopify/oauth/callback";
   const testShop = process.env.SHOPIFY_TEST_SHOP || "yambasurf-co-il.myshopify.com";
 
