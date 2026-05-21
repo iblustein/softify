@@ -1,0 +1,6 @@
+{
+  "name": "Shopify AI Agent Control Center",
+  "description": "SaaS prototype control center for managing connected storefront status, registry parameters, allowed tools, and authorizing agent updates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
