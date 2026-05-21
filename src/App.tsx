@@ -81,6 +81,14 @@ export default function App() {
   // Trigger initial synchronization
   useEffect(() => {
     fetchAllData();
+
+    // Handle query params on redirection callback
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("shopify_connected") === "true") {
+      const shop = urlParams.get("shop") || "Store";
+      window.history.replaceState({}, document.title, window.location.pathname);
+      console.log(`[Shopify OAuth] Store ${shop} connected successfully via OAuth!`);
+    }
   }, []);
 
   // Sync state stats after approvals/updates

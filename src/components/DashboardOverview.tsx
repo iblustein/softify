@@ -65,9 +65,25 @@ export default function DashboardOverview({
     );
   };
 
-  const handleConnectSubmit = (e: React.FormEvent) => {
+  const handleConnectSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeInput.trim()) return;
+
+    try {
+      const res = await fetch("/api/shopify/oauth/status");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.configured) {
+          // Redirect browser to trigger installation flow
+          window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(storeInput)}`;
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Could not check OAuth configuration status, falling back to mock connect:", err);
+    }
+
+    // Fallback to mock connect
     onConnect(storeInput, selectedScopes);
     setShowConnectForm(false);
   };
