@@ -8,7 +8,7 @@ import { ApprovalItem } from "../../types.js";
 export interface ExecuteToolResult {
   toolName: string;
   args: any;
-  status: 'success' | 'requires_approval';
+  status: 'success' | 'requires_approval' | 'failed';
   result: any;
   approvalId?: string;
 }
@@ -26,10 +26,30 @@ export interface ExecuteToolResult {
 export function executeTool(
   toolName: string,
   args: any,
-  agent: { id: string; name: string },
+  agent: { id: string; name: string; allowedTools: string[]; requiredScopes: string[] },
   customApprovalDetails?: { title: string; summary: string; before?: string }
 ): ExecuteToolResult {
   const cleanArgs = args || {};
+
+  // Verify toolName exists in agent.allowedTools
+  if (!agent.allowedTools || !agent.allowedTools.includes(toolName)) {
+    writeLog(
+      agent.name,
+      "TOOL_BLOCKED",
+      `Tool \`${toolName}\` blocked: Not allowed for agent \`${agent.name}\``,
+      { toolName, args: cleanArgs }
+    );
+    return {
+      toolName,
+      args: cleanArgs,
+      status: "failed",
+      result: {
+        error: "Tool not allowed for this agent"
+      }
+    };
+  }
+
+  // TODO: Scope validation. Verify if the agent possesses the required Shopify scope in agent.requiredScopes.
 
   // Standard logging for tool execution
   writeLog(agent.name, "TOOL_CALL", `Executed SDK Gateway task: \`${toolName}\``, { args: cleanArgs });
@@ -139,6 +159,13 @@ export function executeTool(
     }
 
     default:
-      throw new Error(`Tool ${toolName} not supported in gateway`);
+      return {
+        toolName,
+        args: cleanArgs,
+        status: "failed",
+        result: {
+          error: `Tool ${toolName} not supported in gateway`
+        }
+      };
   }
 }
