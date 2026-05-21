@@ -10,6 +10,15 @@ import { setAuditLogs, getAuditLogs, writeLog } from "./audit-log.service.js";
 import { getGeminiSDK } from "./gemini.service.js";
 import { executeTool } from "../tools/tool-gateway.js";
 
+function buildToolFailureResponse(agentName: string, toolName: string): string {
+  return `⚠️ **Security Policy Blocked Action:**
+  
+  I attempted to execute the tool \`${toolName}\` to process your request, but the action was blocked by the Tool Gateway policy.
+  
+  * **Reason:** This tool is not in the allowed tools list for the **${agentName}**.
+  * **Enforcement:** The gateway blocked execution and logged a \`TOOL_BLOCKED\` security event in the audit trail.`;
+}
+
 // Deterministic fallback response simulation
 export function fallbackOrchestration(prompt: string, selectedAgentId?: string): OrchestrationMessage[] {
   const normPrompt = prompt.toLowerCase();
@@ -69,16 +78,20 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     const gatewayResult = executeTool("shopify.getSalesSummary", {}, agent);
     mockCalls.push(gatewayResult);
     
-    agentResponseText = `📊 **Sales Summary & Analysis Report:**
-    
-    I have retrieved the sales summary from the Shopify store via \`shopify.getSalesSummary\`. Here are the active insights:
-    * **Weekly Revenue:** $5,340.00 across high-performing days.
-    * **Store Conversion Rate:** **${gatewayResult.result.conversionRate}** (above industry average).
-    * **Top Product Performance:**
-      - **Eco Linen Warm Shirt** (${gatewayResult.result.popularProducts[0].salesCount} units) generating **$${gatewayResult.result.popularProducts[0].revenue}**.
-      - **Silk Contour Sleep Mask** (${gatewayResult.result.popularProducts[1].salesCount} units).
-    
-    Current trends demonstrate organic lift on weekends. Inventory levels are stable, although a replenishment trigger is recommended for **Full-grain Leather Backpack** soon.`;
+    if (gatewayResult.status === "failed") {
+      agentResponseText = buildToolFailureResponse(agent.name, "shopify.getSalesSummary");
+    } else {
+      agentResponseText = `📊 **Sales Summary & Analysis Report:**
+      
+      I have retrieved the sales summary from the Shopify store via \`shopify.getSalesSummary\`. Here are the active insights:
+      * **Weekly Revenue:** $5,340.00 across high-performing days.
+      * **Store Conversion Rate:** **${gatewayResult.result.conversionRate}** (above industry average).
+      * **Top Product Performance:**
+        - **Eco Linen Warm Shirt** (${gatewayResult.result.popularProducts[0].salesCount} units) generating **$${gatewayResult.result.popularProducts[0].revenue}**.
+        - **Silk Contour Sleep Mask** (${gatewayResult.result.popularProducts[1].salesCount} units).
+      
+      Current trends demonstrate organic lift on weekends. Inventory levels are stable, although a replenishment trigger is recommended for **Full-grain Leather Backpack** soon.`;
+    }
   } 
 
   else if (agent.id === "agent_content") {
@@ -95,27 +108,35 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     const getProdResult = executeTool("shopify.getProducts", {}, agent);
     mockCalls.push(getProdResult);
 
-    const rawAfterStr = `✨ **POLISHED REVISED COPY: ${targetProduct.title}**\n\nExperience elevated comfort with this premium, meticulously crafted garment. Made of 100% natural, sustainable organic flax linen for lightweight breathability. Complete with high-durability structured tailoring, this wardrobe essential bridges relaxed everyday wear and refined office aesthetics with absolute ease.`;
+    if (getProdResult.status === "failed") {
+      agentResponseText = buildToolFailureResponse(agent.name, "shopify.getProducts");
+    } else {
+      const rawAfterStr = `✨ **POLISHED REVISED COPY: ${targetProduct.title}**\n\nExperience elevated comfort with this premium, meticulously crafted garment. Made of 100% natural, sustainable organic flax linen for lightweight breathability. Complete with high-durability structured tailoring, this wardrobe essential bridges relaxed everyday wear and refined office aesthetics with absolute ease.`;
 
-    const approvalResult = executeTool("shopify.prepareProductUpdate", {
-      productId: targetProduct.id,
-      fields: { description: rawAfterStr }
-    }, agent, {
-      title: `Optimize description copy for ${targetProduct.title}`,
-      before: targetProduct.description,
-      summary: "Overhauled boilerplate descriptions to incorporate rich lifestyle hooks, highlights about lightweight breathability, and SEO-dense terminology."
-    });
-    mockCalls.push(approvalResult);
+      const approvalResult = executeTool("shopify.prepareProductUpdate", {
+        productId: targetProduct.id,
+        fields: { description: rawAfterStr }
+      }, agent, {
+        title: `Optimize description copy for ${targetProduct.title}`,
+        before: targetProduct.description,
+        summary: "Overhauled boilerplate descriptions to incorporate rich lifestyle hooks, highlights about lightweight breathability, and SEO-dense terminology."
+      });
+      mockCalls.push(approvalResult);
 
-    agentResponseText = `✍️ **Optimized SEO Product Copy Ready for Handshake**
-    
-    I inspected your product catalog using \`shopify.getProducts\`. To optimize your catalog's checkout metrics, I drafted an SEO-enriched description for **${targetProduct.title}** and queued a secure write action.
-    
-    * **Proposed Content Enhancement:**
-    ${rawAfterStr.split("\n\n").map(p => `> ${p}`).join("\n")}
-    
-    * **Security Gate Activated:**
-    Since this is a write-capable action, the Tool Gateway blocked live deployment to Shopify. I have created a pending action **${approvalResult.approvalId}** in your Approval Queue. Please audit and accept or decline this change in your central dashboard tab.`;
+      if (approvalResult.status === "failed") {
+        agentResponseText = buildToolFailureResponse(agent.name, "shopify.prepareProductUpdate");
+      } else {
+        agentResponseText = `✍️ **Optimized SEO Product Copy Ready for Handshake**
+        
+        I inspected your product catalog using \`shopify.getProducts\`. To optimize your catalog's checkout metrics, I drafted an SEO-enriched description for **${targetProduct.title}** and queued a secure write action.
+        
+        * **Proposed Content Enhancement:**
+        ${rawAfterStr.split("\n\n").map(p => `> ${p}`).join("\n")}
+        
+        * **Security Gate Activated:**
+        Since this is a write-capable action, the Tool Gateway blocked live deployment to Shopify. I have created a pending action **${approvalResult.approvalId}** in your Approval Queue. Please audit and accept or decline this change in your central dashboard tab.`;
+      }
+    }
   }
 
   else if (agent.id === "agent_theme_dev" || agent.id === "agent_design") {
@@ -131,43 +152,55 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     });
     mockCalls.push(approvalResult);
 
-    agentResponseText = `🎨 **Layout Adjustments Proposed**
-    
-    I analyzed the Shopify store's style hooks using \`shopify.getShopInfo\`. To create a highly premium storefront feel, I drafted a theme layout override patch and logged it in the Tool Gateway.
-    
-    * **Calculated Theme Patch:**
-    \`\`\`css
-    ${patchCode}
-    \`\`\`
-    
-    Since this update changes your active storefront aesthetics, the rewrite is paused. I've sent item **${approvalResult.approvalId}** to the **Approval Queue** for your direct authorization.`;
+    if (approvalResult.status === "failed") {
+      agentResponseText = buildToolFailureResponse(agent.name, "shopify.prepareThemePatch");
+    } else {
+      agentResponseText = `🎨 **Layout Adjustments Proposed**
+      
+      I analyzed the Shopify store's style hooks using \`shopify.getShopInfo\`. To create a highly premium storefront feel, I drafted a theme layout override patch and logged it in the Tool Gateway.
+      
+      * **Calculated Theme Patch:**
+      \`\`\`css
+      ${patchCode}
+      \`\`\`
+      
+      Since this update changes your active storefront aesthetics, the rewrite is paused. I've sent item **${approvalResult.approvalId}** to the **Approval Queue** for your direct authorization.`;
+    }
   }
 
   else {
     // Setup, Support, or Media Agent Generic Responses
     let actionItem = "general context lookup";
     let gatewayResult;
+    let toolName = "shopify.getProducts";
     if (agent.id === "agent_store_setup") {
       actionItem = "Shopify parameters configuration check";
+      toolName = "shopify.getShopInfo";
       gatewayResult = executeTool("shopify.getShopInfo", {}, agent);
       mockCalls.push(gatewayResult);
     } else if (agent.id === "agent_customer_support") {
       actionItem = "customer order audits";
+      toolName = "shopify.getOrders";
       gatewayResult = executeTool("shopify.getOrders", {}, agent);
       mockCalls.push(gatewayResult);
     } else {
       actionItem = "media layout scan";
+      toolName = "shopify.getProducts";
       gatewayResult = executeTool("shopify.getProducts", {}, agent);
       mockCalls.push(gatewayResult);
     }
 
-    agentResponseText = `🤖 **Greetings! I am the ${agent.name}.**
-    
-    I have processed your query: *"${prompt}"*. 
-    To fulfill this request, I activated my assigned resources. Our security layer was triggered, verifying correct scopes (\`${agent.requiredScopes.join(", ")}\`) before delegating tasks.
-    
-    * **Action Completed:** Conducted ${actionItem} securely in isolation.
-    * **Audit Complete:** Access logs have been captured in your global Audit Trail records. Let me know if you would like me to draft further actions!`;
+    if (gatewayResult.status === "failed") {
+      agentResponseText = buildToolFailureResponse(agent.name, toolName);
+    } else {
+      agentResponseText = `🤖 **Greetings! I am the ${agent.name}.**
+      
+      I have processed your query: *"${prompt}"*. 
+      To fulfill this request, I activated my assigned resources. Our security layer was triggered, verifying correct scopes (\`${agent.requiredScopes.join(", ")}\`) before delegating tasks.
+      
+      * **Action Completed:** Conducted ${actionItem} securely in isolation.
+      * **Audit Complete:** Access logs have been captured in your global Audit Trail records. Let me know if you would like me to draft further actions!`;
+    }
   }
 
   // Orchestrator response
