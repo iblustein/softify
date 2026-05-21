@@ -11,12 +11,12 @@ import { getGeminiSDK } from "./gemini.service.js";
 import { executeTool, executeToolWithContext } from "../tools/tool-gateway.js";
 import { getDemoToolExecutionContext } from "./tool-execution-context.service.js";
 
-function buildToolFailureResponse(agentName: string, toolName: string): string {
+function buildToolFailureResponse(agentName: string, toolName: string, errorMessage: string): string {
   return `⚠️ **Security Policy Blocked Action:**
   
   I attempted to execute the tool \`${toolName}\` to process your request, but the action was blocked by the Tool Gateway policy.
   
-  * **Reason:** This tool is not in the allowed tools list for the **${agentName}**.
+  * **Reason:** ${errorMessage}
   * **Enforcement:** The gateway blocked execution and logged a \`TOOL_BLOCKED\` security event in the audit trail.`;
 }
 
@@ -87,7 +87,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     mockCalls.push(gatewayResult);
     
     if (gatewayResult.status === "failed") {
-      agentResponseText = buildToolFailureResponse(agent.name, "shopify.getSalesSummary");
+      agentResponseText = buildToolFailureResponse(agent.name, "shopify.getSalesSummary", gatewayResult.result.error);
     } else {
       agentResponseText = `📊 **Sales Summary & Analysis Report:**
       
@@ -117,7 +117,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     mockCalls.push(getProdResult);
 
     if (getProdResult.status === "failed") {
-      agentResponseText = buildToolFailureResponse(agent.name, "shopify.getProducts");
+      agentResponseText = buildToolFailureResponse(agent.name, "shopify.getProducts", getProdResult.result.error);
     } else {
       const rawAfterStr = `✨ **POLISHED REVISED COPY: ${targetProduct.title}**\n\nExperience elevated comfort with this premium, meticulously crafted garment. Made of 100% natural, sustainable organic flax linen for lightweight breathability. Complete with high-durability structured tailoring, this wardrobe essential bridges relaxed everyday wear and refined office aesthetics with absolute ease.`;
 
@@ -132,7 +132,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
       mockCalls.push(approvalResult);
 
       if (approvalResult.status === "failed") {
-        agentResponseText = buildToolFailureResponse(agent.name, "shopify.prepareProductUpdate");
+        agentResponseText = buildToolFailureResponse(agent.name, "shopify.prepareProductUpdate", approvalResult.result.error);
       } else {
         agentResponseText = `✍️ **Optimized SEO Product Copy Ready for Handshake**
         
@@ -161,7 +161,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     mockCalls.push(approvalResult);
 
     if (approvalResult.status === "failed") {
-      agentResponseText = buildToolFailureResponse(agent.name, "shopify.prepareThemePatch");
+      agentResponseText = buildToolFailureResponse(agent.name, "shopify.prepareThemePatch", approvalResult.result.error);
     } else {
       agentResponseText = `🎨 **Layout Adjustments Proposed**
       
@@ -199,7 +199,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     }
 
     if (gatewayResult.status === "failed") {
-      agentResponseText = buildToolFailureResponse(agent.name, toolName);
+      agentResponseText = buildToolFailureResponse(agent.name, toolName, gatewayResult.result.error);
     } else {
       agentResponseText = `🤖 **Greetings! I am the ${agent.name}.**
       
