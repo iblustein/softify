@@ -8,7 +8,8 @@ import { getActiveThemeCode, setActiveThemeCode } from "../data/mock-theme.js";
 import { setApprovals, getApprovals } from "./approval.service.js";
 import { setAuditLogs, getAuditLogs, writeLog } from "./audit-log.service.js";
 import { getGeminiSDK } from "./gemini.service.js";
-import { executeTool } from "../tools/tool-gateway.js";
+import { executeTool, executeToolWithContext } from "../tools/tool-gateway.js";
+import { getDemoToolExecutionContext } from "./tool-execution-context.service.js";
 
 function buildToolFailureResponse(agentName: string, toolName: string): string {
   return `⚠️ **Security Policy Blocked Action:**
@@ -51,6 +52,13 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
   const resultMessages: OrchestrationMessage[] = [];
   const messageTimestamp = new Date().toISOString();
 
+  // Load and synchronize tool execution context
+  const toolContext = getDemoToolExecutionContext(agent.id);
+  toolContext.agentInstallation.enabled = agent.enabled;
+  const store = getShopifyStore();
+  toolContext.storeConnection.status = store.connected ? "CONNECTED" : "DISCONNECTED";
+  toolContext.agentDefinition.allowedTools = agent.allowedTools;
+
   // Route log
   writeLog(
     "Super Agent Orchestrator",
@@ -75,7 +83,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
   const mockCalls: any[] = [];
 
   if (agent.id === "agent_analytics") {
-    const gatewayResult = executeTool("shopify.getSalesSummary", {}, agent);
+    const gatewayResult = executeToolWithContext("shopify.getSalesSummary", {}, toolContext);
     mockCalls.push(gatewayResult);
     
     if (gatewayResult.status === "failed") {
@@ -105,7 +113,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
       }
     }
 
-    const getProdResult = executeTool("shopify.getProducts", {}, agent);
+    const getProdResult = executeToolWithContext("shopify.getProducts", {}, toolContext);
     mockCalls.push(getProdResult);
 
     if (getProdResult.status === "failed") {
@@ -113,10 +121,10 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     } else {
       const rawAfterStr = `✨ **POLISHED REVISED COPY: ${targetProduct.title}**\n\nExperience elevated comfort with this premium, meticulously crafted garment. Made of 100% natural, sustainable organic flax linen for lightweight breathability. Complete with high-durability structured tailoring, this wardrobe essential bridges relaxed everyday wear and refined office aesthetics with absolute ease.`;
 
-      const approvalResult = executeTool("shopify.prepareProductUpdate", {
+      const approvalResult = executeToolWithContext("shopify.prepareProductUpdate", {
         productId: targetProduct.id,
         fields: { description: rawAfterStr }
-      }, agent, {
+      }, toolContext, {
         title: `Optimize description copy for ${targetProduct.title}`,
         before: targetProduct.description,
         summary: "Overhauled boilerplate descriptions to incorporate rich lifestyle hooks, highlights about lightweight breathability, and SEO-dense terminology."
@@ -142,10 +150,10 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
   else if (agent.id === "agent_theme_dev" || agent.id === "agent_design") {
     const patchCode = `/* ${agent.name} Optimizations - Active */\n.btn-primary {\n  background-color: #0c1821;\n  letter-spacing: 0.05em;\n  transition: duration 300ms ease;\n}`;
 
-    const approvalResult = executeTool("shopify.prepareThemePatch", {
+    const approvalResult = executeToolWithContext("shopify.prepareThemePatch", {
       themeId: "main_theme",
       patch: patchCode
-    }, agent, {
+    }, toolContext, {
       title: `Asset layout update via ${agent.name}`,
       summary: "Inserted CSS overrides to add sleek graphite buttons with fluid responsive scaling transitions.",
       before: "/* Default CSS declarations in theme files */"
@@ -176,17 +184,17 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     if (agent.id === "agent_store_setup") {
       actionItem = "Shopify parameters configuration check";
       toolName = "shopify.getShopInfo";
-      gatewayResult = executeTool("shopify.getShopInfo", {}, agent);
+      gatewayResult = executeToolWithContext("shopify.getShopInfo", {}, toolContext);
       mockCalls.push(gatewayResult);
     } else if (agent.id === "agent_customer_support") {
       actionItem = "customer order audits";
       toolName = "shopify.getOrders";
-      gatewayResult = executeTool("shopify.getOrders", {}, agent);
+      gatewayResult = executeToolWithContext("shopify.getOrders", {}, toolContext);
       mockCalls.push(gatewayResult);
     } else {
       actionItem = "media layout scan";
       toolName = "shopify.getProducts";
-      gatewayResult = executeTool("shopify.getProducts", {}, agent);
+      gatewayResult = executeToolWithContext("shopify.getProducts", {}, toolContext);
       mockCalls.push(gatewayResult);
     }
 

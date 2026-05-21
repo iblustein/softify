@@ -2,8 +2,8 @@ import * as mockTools from "./mock-shopify-tools.js";
 import { createApproval } from "../services/approval.service.js";
 import { writeLog } from "../services/audit-log.service.js";
 import { getMockProducts } from "../data/mock-products.js";
-import { getShopifyStore } from "../data/mock-store.js";
-import { ApprovalItem } from "../../types.js";
+import { getDemoPlatformContext } from "../services/platform-context.service.js";
+import { ToolExecutionContext } from "../services/tool-execution-context.service.js";
 
 export interface ExecuteToolResult {
   toolName: string;
@@ -13,46 +13,173 @@ export interface ExecuteToolResult {
   approvalId?: string;
 }
 
+export interface ValidationResult {
+  isValid: boolean;
+  error?: string;
+  reason?: string;
+}
+
 /**
- * Tool Gateway: Unified execution gate for all AI agent tool calls.
- * 
- * TODO: Future enforcement point for:
- *  - Scope and permissions check (e.g., verifying if the agent possesses the required Shopify scope)
- *  - Risk policy checks (e.g., restricting High risk agents from making unauthorized write commands)
- *  - Centralized approval policy enforcement
- *  - Encrypted token verification
- *  - Direct routing to the real Shopify GraphQL Admin API / REST Admin API
+ * Type guard to check if an object is a ToolExecutionContext.
  */
-export function executeTool(
+export function isToolExecutionContext(obj: any): obj is ToolExecutionContext {
+  return obj && typeof obj === "object" && "agentDefinition" in obj && "agentInstallation" in obj;
+}
+
+/**
+ * Separate context validation into a helper function.
+ * Validates in the exact requested order:
+ *  1. agent installation disabled
+ *  2. store disconnected
+ *  3. tool not registered in enabledTools
+ *  4. tool not allowed by agentDefinition.allowedTools
+ *  5. TODO: Shopify scope validation
+ *  6. TODO: billing / plan enforcement
+ */
+export function validateToolExecutionContext(toolName: string, context: ToolExecutionContext): ValidationResult {
+  // 1. Agent installation disabled check
+  if (!context.agentInstallation.enabled) {
+    return {
+      isValid: false,
+      error: `Agent installation is disabled for agent ${context.agentDefinition.name}`,
+      reason: "agent_installation_disabled"
+    };
+  }
+
+  // 2. Store disconnected check
+  if (context.storeConnection.status !== "CONNECTED") {
+    return {
+      isValid: false,
+      error: `Shopify store ${context.storeConnection.storeUrl} is disconnected`,
+      reason: "store_disconnected"
+    };
+  }
+
+  // 3. Tool not registered in enabledTools check
+  const isEnabled = context.enabledTools.some(t => t.name === toolName);
+  if (!isEnabled) {
+    return {
+      isValid: false,
+      error: `Tool ${toolName} is not enabled on this platform`,
+      reason: "tool_not_enabled"
+    };
+  }
+
+  // 4. Tool not allowed by agentDefinition.allowedTools check
+  if (!context.agentDefinition.allowedTools || !context.agentDefinition.allowedTools.includes(toolName)) {
+    return {
+      isValid: false,
+      error: "Tool not allowed for this agent",
+      reason: "tool_not_allowed"
+    };
+  }
+
+  // TODO: Shopify scope validation (verify agent required scopes map onto store connection scopes)
+  // TODO: billing / plan enforcement (verify monthly quotas or tier limits)
+
+  return { isValid: true };
+}
+
+/**
+ * Build a compatibility context around legacy agent objects.
+ */
+function buildCompatibilityContext(
+  agent: { id: string; name: string; allowedTools: string[]; requiredScopes: string[] }
+): ToolExecutionContext {
+  const platformContext = getDemoPlatformContext();
+
+  let agentDefinition = platformContext.agentDefinitions.find(d => d.id === agent.id);
+  if (!agentDefinition) {
+    agentDefinition = {
+      id: agent.id,
+      name: agent.name,
+      description: "",
+      systemInstruction: "",
+      allowedTools: agent.allowedTools,
+      requiredScopes: agent.requiredScopes,
+      riskLevel: "Medium",
+      avatarColor: "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  } else {
+    // Override allowedTools and requiredScopes to align with any in-memory session changes made by callers
+    agentDefinition = {
+      ...agentDefinition,
+      allowedTools: agent.allowedTools,
+      requiredScopes: agent.requiredScopes
+    };
+  }
+
+  let agentInstallation = platformContext.agentInstallations.find(i => i.agentDefinitionId === agent.id);
+  if (!agentInstallation) {
+    agentInstallation = {
+      id: `inst_${agent.id}`,
+      organizationId: platformContext.currentOrganization.id,
+      storeConnectionId: platformContext.storeConnection.id,
+      agentDefinitionId: agent.id,
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  return {
+    currentUser: platformContext.currentUser,
+    currentOrganization: platformContext.currentOrganization,
+    storeConnection: platformContext.storeConnection,
+    agentDefinition,
+    agentInstallation,
+    enabledTools: platformContext.enabledTools
+  };
+}
+
+/**
+ * Preferred new tool execution path that validates against a full ToolExecutionContext.
+ */
+export function executeToolWithContext(
   toolName: string,
   args: any,
-  agent: { id: string; name: string; allowedTools: string[]; requiredScopes: string[] },
+  context: ToolExecutionContext,
   customApprovalDetails?: { title: string; summary: string; before?: string }
 ): ExecuteToolResult {
   const cleanArgs = args || {};
 
-  // Verify toolName exists in agent.allowedTools
-  if (!agent.allowedTools || !agent.allowedTools.includes(toolName)) {
+  // Run validation
+  const validation = validateToolExecutionContext(toolName, context);
+  if (!validation.isValid) {
     writeLog(
-      agent.name,
+      context.agentDefinition.name,
       "TOOL_BLOCKED",
-      `Tool \`${toolName}\` blocked: Not allowed for agent \`${agent.name}\``,
-      { toolName, args: cleanArgs }
+      `Tool \`${toolName}\` blocked: ${validation.error}`,
+      {
+        toolName,
+        reason: validation.reason,
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentDefinitionId: context.agentDefinition.id,
+        agentInstallationId: context.agentInstallation.id,
+        args: cleanArgs
+      }
     );
+
     return {
       toolName,
       args: cleanArgs,
       status: "failed",
       result: {
-        error: "Tool not allowed for this agent"
+        error: validation.error || "Tool blocked by platform context safety policies"
       }
     };
   }
 
-  // TODO: Scope validation. Verify if the agent possesses the required Shopify scope in agent.requiredScopes.
-
   // Standard logging for tool execution
-  writeLog(agent.name, "TOOL_CALL", `Executed SDK Gateway task: \`${toolName}\``, { args: cleanArgs });
+  writeLog(
+    context.agentDefinition.name,
+    "TOOL_CALL",
+    `Executed SDK Gateway task: \`${toolName}\` for store ${context.storeConnection.storeUrl}`,
+    { args: cleanArgs }
+  );
 
   switch (toolName) {
     case "shopify.getShopInfo": {
@@ -90,8 +217,8 @@ export function executeTool(
 
       // Register approval
       const approval = createApproval({
-        agentId: agent.id,
-        agentName: agent.name,
+        agentId: context.agentDefinition.id,
+        agentName: context.agentDefinition.name,
         actionType: "PRODUCT_UPDATE",
         targetId: String(productId),
         details: {
@@ -105,7 +232,12 @@ export function executeTool(
       });
 
       // Standard logging for approval creation
-      writeLog(agent.name, "APPROVAL_CREATED", `Added manual audit item ${approval.id} for product ${productId}`, { approvalId: approval.id });
+      writeLog(
+        context.agentDefinition.name,
+        "APPROVAL_CREATED",
+        `Added manual audit item ${approval.id} for product ${productId}`,
+        { approvalId: approval.id }
+      );
 
       return {
         toolName,
@@ -129,8 +261,8 @@ export function executeTool(
 
       // Register approval
       const approval = createApproval({
-        agentId: agent.id,
-        agentName: agent.name,
+        agentId: context.agentDefinition.id,
+        agentName: context.agentDefinition.name,
         actionType: "THEME_PATCH",
         targetId: themeId,
         details: {
@@ -144,7 +276,12 @@ export function executeTool(
       });
 
       // Standard logging for approval creation
-      writeLog(agent.name, "APPROVAL_CREATED", `Added manual CSS overhaul task ${approval.id}`, { approvalId: approval.id });
+      writeLog(
+        context.agentDefinition.name,
+        "APPROVAL_CREATED",
+        `Added manual CSS overhaul task ${approval.id}`,
+        { approvalId: approval.id }
+      );
 
       return {
         toolName,
@@ -168,4 +305,22 @@ export function executeTool(
         }
       };
   }
+}
+
+/**
+ * Unified execution gate for all AI agent tool calls.
+ * Kept fully backward compatible with the current legacy signature.
+ */
+export function executeTool(
+  toolName: string,
+  args: any,
+  agentOrContext: { id: string; name: string; allowedTools: string[]; requiredScopes: string[] } | ToolExecutionContext,
+  customApprovalDetails?: { title: string; summary: string; before?: string }
+): ExecuteToolResult {
+  if (isToolExecutionContext(agentOrContext)) {
+    return executeToolWithContext(toolName, args, agentOrContext, customApprovalDetails);
+  }
+
+  const context = buildCompatibilityContext(agentOrContext);
+  return executeToolWithContext(toolName, args, context, customApprovalDetails);
 }
