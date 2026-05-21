@@ -85,7 +85,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
   if (agent.id === "agent_analytics") {
     const gatewayResult = executeToolWithContext("shopify.getSalesSummary", {}, toolContext);
     mockCalls.push(gatewayResult);
-    
+
     if (gatewayResult.status === "failed") {
       agentResponseText = buildToolFailureResponse(agent.name, "shopify.getSalesSummary", gatewayResult.result.error);
     } else {
@@ -100,7 +100,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
       
       Current trends demonstrate organic lift on weekends. Inventory levels are stable, although a replenishment trigger is recommended for **Full-grain Leather Backpack** soon.`;
     }
-  } 
+  }
 
   else if (agent.id === "agent_content") {
     // Determine which product to edit
@@ -353,11 +353,11 @@ export async function orchestrate(prompt: string, selectedAgentId?: string): Pro
 
     // Process tool invocations and map to frontend representation
     const frontendInvocations: any[] = [];
-    
+
     if (resultObj.toolCalls && Array.isArray(resultObj.toolCalls)) {
       for (const call of resultObj.toolCalls) {
         const gatewayResult = executeTool(call.name, call.args, matchedAgent);
-        
+
         frontendInvocations.push({
           toolName: gatewayResult.toolName,
           args: gatewayResult.args,
@@ -389,7 +389,7 @@ export async function orchestrate(prompt: string, selectedAgentId?: string): Pro
 
   } catch (error: any) {
     console.error("Gemini Orchestration Error: ", error);
-    
+
     // Smooth recovery & fallback log
     return fallbackOrchestration(prompt, selectedAgentId);
   }
