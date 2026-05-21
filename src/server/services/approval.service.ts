@@ -4,6 +4,7 @@ import { getActiveThemeCode, setActiveThemeCode } from "../data/mock-theme.js";
 import { writeLog } from "./audit-log.service.js";
 
 // TODO: Replace with a persistent database (e.g., PostgreSQL or MongoDB) for production
+// TODO: Migrate approvalQueue operations (createApproval, decideApproval) to ApprovalRepository under src/server/repositories/approval.repository.ts
 export let approvalQueue: ApprovalItem[] = [
   {
     id: "APV-001",

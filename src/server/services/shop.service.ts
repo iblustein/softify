@@ -2,6 +2,8 @@ import { ShopifyStore } from "../../types.js";
 import { getShopifyStore, setShopifyStore } from "../data/mock-store.js";
 import { writeLog } from "./audit-log.service.js";
 
+// TODO: Migrate getShop, connectShop, and disconnectShop to StoreRepository under src/server/repositories/store.repository.ts
+// In the future, shop connections and status will be persisted in a relational database instead of in-memory mock-store data.
 export function getShop(): ShopifyStore {
   return getShopifyStore();
 }

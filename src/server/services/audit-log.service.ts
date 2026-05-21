@@ -3,6 +3,7 @@ import { getShopifyStore } from "../data/mock-store.js";
 import { getMockProducts } from "../data/mock-products.js";
 
 // TODO: Replace with a persistent database (e.g., PostgreSQL or MongoDB) for production
+// TODO: Migrate auditLogs, getAuditLogs, and writeLog to AuditRepository under src/server/repositories/audit.repository.ts
 export let auditLogs: AuditLog[] = [
   {
     id: "LOG-001",

@@ -2,6 +2,7 @@ import { Agent } from "../../types.js";
 import { writeLog } from "./audit-log.service.js";
 
 // TODO: Integrate with Gemini Managed Agents API (e.g. creating/configuring persistent remote agents)
+// TODO: Migrate agentsList, getAgents, getAgentById, and updateAgent to AgentInstallationRepository under src/server/repositories/agent-installation.repository.ts
 export let agentsList: Agent[] = [
   {
     id: "agent_store_setup",
