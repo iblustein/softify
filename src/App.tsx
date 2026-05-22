@@ -43,6 +43,8 @@ export default function App() {
   const [errorText, setErrorText] = useState<string | null>(null);
   const [shopifyLaunchShop, setShopifyLaunchShop] = useState<string | null>(null);
   const [needsShopifyConnection, setNeedsShopifyConnection] = useState<boolean>(false);
+  const [shopifyTestShop, setShopifyTestShop] = useState<string | null>(null);
+  const [isOAuthConfigured, setIsOAuthConfigured] = useState<boolean>(false);
 
   // Fetch core parameters
   const fetchAllData = async () => {
@@ -97,34 +99,58 @@ export default function App() {
 
     async function checkOAuthAndSync() {
       let isPendingConnection = false;
-      if (shopParam) {
-        setShopifyLaunchShop(shopParam);
-        try {
-          const res = await fetch(`/api/shopify/oauth/status?shop=${encodeURIComponent(shopParam)}`);
-          if (res.ok) {
-            const statusData = await res.json();
-            if (statusData.configured) {
-              if (!statusData.connected) {
+      let isConfigured = false;
+      let isConnected = false;
+      let fetchedTestShop: string | null = null;
+
+      try {
+        const shopQuery = shopParam ? `&shop=${encodeURIComponent(shopParam)}` : '';
+        const res = await fetch(`/api/shopify/oauth/status?check_setup=true${shopQuery}`);
+        if (res.ok) {
+          const statusData = await res.json();
+          isConfigured = statusData.configured;
+          isConnected = statusData.connected;
+          setIsOAuthConfigured(statusData.configured);
+          if (statusData.testShop) {
+            fetchedTestShop = statusData.testShop;
+            setShopifyTestShop(statusData.testShop);
+          }
+
+          if (isConfigured) {
+            console.log(`[Shopify OAuth] Configured. Connected: ${isConnected}, testShop: ${statusData.testShop}`);
+            if (shopParam) {
+              setShopifyLaunchShop(shopParam);
+              if (!isConnected) {
                 console.log(`[Shopify OAuth] Shop ${shopParam} is not connected. Setting needsShopifyConnection flag.`);
                 setNeedsShopifyConnection(true);
                 isPendingConnection = true;
-              } else {
-                console.log(`[Shopify OAuth] Shop ${shopParam} is already connected. Loading storefront data.`);
               }
+            } else if (!isConnected) {
+              console.log(`[Shopify OAuth] OAuth configured but no connected store found.`);
+              isPendingConnection = true;
             }
           }
-        } catch (err) {
-          console.error("Error during Shopify launch verification:", err);
         }
+      } catch (err) {
+        console.error("Error during Shopify status check:", err);
       }
 
       await fetchAllData();
 
-      if (isPendingConnection && shopParam) {
-        const cleanName = shopParam.split('.')[0].replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      // If OAuth is configured but not connected, force the frontend 'store' state to reflect a disconnected state!
+      if (isConfigured && !isConnected) {
+        // Prefill shop URL in store state
+        let prefillUrl = "";
+        if (shopParam) {
+          prefillUrl = shopParam;
+        } else if (fetchedTestShop) {
+          prefillUrl = fetchedTestShop;
+        }
+
+        const cleanName = prefillUrl ? prefillUrl.split('.')[0].replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : "";
         setStore({
-          url: shopParam,
-          name: cleanName || "Shopify Store",
+          url: prefillUrl,
+          name: cleanName || "Unconnected Store",
           connected: false,
           scopes: []
         });
@@ -165,17 +191,16 @@ export default function App() {
     setIsActionLoading(true);
     setErrorText(null);
     try {
-      // If OAuth is configured and a Shopify launch/current shop is known, redirect manually to installation
-      const checkShop = url || shopifyLaunchShop || "";
-      if (checkShop) {
-        const resStatus = await fetch(`/api/shopify/oauth/status?shop=${encodeURIComponent(checkShop)}`);
-        if (resStatus.ok) {
-          const statusData = await resStatus.json();
-          if (statusData.configured) {
-            console.log(`[Shopify OAuth] Redirecting manually to install for shop: ${checkShop}`);
-            window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(checkShop)}`;
-            return;
-          }
+      // Manual Connect Store should redirect to /api/shopify/oauth/install?shop=<entered-or-detected-shop> when OAuth is configured
+      if (isOAuthConfigured) {
+        // Priority: entered input value (url) -> Shopify launch shop param (shopifyLaunchShop) -> testShop only in dev/demo setup mode (shopifyTestShop)
+        const checkShop = url || shopifyLaunchShop || shopifyTestShop || "";
+        if (checkShop) {
+          console.log(`[Shopify OAuth] Redirecting manually to install for shop: ${checkShop}`);
+          window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(checkShop)}`;
+          return;
+        } else {
+          throw new Error("No shop domain was provided or detected.");
         }
       }
 
@@ -496,6 +521,8 @@ export default function App() {
               <DashboardOverview 
                 stats={stats} 
                 store={store} 
+                isOAuthConfigured={isOAuthConfigured}
+                testShop={shopifyTestShop}
                 onConnect={handleConnectStore} 
                 onDisconnect={handleDisconnectStore} 
                 onReset={handleResetDatabase}

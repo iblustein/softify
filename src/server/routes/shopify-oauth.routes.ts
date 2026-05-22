@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { isShopifyOAuthConfigured } from "../config/shopify.config.js";
+import { isShopifyOAuthConfigured, getShopifyConfig } from "../config/shopify.config.js";
 import {
   validateShopDomain,
   normalizeShopDomain,
@@ -21,7 +21,7 @@ router.get("/status", async (req, res) => {
   try {
     const configured = isShopifyOAuthConfigured();
     const repos = getRepositories();
-    const { shop } = req.query;
+    const { shop, check_setup } = req.query;
     
     let connectedStore = null;
     if (shop && typeof shop === "string") {
@@ -36,12 +36,18 @@ router.get("/status", async (req, res) => {
       connectedStore = connections.find(c => c.status === "CONNECTED");
     }
 
-    res.json({
+    const responseData: any = {
       configured,
       connected: Boolean(connectedStore),
       shop: connectedStore ? connectedStore.storeUrl : null,
       scopes: connectedStore ? connectedStore.scopes : []
-    });
+    };
+
+    if (check_setup === "true") {
+      responseData.testShop = getShopifyConfig().testShop;
+    }
+
+    res.json(responseData);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

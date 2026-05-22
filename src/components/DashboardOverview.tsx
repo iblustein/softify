@@ -22,6 +22,8 @@ interface DashboardOverviewProps {
   onDisconnect: () => void;
   onReset: () => void;
   isLoading: boolean;
+  isOAuthConfigured?: boolean;
+  testShop?: string | null;
 }
 
 const ALL_AVAILABLE_SCOPES = [
@@ -50,9 +52,19 @@ export default function DashboardOverview({
   onConnect,
   onDisconnect,
   onReset,
-  isLoading
+  isLoading,
+  isOAuthConfigured,
+  testShop
 }: DashboardOverviewProps) {
-  const [storeInput, setStoreInput] = useState(store.url || "glowthread-apparel.myshopify.com");
+  const [storeInput, setStoreInput] = useState(() => {
+    if (store.connected) {
+      return store.url;
+    }
+    if (isOAuthConfigured) {
+      return store.url || testShop || "";
+    }
+    return store.url || "glowthread-apparel.myshopify.com";
+  });
   const [selectedScopes, setSelectedScopes] = useState<string[]>(
     store.scopes.length > 0 ? store.scopes : ['read_products', 'read_orders']
   );
