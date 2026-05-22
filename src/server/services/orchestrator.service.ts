@@ -9,7 +9,7 @@ import { setApprovals, getApprovals } from "./approval.service.js";
 import { setAuditLogs, getAuditLogs, writeLog } from "./audit-log.service.js";
 import { getGeminiSDK } from "./gemini.service.js";
 import { executeTool, executeToolWithContext } from "../tools/tool-gateway.js";
-import { getDemoToolExecutionContext } from "./tool-execution-context.service.js";
+import { getDemoToolExecutionContext, getToolExecutionContextForShop } from "./tool-execution-context.service.js";
 
 function buildToolFailureResponse(agentName: string, toolName: string, errorMessage: string): string {
   return `⚠️ **Security Policy Blocked Action:**
@@ -53,10 +53,9 @@ export async function fallbackOrchestration(prompt: string, selectedAgentId?: st
   const messageTimestamp = new Date().toISOString();
 
   // Load and synchronize tool execution context
-  const toolContext = getDemoToolExecutionContext(agent.id);
-  toolContext.agentInstallation.enabled = agent.enabled;
   const store = getShopifyStore();
-  toolContext.storeConnection.status = store.connected ? "CONNECTED" : "DISCONNECTED";
+  const toolContext = await getToolExecutionContextForShop(agent.id, store.url);
+  toolContext.agentInstallation.enabled = agent.enabled;
   toolContext.agentDefinition.allowedTools = agent.allowedTools;
 
   // Route log
