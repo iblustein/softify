@@ -66,7 +66,7 @@ export function getDemoPlatformContext(): PlatformContext {
       name: "Store Setup Agent",
       description: "Analyzes Shopify settings, configures store parameters, reads current metadata.",
       systemInstruction: "You are the Store Setup Agent. You analyze Shopify settings, configure store parameters, read current metadata, and prepare initial product structures or settings updates.",
-      allowedTools: ["shopify.getShopInfo", "shopify.prepareProductUpdate", "shopify.shop.read"],
+      allowedTools: ["shopify.getShopInfo", "shopify.prepareProductUpdate", "shopify.shop.read", "shopify.products.read"],
       requiredScopes: ["read_content", "write_content", "read_products"],
       riskLevel: "Medium",
       avatarColor: "bg-blue-600 text-white",
@@ -78,7 +78,7 @@ export function getDemoPlatformContext(): PlatformContext {
       name: "Content Agent",
       description: "Generates or refines high-converting product descriptions, marketing campaigns, and blog posts.",
       systemInstruction: "You are the Content Agent. You generate or refine high-converting product descriptions, marketing campaigns, and blog posts.",
-      allowedTools: ["shopify.getProducts", "shopify.prepareProductUpdate"],
+      allowedTools: ["shopify.getProducts", "shopify.prepareProductUpdate", "shopify.products.read"],
       requiredScopes: ["write_products", "read_products"],
       riskLevel: "Low",
       avatarColor: "bg-emerald-600 text-white",
@@ -90,7 +90,7 @@ export function getDemoPlatformContext(): PlatformContext {
       name: "Analytics Agent",
       description: "Fetches sales, order history, and product metrics to form summaries and predictions.",
       systemInstruction: "You are the Analytics Agent. You fetch sales, order history, and product metrics to form summaries and predictions.",
-      allowedTools: ["shopify.getOrders", "shopify.getSalesSummary", "shopify.shop.read"],
+      allowedTools: ["shopify.getOrders", "shopify.getSalesSummary", "shopify.shop.read", "shopify.products.read"],
       requiredScopes: ["read_orders", "read_analytics"],
       riskLevel: "Low",
       avatarColor: "bg-violet-600 text-white",
@@ -207,6 +207,13 @@ export function getDemoPlatformContext(): PlatformContext {
       description: "Read real general shop settings, plan, currency, and scopes using live Shopify Admin API.",
       parameters: '{"shopDomain": "string?"}',
       requiredScope: "",
+      riskLevel: "Low"
+    },
+    {
+      name: "shopify.products.read",
+      description: "Read real products list, statuses, pricing, and tags using live Shopify Admin API.",
+      parameters: '{"shopDomain": "string?", "limit": "number?", "query": "string?", "after": "string?"}',
+      requiredScope: "read_products",
       riskLevel: "Low"
     }
   ];

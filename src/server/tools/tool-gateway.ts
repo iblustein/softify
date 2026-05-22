@@ -4,7 +4,7 @@ import { writeLog } from "../services/audit-log.service.js";
 import { getMockProducts } from "../data/mock-products.js";
 import { getDemoPlatformContext } from "../services/platform-context.service.js";
 import { ToolExecutionContext } from "../services/tool-execution-context.service.js";
-import { readShopInfo, ShopifyAdminApiError } from "../services/shopify-admin-client.service.js";
+import { readShopInfo, readProducts, ShopifyAdminApiError } from "../services/shopify-admin-client.service.js";
 
 export interface ExecuteToolResult {
   toolName: string;
@@ -307,6 +307,38 @@ export async function executeToolWithContext(
           throw new ShopifyAdminApiError("SHOPIFY_STORE_NOT_CONNECTED", "No active shop domain found in context or arguments.");
         }
         const result = await readShopInfo(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        const code = error instanceof ShopifyAdminApiError ? error.code : "SHOPIFY_ADMIN_API_REQUEST_FAILED";
+        return {
+          toolName,
+          args: cleanArgs,
+          status: "failed",
+          result: {
+            error: {
+              code,
+              message: error.message
+            }
+          }
+        };
+      }
+    }
+
+    case "shopify.products.read": {
+      try {
+        let shopDomain = cleanArgs.shopDomain;
+        if (!shopDomain) {
+          // If shopDomain is missing, use the currently connected store from context where available.
+          shopDomain = context.storeConnection?.storeUrl;
+        }
+        if (!shopDomain) {
+          throw new ShopifyAdminApiError("SHOPIFY_STORE_NOT_CONNECTED", "No active shop domain found in context or arguments.");
+        }
+        const limit = cleanArgs.limit !== undefined ? Number(cleanArgs.limit) : undefined;
+        const query = typeof cleanArgs.query === "string" ? cleanArgs.query : undefined;
+        const after = typeof cleanArgs.after === "string" ? cleanArgs.after : undefined;
+
+        const result = await readProducts(shopDomain, { limit, query, after });
         return { toolName, args: cleanArgs, status: "completed", result };
       } catch (error: any) {
         const code = error instanceof ShopifyAdminApiError ? error.code : "SHOPIFY_ADMIN_API_REQUEST_FAILED";
