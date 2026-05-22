@@ -153,7 +153,7 @@ export default function DashboardOverview({
           <div className="flex gap-2">
             {store.status === 'REAUTH_REQUIRED' || store.status === 'MISSING_SCOPES' ? (
               <button
-                onClick={() => onConnect(storeInput, selectedScopes)}
+                onClick={() => onConnect(store.url || storeInput, selectedScopes)}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition border border-rose-100 cursor-pointer animate-pulse"
               >
                 <RefreshCw className="w-3.5 h-3.5" />

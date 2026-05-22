@@ -191,6 +191,20 @@ export default function App() {
     }
   };
 
+  // Redirect to Shopify OAuth Install helper
+  const redirectToShopifyOAuthInstall = (shopDomain: string) => {
+    const installUrl = `${window.location.origin}/api/shopify/oauth/install?shop=${encodeURIComponent(shopDomain)}`;
+    try {
+      if (window.self !== window.top) {
+        window.top.location.href = installUrl;
+        return;
+      }
+    } catch (e) {
+      console.error('Failed to redirect window.top', e);
+    }
+    window.location.href = installUrl;
+  };
+
   // Connect Storefront Handler
   const handleConnectStore = async (url: string, scopes: string[]) => {
     setIsActionLoading(true);
@@ -202,7 +216,7 @@ export default function App() {
         const checkShop = url || shopifyLaunchShop || shopifyTestShop || "";
         if (checkShop) {
           console.log(`[Shopify OAuth] Redirecting manually to install for shop: ${checkShop}`);
-          window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(checkShop)}`;
+          redirectToShopifyOAuthInstall(checkShop);
           return;
         } else {
           throw new Error("No shop domain was provided or detected.");
@@ -509,7 +523,7 @@ export default function App() {
             <button
               onClick={() => {
                 if (shopifyLaunchShop) {
-                  handleConnectStore(shopifyLaunchShop, []);
+                  redirectToShopifyOAuthInstall(shopifyLaunchShop);
                 }
               }}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg transition text-3xs uppercase cursor-pointer"
@@ -535,7 +549,7 @@ export default function App() {
               onClick={() => {
                 const targetShop = store.url || shopifyLaunchShop || shopifyTestShop || "";
                 if (targetShop) {
-                  handleConnectStore(targetShop, []);
+                  redirectToShopifyOAuthInstall(targetShop);
                 }
               }}
               className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg transition text-3xs uppercase cursor-pointer"
