@@ -21,7 +21,7 @@ function buildToolFailureResponse(agentName: string, toolName: string, errorMess
 }
 
 // Deterministic fallback response simulation
-export function fallbackOrchestration(prompt: string, selectedAgentId?: string): OrchestrationMessage[] {
+export async function fallbackOrchestration(prompt: string, selectedAgentId?: string): Promise<OrchestrationMessage[]> {
   const normPrompt = prompt.toLowerCase();
   const agentsList = getAgents();
   let agent: Agent = agentsList[0]; // Default fallback
@@ -83,7 +83,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
   const mockCalls: any[] = [];
 
   if (agent.id === "agent_analytics") {
-    const gatewayResult = executeToolWithContext("shopify.getSalesSummary", {}, toolContext);
+    const gatewayResult = await executeToolWithContext("shopify.getSalesSummary", {}, toolContext);
     mockCalls.push(gatewayResult);
 
     if (gatewayResult.status === "failed") {
@@ -113,7 +113,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
       }
     }
 
-    const getProdResult = executeToolWithContext("shopify.getProducts", {}, toolContext);
+    const getProdResult = await executeToolWithContext("shopify.getProducts", {}, toolContext);
     mockCalls.push(getProdResult);
 
     if (getProdResult.status === "failed") {
@@ -121,7 +121,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     } else {
       const rawAfterStr = `✨ **POLISHED REVISED COPY: ${targetProduct.title}**\n\nExperience elevated comfort with this premium, meticulously crafted garment. Made of 100% natural, sustainable organic flax linen for lightweight breathability. Complete with high-durability structured tailoring, this wardrobe essential bridges relaxed everyday wear and refined office aesthetics with absolute ease.`;
 
-      const approvalResult = executeToolWithContext("shopify.prepareProductUpdate", {
+      const approvalResult = await executeToolWithContext("shopify.prepareProductUpdate", {
         productId: targetProduct.id,
         fields: { description: rawAfterStr }
       }, toolContext, {
@@ -150,7 +150,7 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
   else if (agent.id === "agent_theme_dev" || agent.id === "agent_design") {
     const patchCode = `/* ${agent.name} Optimizations - Active */\n.btn-primary {\n  background-color: #0c1821;\n  letter-spacing: 0.05em;\n  transition: duration 300ms ease;\n}`;
 
-    const approvalResult = executeToolWithContext("shopify.prepareThemePatch", {
+    const approvalResult = await executeToolWithContext("shopify.prepareThemePatch", {
       themeId: "main_theme",
       patch: patchCode
     }, toolContext, {
@@ -184,17 +184,17 @@ export function fallbackOrchestration(prompt: string, selectedAgentId?: string):
     if (agent.id === "agent_store_setup") {
       actionItem = "Shopify parameters configuration check";
       toolName = "shopify.getShopInfo";
-      gatewayResult = executeToolWithContext("shopify.getShopInfo", {}, toolContext);
+      gatewayResult = await executeToolWithContext("shopify.getShopInfo", {}, toolContext);
       mockCalls.push(gatewayResult);
     } else if (agent.id === "agent_customer_support") {
       actionItem = "customer order audits";
       toolName = "shopify.getOrders";
-      gatewayResult = executeToolWithContext("shopify.getOrders", {}, toolContext);
+      gatewayResult = await executeToolWithContext("shopify.getOrders", {}, toolContext);
       mockCalls.push(gatewayResult);
     } else {
       actionItem = "media layout scan";
       toolName = "shopify.getProducts";
-      gatewayResult = executeToolWithContext("shopify.getProducts", {}, toolContext);
+      gatewayResult = await executeToolWithContext("shopify.getProducts", {}, toolContext);
       mockCalls.push(gatewayResult);
     }
 
@@ -238,7 +238,7 @@ export async function orchestrate(prompt: string, selectedAgentId?: string): Pro
 
   if (!client) {
     // Deterministic fallback response simulation
-    return fallbackOrchestration(prompt, selectedAgentId);
+    return await fallbackOrchestration(prompt, selectedAgentId);
   }
 
   // Real Gemini implementation
@@ -356,7 +356,7 @@ export async function orchestrate(prompt: string, selectedAgentId?: string): Pro
 
     if (resultObj.toolCalls && Array.isArray(resultObj.toolCalls)) {
       for (const call of resultObj.toolCalls) {
-        const gatewayResult = executeTool(call.name, call.args, matchedAgent);
+        const gatewayResult = await executeTool(call.name, call.args, matchedAgent);
 
         frontendInvocations.push({
           toolName: gatewayResult.toolName,
@@ -391,7 +391,7 @@ export async function orchestrate(prompt: string, selectedAgentId?: string): Pro
     console.error("Gemini Orchestration Error: ", error);
 
     // Smooth recovery & fallback log
-    return fallbackOrchestration(prompt, selectedAgentId);
+    return await fallbackOrchestration(prompt, selectedAgentId);
   }
 }
 

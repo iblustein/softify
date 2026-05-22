@@ -24,6 +24,7 @@ Configure the following environment variables on your Google Cloud Run instance:
 | `SHOPIFY_SCOPES` | No | Comma-separated access scopes. Defaults to `read_products,read_orders,read_customers,read_themes,read_content` (Read-only) |
 | `SHOPIFY_OAUTH_CALLBACK_PATH` | No | Redirect callback route path. Defaults to `/api/shopify/oauth/callback` |
 | `SHOPIFY_TOKEN_ENCRYPTION_KEY` | Yes | A cryptographically random 32-byte key used for AES-256-GCM token storage. |
+| `SHOPIFY_ADMIN_API_VERSION` | No | Target Shopify Admin API version. Defaults to `2025-10`. |
 
 ---
 

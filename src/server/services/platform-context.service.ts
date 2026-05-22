@@ -66,7 +66,7 @@ export function getDemoPlatformContext(): PlatformContext {
       name: "Store Setup Agent",
       description: "Analyzes Shopify settings, configures store parameters, reads current metadata.",
       systemInstruction: "You are the Store Setup Agent. You analyze Shopify settings, configure store parameters, read current metadata, and prepare initial product structures or settings updates.",
-      allowedTools: ["shopify.getShopInfo", "shopify.prepareProductUpdate"],
+      allowedTools: ["shopify.getShopInfo", "shopify.prepareProductUpdate", "shopify.shop.read"],
       requiredScopes: ["read_content", "write_content", "read_products"],
       riskLevel: "Medium",
       avatarColor: "bg-blue-600 text-white",
@@ -90,7 +90,7 @@ export function getDemoPlatformContext(): PlatformContext {
       name: "Analytics Agent",
       description: "Fetches sales, order history, and product metrics to form summaries and predictions.",
       systemInstruction: "You are the Analytics Agent. You fetch sales, order history, and product metrics to form summaries and predictions.",
-      allowedTools: ["shopify.getOrders", "shopify.getSalesSummary"],
+      allowedTools: ["shopify.getOrders", "shopify.getSalesSummary", "shopify.shop.read"],
       requiredScopes: ["read_orders", "read_analytics"],
       riskLevel: "Low",
       avatarColor: "bg-violet-600 text-white",
@@ -126,7 +126,7 @@ export function getDemoPlatformContext(): PlatformContext {
       name: "Customer Support Agent",
       description: "Checks recent orders, customer queries, policy details, and prepares answers or refund drafts.",
       systemInstruction: "You are the Customer Support Agent. You check recent orders, customer queries, policy details, and prepare answers or refund drafts.",
-      allowedTools: ["shopify.getOrders", "shopify.getProducts"],
+      allowedTools: ["shopify.getOrders", "shopify.getProducts", "shopify.shop.read"],
       requiredScopes: ["read_orders", "read_customers"],
       riskLevel: "Low",
       avatarColor: "bg-sky-600 text-white",
@@ -201,6 +201,13 @@ export function getDemoPlatformContext(): PlatformContext {
       parameters: '{"themeId": "string", "patch": "string", "summary": "string"}',
       requiredScope: "write_themes",
       riskLevel: "High"
+    },
+    {
+      name: "shopify.shop.read",
+      description: "Read real general shop settings, plan, currency, and scopes using live Shopify Admin API.",
+      parameters: '{"shopDomain": "string?"}',
+      requiredScope: "",
+      riskLevel: "Low"
     }
   ];
 

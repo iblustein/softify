@@ -4,11 +4,12 @@ import { writeLog } from "../services/audit-log.service.js";
 import { getMockProducts } from "../data/mock-products.js";
 import { getDemoPlatformContext } from "../services/platform-context.service.js";
 import { ToolExecutionContext } from "../services/tool-execution-context.service.js";
+import { readShopInfo, ShopifyAdminApiError } from "../services/shopify-admin-client.service.js";
 
 export interface ExecuteToolResult {
   toolName: string;
   args: any;
-  status: 'success' | 'requires_approval' | 'failed';
+  status: 'success' | 'requires_approval' | 'failed' | 'completed';
   result: any;
   approvalId?: string;
 }
@@ -137,12 +138,12 @@ function buildCompatibilityContext(
 /**
  * Preferred new tool execution path that validates against a full ToolExecutionContext.
  */
-export function executeToolWithContext(
+export async function executeToolWithContext(
   toolName: string,
   args: any,
   context: ToolExecutionContext,
   customApprovalDetails?: { title: string; summary: string; before?: string }
-): ExecuteToolResult {
+): Promise<ExecuteToolResult> {
   const cleanArgs = args || {};
 
   // Run validation
@@ -295,6 +296,34 @@ export function executeToolWithContext(
       };
     }
 
+    case "shopify.shop.read": {
+      try {
+        let shopDomain = cleanArgs.shopDomain;
+        if (!shopDomain) {
+          // If shopDomain is missing, use the currently connected store from context where available.
+          shopDomain = context.storeConnection?.storeUrl;
+        }
+        if (!shopDomain) {
+          throw new ShopifyAdminApiError("SHOPIFY_STORE_NOT_CONNECTED", "No active shop domain found in context or arguments.");
+        }
+        const result = await readShopInfo(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        const code = error instanceof ShopifyAdminApiError ? error.code : "SHOPIFY_ADMIN_API_REQUEST_FAILED";
+        return {
+          toolName,
+          args: cleanArgs,
+          status: "failed",
+          result: {
+            error: {
+              code,
+              message: error.message
+            }
+          }
+        };
+      }
+    }
+
     default:
       return {
         toolName,
@@ -311,16 +340,16 @@ export function executeToolWithContext(
  * Unified execution gate for all AI agent tool calls.
  * Kept fully backward compatible with the current legacy signature.
  */
-export function executeTool(
+export async function executeTool(
   toolName: string,
   args: any,
   agentOrContext: { id: string; name: string; allowedTools: string[]; requiredScopes: string[] } | ToolExecutionContext,
   customApprovalDetails?: { title: string; summary: string; before?: string }
-): ExecuteToolResult {
+): Promise<ExecuteToolResult> {
   if (isToolExecutionContext(agentOrContext)) {
-    return executeToolWithContext(toolName, args, agentOrContext, customApprovalDetails);
+    return await executeToolWithContext(toolName, args, agentOrContext, customApprovalDetails);
   }
 
   const context = buildCompatibilityContext(agentOrContext);
-  return executeToolWithContext(toolName, args, context, customApprovalDetails);
+  return await executeToolWithContext(toolName, args, context, customApprovalDetails);
 }
