@@ -41,6 +41,21 @@ export function normalizeShopDomain(shop: string): string {
 }
 
 /**
+ * Safely builds the Shopify Admin embedded app URL for returning merchants
+ * back to the Shopify Admin interface instead of an external/blank root page.
+ * Uses normalized store domain and configured/env-backed app handle.
+ */
+export function buildShopifyAdminAppRedirectUrl(shop: string): string {
+  const normalizedShop = normalizeShopDomain(shop);
+  // Derive storeHandle by removing ".myshopify.com"
+  const storeHandle = normalizedShop.replace(/\.myshopify\.com$/i, "");
+  const config = getShopifyConfig();
+  const appHandle = config.appHandle || "softify";
+
+  return `https://admin.shopify.com/store/${storeHandle}/apps/${appHandle}?shopify_connected=true&shop=${encodeURIComponent(normalizedShop)}`;
+}
+
+/**
  * Generates a unique OAuth state nonce and stores it in the temporary cache.
  */
 export function generateOAuthState(): string {

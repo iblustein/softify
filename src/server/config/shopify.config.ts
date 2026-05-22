@@ -5,6 +5,7 @@ export interface ShopifyConfig {
   appUrl: string;
   oauthCallbackPath: string;
   testShop: string;
+  appHandle: string;
 }
 
 /**
@@ -24,6 +25,7 @@ export function getShopifyConfig(): ShopifyConfig {
   const appUrl = process.env.SHOPIFY_APP_URL || process.env.APP_URL || "";
   const oauthCallbackPath = process.env.SHOPIFY_OAUTH_CALLBACK_PATH || "/api/shopify/oauth/callback";
   const testShop = process.env.SHOPIFY_TEST_SHOP || "yambasurf-co-il.myshopify.com";
+  const appHandle = process.env.SHOPIFY_APP_HANDLE || "softify";
 
   return {
     apiKey,
@@ -31,7 +33,8 @@ export function getShopifyConfig(): ShopifyConfig {
     scopes,
     appUrl,
     oauthCallbackPath,
-    testShop
+    testShop,
+    appHandle
   };
 }
 

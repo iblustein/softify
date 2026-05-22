@@ -7,7 +7,8 @@ import {
   verifyShopifyHmac,
   verifyOAuthState,
   exchangeCodeForAccessToken,
-  connectShopFromOAuth
+  connectShopFromOAuth,
+  buildShopifyAdminAppRedirectUrl
 } from "../services/shopify-oauth.service.js";
 import { getRepositories } from "../repositories/repository-provider.js";
 import { checkHealth } from "../services/shopify-connection-health.service.js";
@@ -125,8 +126,10 @@ router.get("/callback", async (req, res) => {
       scope: tokenResult.scope
     });
 
-    // 5. Successful connection redirect to frontend
-    res.redirect(`/?shopify_connected=true&shop=${encodeURIComponent(shop)}`);
+    // 5. Successful connection redirect to Shopify Admin embedded app URL.
+    // Returning the merchant back to the Shopify Admin embedded environment (iframe)
+    // instead of showing a blank Cloud Run page.
+    res.redirect(buildShopifyAdminAppRedirectUrl(shop));
   } catch (error: any) {
     console.error("[SHOPIFY OAUTH] Error in callback handler:", error.message);
     res.status(500).json({ error: error.message });
