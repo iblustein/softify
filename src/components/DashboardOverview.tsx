@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   Link2, 
@@ -46,6 +46,20 @@ const LOCAL_SALES_REPORT = {
   ]
 };
 
+function resolveStoreInputValue(
+  store: ShopifyStore,
+  isOAuthConfigured?: boolean,
+  testShop?: string | null
+) {
+  if (store.connected) return store.url;
+
+  if (isOAuthConfigured) {
+    return store.url || testShop || "";
+  }
+
+  return store.url || "glowthread-apparel.myshopify.com";
+}
+
 export default function DashboardOverview({
   stats,
   store,
@@ -56,19 +70,19 @@ export default function DashboardOverview({
   isOAuthConfigured,
   testShop
 }: DashboardOverviewProps) {
-  const [storeInput, setStoreInput] = useState(() => {
-    if (store.connected) {
-      return store.url;
-    }
-    if (isOAuthConfigured) {
-      return store.url || testShop || "";
-    }
-    return store.url || "glowthread-apparel.myshopify.com";
-  });
+  const [storeInput, setStoreInput] = useState(() =>
+    resolveStoreInputValue(store, isOAuthConfigured, testShop)
+  );
   const [selectedScopes, setSelectedScopes] = useState<string[]>(
     store.scopes.length > 0 ? store.scopes : ['read_products', 'read_orders']
   );
   const [showConnectForm, setShowConnectForm] = useState(!store.connected);
+
+  useEffect(() => {
+    if (!store.connected) {
+      setStoreInput(resolveStoreInputValue(store, isOAuthConfigured, testShop));
+    }
+  }, [store.url, store.connected, isOAuthConfigured, testShop]);
 
   const handleScopeToggle = (scopeId: string) => {
     if (scopeId === 'read_products' || scopeId === 'read_orders') return; // mandatory for routing mockup
