@@ -164,6 +164,28 @@ export async function exchangeCodeForAccessToken(
 }
 
 /**
+ * Safe parser for Shopify scopes.
+ * Handles both string and string[] inputs gracefully.
+ * Trims whitespace, removes empty values, deduplicates, and lowercases.
+ * Does not throw on empty/undefined input.
+ */
+export function parseScopeList(scopeValue?: string | string[] | null): string[] {
+  if (!scopeValue) return [];
+  let list: string[] = [];
+  if (Array.isArray(scopeValue)) {
+    list = scopeValue;
+  } else if (typeof scopeValue === "string") {
+    list = scopeValue.split(",");
+  } else {
+    return [];
+  }
+  const normalized = list
+    .map(s => (s || "").trim().toLowerCase())
+    .filter(Boolean);
+  return Array.from(new Set(normalized));
+}
+
+/**
  * Persists the connected store details securely into the StoreRepository after successful OAuth.
  */
 export async function connectShopFromOAuth(params: {
@@ -176,7 +198,13 @@ export async function connectShopFromOAuth(params: {
   
   // Immediately encrypt the access token. Never store or log it raw!
   const accessTokenEncrypted = await encryptAccessToken(accessToken);
-  const parsedScopes = scope.split(",").map(s => s.trim()).filter(Boolean);
+
+  const config = getShopifyConfig();
+  const tokenResponseScopes = parseScopeList(scope);
+  const configuredScopes = parseScopeList(config.scopes);
+  
+  const fallbackUsed = tokenResponseScopes.length === 0;
+  const grantedScopes = tokenResponseScopes.length > 0 ? tokenResponseScopes : configuredScopes;
 
   const repos = getRepositories();
   let connection = await repos.stores.getStoreConnectionByUrl(normalizedShop);
@@ -184,7 +212,7 @@ export async function connectShopFromOAuth(params: {
   if (connection) {
     connection = await repos.stores.updateStoreConnection(connection.id, {
       accessTokenEncrypted,
-      scopes: parsedScopes,
+      scopes: grantedScopes,
       status: "CONNECTED",
       connectedAt: new Date().toISOString()
     });
@@ -194,7 +222,7 @@ export async function connectShopFromOAuth(params: {
       organizationId: "demo-org-id", // Sandboxed SaaS tenant organization identifier
       storeUrl: normalizedShop,
       accessTokenEncrypted,
-      scopes: parsedScopes,
+      scopes: grantedScopes,
       status: "CONNECTED",
       connectedAt: new Date().toISOString(),
       plan: "Standard Plan",
@@ -223,8 +251,8 @@ export async function connectShopFromOAuth(params: {
   writeLog(
     "Shop Owner",
     "SHOP_CONNECTED",
-    `Connected Shopify store '${normalizedShop}' via secure OAuth token exchange.`,
-    { url: normalizedShop, scopes: parsedScopes }
+    `Connected Shopify store '${normalizedShop}' via secure OAuth token exchange. Captured ${grantedScopes.length} scopes (fallback to config: ${fallbackUsed}).`,
+    { url: normalizedShop, scopesCount: grantedScopes.length, fallbackUsed }
   );
 
   return connection;
