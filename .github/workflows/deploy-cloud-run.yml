@@ -1,0 +1,67 @@
+name: Deploy Softify to Cloud Run
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: softify-cloud-run-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    name: Build, deploy, and smoke test
+    runs-on: ubuntu-latest
+
+    env:
+      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      REGION: ${{ secrets.GCP_REGION }}
+      SERVICE: ${{ secrets.CLOUD_RUN_SERVICE }}
+      SOFTIFY_TEST_SHOP: ${{ secrets.SOFTIFY_TEST_SHOP }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript / lint check
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: ${{ secrets.CLOUD_RUN_SERVICE }}
+          region: ${{ secrets.GCP_REGION }}
+          source: .
+          flags: "--allow-unauthenticated"
+
+      - name: Smoke test deployed service
+        env:
+          SOFTIFY_BASE_URL: ${{ steps.deploy.outputs.url }}
+          SOFTIFY_TEST_SHOP: ${{ secrets.SOFTIFY_TEST_SHOP }}
+        run: npm run smoke:prod
