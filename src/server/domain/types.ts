@@ -137,8 +137,8 @@ export interface ProductSnapshot {
   title: string;
   handle: string;
   status: string;
-  vendor?: string;
-  productType?: string;
+  vendor?: string | null;
+  productType?: string | null;
   tags: string[];
   variantsCount: number;
   imagesCount: number;

@@ -179,6 +179,44 @@ async function runVerification() {
     scanForForbiddenKeys(saved);
   });
 
+  // Test 6: ProductSnapshot optional fields sanitization validation
+  await check("6. ProductSnapshot optional fields sanitization validation", async () => {
+    const { removeUndefinedValues } = await import("../src/server/repositories/firestore/firestore-product.repository.ts");
+    
+    const testSnapshot = {
+      id: "sanitize-shop_prod1",
+      organizationId: "org-sanitize-1",
+      storeConnectionId: "conn-sanitize-1",
+      shopDomain: "sanitize-shop.myshopify.com",
+      shopifyProductId: "prod1",
+      title: "Sanitize Test Product",
+      handle: "sanitize-test-product",
+      status: "ACTIVE",
+      vendor: undefined, // undefined optional
+      productType: null, // nullable optional
+      tags: ["sanitize"],
+      variantsCount: 2,
+      imagesCount: 1,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      syncedAt: new Date().toISOString()
+    };
+
+    const sanitized = removeUndefinedValues(testSnapshot);
+
+    // Ensure undefined field was removed
+    if ("vendor" in sanitized) {
+      throw new Error("Sanitization failed: 'vendor' key with undefined value was not removed.");
+    }
+    // Ensure null field was kept
+    if (sanitized.productType !== null) {
+      throw new Error(`Sanitization failed: 'productType' should be null, got: ${sanitized.productType}`);
+    }
+
+    // Double check token security on sanitized object
+    scanForForbiddenKeys(sanitized);
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

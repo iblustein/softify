@@ -43,6 +43,22 @@ function mapDocument(doc: FirebaseFirestore.DocumentSnapshot): ProductSnapshot |
   };
 }
 
+export function removeUndefinedValues<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map(removeUndefinedValues) as T;
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .map(([k, v]) => [k, removeUndefinedValues(v)])
+    ) as T;
+  }
+
+  return value;
+}
+
 export async function upsertProductSnapshot(product: ProductSnapshot): Promise<ProductSnapshot> {
   const collection = getCollection();
   const cleanShop = normalizeShopDomain(product.shopDomain);
@@ -56,7 +72,7 @@ export async function upsertProductSnapshot(product: ProductSnapshot): Promise<P
     syncedAt: product.syncedAt || now
   };
 
-  await docRef.set(snapshot);
+  await docRef.set(removeUndefinedValues(snapshot));
   return snapshot;
 }
 

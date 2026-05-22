@@ -27,6 +27,7 @@ export function getFirestoreClient(): Firestore {
   firestoreInstance = new Firestore({
     projectId: config.projectId,
     databaseId: config.databaseId,
+    ignoreUndefinedProperties: true,
   });
 
   return firestoreInstance;

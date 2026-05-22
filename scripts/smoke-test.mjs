@@ -41,15 +41,24 @@ function scanForForbiddenKeys(obj, path = "") {
   }
 }
 
+async function checkResponse(res) {
+  if (!res.ok) {
+    let bodyText = "";
+    try {
+      bodyText = await res.text();
+    } catch (_) {}
+    throw new Error(`HTTP Error status ${res.status}. Body: ${bodyText}`);
+  }
+  return res;
+}
+
 async function runSuite() {
   // Test A: OAuth Status validation
   await check("A. OAuth Status endpoint validation", async () => {
     const timestamp = Date.now();
     const url = `${baseUrl}/api/shopify/oauth/status?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`HTTP Error status ${res.status}`);
-    }
+    await checkResponse(res);
     const data = await res.json();
     scanForForbiddenKeys(data);
 
@@ -78,9 +87,7 @@ async function runSuite() {
     const timestamp = Date.now();
     const url = `${baseUrl}/api/shopify/admin/shop?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`HTTP Error status ${res.status}`);
-    }
+    await checkResponse(res);
     const data = await res.json();
     scanForForbiddenKeys(data);
 
@@ -106,9 +113,7 @@ async function runSuite() {
     const timestamp = Date.now();
     const url = `${baseUrl}/api/shopify/admin/products?shop=${encodeURIComponent(shop)}&limit=${defaultLimit}&t=${timestamp}`;
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`HTTP Error status ${res.status}`);
-    }
+    await checkResponse(res);
     const data = await res.json();
     scanForForbiddenKeys(data);
 
@@ -131,9 +136,7 @@ async function runSuite() {
     const timestamp = Date.now();
     const url = `${baseUrl}/api/shopify/admin/products?shop=${encodeURIComponent(shop)}&limit=500&t=${timestamp}`;
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`HTTP Error status ${res.status}`);
-    }
+    await checkResponse(res);
     const data = await res.json();
     scanForForbiddenKeys(data);
 
@@ -147,9 +150,7 @@ async function runSuite() {
     const timestamp = Date.now();
     const url = `${baseUrl}/api/shopify/admin/products?shop=${encodeURIComponent(shop)}&limit=abc&t=${timestamp}`;
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`HTTP Error status ${res.status}`);
-    }
+    await checkResponse(res);
     const data = await res.json();
     scanForForbiddenKeys(data);
 
@@ -163,9 +164,7 @@ async function runSuite() {
     const timestamp = Date.now();
     const url = `${baseUrl}/api/catalog/products/sync?shop=${encodeURIComponent(shop)}&limit=5&t=${timestamp}`;
     const res = await fetch(url, { method: "POST" });
-    if (!res.ok) {
-      throw new Error(`HTTP Error status ${res.status}`);
-    }
+    await checkResponse(res);
     const data = await res.json();
     scanForForbiddenKeys(data);
 
@@ -182,9 +181,7 @@ async function runSuite() {
     const timestamp = Date.now();
     const url = `${baseUrl}/api/catalog/products/status?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`HTTP Error status ${res.status}`);
-    }
+    await checkResponse(res);
     const data = await res.json();
     scanForForbiddenKeys(data);
 
@@ -201,9 +198,7 @@ async function runSuite() {
     const timestamp = Date.now();
     const url = `${baseUrl}/api/catalog/products?shop=${encodeURIComponent(shop)}&limit=5&t=${timestamp}`;
     const res = await fetch(url);
-    if (!res.ok) {
-      throw new Error(`HTTP Error status ${res.status}`);
-    }
+    await checkResponse(res);
     const list = await res.json();
     scanForForbiddenKeys(list);
 
