@@ -14,6 +14,9 @@ import * as inMemoryApprovals from "./in-memory/in-memory-approval.repository.js
 import * as inMemoryAudits from "./in-memory/in-memory-audit.repository.js";
 import * as inMemoryConversations from "./in-memory/in-memory-conversation.repository.js";
 
+import { isFirestoreConfigured } from "../config/firestore.config.js";
+import * as firestoreStores from "./firestore/firestore-store.repository.js";
+
 export interface Repositories {
   users: UserRepository;
   organizations: OrganizationRepository;
@@ -26,19 +29,23 @@ export interface Repositories {
 
 /**
  * Retrieve the active persistence repository suite.
- * Currently, returns the sandboxed in-memory mocks.
+ * Dynamically resolves Firestore strategy for Shopify store connection details if configured,
+ * falling back safely to sandboxed in-memory mocks for all other schemas.
  */
 export function getRepositories(): Repositories {
-  // TODO: In production, dynamically resolve persistence strategies:
-  // - Prisma/PostgreSQL or Drizzle environment-based repository selection
-  // - Test environment repository mocking / mock repository injection
-  // - Transaction handling and query context injection (e.g. passing Prisma transactions through repositories)
-  // - Tenant-aware query enforcement (automatically appending organizationId parameters to queries)
+  // TODO: Future milestones:
+  // 1. tenant-aware filtering: automatically inject tenant filters into other repositories
+  // 2. transaction support: implement cross-repository transactions using Firestore batch/transaction runs
+  // 3. full repository backend migration: transition remaining in-memory repositories to durable database engines
+  // 4. Firestore security rules / IAM enforcement: configure tight IAM controls for Cloud Run runtime service account
+  // 5. Cloud KMS token encryption: migrate from AES-256-GCM TokenCryptoService to GCP Cloud Key Management Service
   
+  const storesRepo = isFirestoreConfigured() ? firestoreStores : inMemoryStores;
+
   return {
     users: inMemoryUsers,
     organizations: inMemoryOrganizations,
-    stores: inMemoryStores,
+    stores: storesRepo,
     agentInstallations: inMemoryAgentInstallations,
     approvals: inMemoryApprovals,
     audit: inMemoryAudits,

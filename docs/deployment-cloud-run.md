@@ -45,8 +45,45 @@ In your Shopify App setup inside the **Shopify Partners Dashboard**, navigate to
 
 ---
 
-## 4. Production Security Hardening
+## 4. Firestore Database Persistence (Durable Storage)
+
+To prevent Shopify store connections from being lost when Cloud Run containers restart or scale down, enable durable persistence in **Google Cloud Firestore**.
+
+### 4.1. Required Environment Variables for Firestore
+
+| Variable Name | Required | Description |
+| :--- | :--- | :--- |
+| `REPOSITORY_BACKEND` | Yes | Set to `firestore` to activate the Firestore persistence adapter. |
+| `GOOGLE_CLOUD_PROJECT` | Yes | Your Google Cloud project ID (e.g. `my-softify-project-123`). |
+| `FIRESTORE_DATABASE_ID` | No | Firestore database ID. Defaults to `(default)`. |
+| `FIRESTORE_STORE_CONNECTIONS_COLLECTION` | No | Firestore collection name. Defaults to `shopify_store_connections`. |
+
+### 4.2. Google Cloud IAM Permissions & Security
+
+1. **Firestore Database Creation**:
+   Ensure that a Firestore database is created inside your Google Cloud project (either in Native mode or Datastore mode). 
+2. **Cloud Run Service Account Roles**:
+   - The runtime service account assigned to the Cloud Run service must be granted the **Cloud Datastore User** (`roles/datastore.user`) IAM role.
+   - This role allows full read, write, update, and delete access to the Firestore collections.
+3. **No Private Keys Committed**:
+   - **NEVER** create, download, or commit service account JSON credential files to your repository.
+   - The `@google-cloud/firestore` library uses Google **Application Default Credentials (ADC)** automatically at runtime under Google Cloud environments.
+
+### 4.3. Local Development Credentials
+
+To test Firestore persistence locally without committing service account keys:
+1. Install the [Google Cloud SDK](https://cloud.google.com/sdk).
+2. Authenticate using Application Default Credentials:
+   ```bash
+   gcloud auth application-default login
+   ```
+3. Ensure your local command shell has `REPOSITORY_BACKEND=firestore` and `GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID` environment variables loaded. The SDK client will automatically discover the ADC credentials and connect directly.
+
+---
+
+## 5. Production Security Hardening
 
 - **Access Token Safety**: Access tokens are encrypted using AES-256-GCM immediately upon exchange before being persisted to the storage layer. Raw tokens are never logged.
+- **Encrypted Token Persistence**: Only the encrypted token (`accessTokenEncrypted`) is saved to Google Cloud Firestore.
 - **State Nonce Validation**: Nonces are stored in memory and validated timing-safely to prevent replay attacks during installation.
 - **KMS Roadmap**: In high-security multi-tenant production architectures, replace `token-crypto.service.ts` encryption logic with a direct call to **Google Cloud KMS (Key Management Service)**.
