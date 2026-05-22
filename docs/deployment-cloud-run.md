@@ -88,3 +88,24 @@ To test Firestore persistence locally without committing service account keys:
 - **Encrypted Token Persistence**: Only the encrypted token (`accessTokenEncrypted`) is saved to Google Cloud Firestore.
 - **State Nonce Validation**: Nonces are stored in memory and validated timing-safely to prevent replay attacks during installation.
 - **KMS Roadmap**: In high-security multi-tenant production architectures, replace `token-crypto.service.ts` encryption logic with a direct call to **Google Cloud KMS (Key Management Service)**.
+
+---
+
+## 6. Post-Deployment Smoke Test
+
+After each deployment, execute the native smoke test suite to validate critical OAuth status and product/shop read capabilities.
+
+### Windows CMD
+```cmd
+set SOFTIFY_BASE_URL=https://softify-595151907767.europe-west1.run.app
+set SOFTIFY_TEST_SHOP=yambasurf-co-il.myshopify.com
+npm run smoke:prod
+```
+
+### PowerShell
+```powershell
+$env:SOFTIFY_BASE_URL="https://softify-595151907767.europe-west1.run.app"
+$env:SOFTIFY_TEST_SHOP="yambasurf-co-il.myshopify.com"
+npm run smoke:prod
+```
+
