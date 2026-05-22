@@ -12,12 +12,22 @@ function getCollection() {
 }
 
 /**
- * Normalizes the shop domain to a lowercase, stripped identifier.
+ * Normalizes the shop domain to a lowercase, protocol-free, path-free identifier ending in .myshopify.com.
  */
 function normalizeShopDomain(shop: string): string {
+  if (!shop) return "";
   let domain = shop.trim().toLowerCase();
-  domain = domain.replace(/^https?:\/\//, "");
-  domain = domain.replace(/\/$/, "");
+  
+  // Remove leading protocol and www
+  domain = domain.replace(/^(https?:\/\/)?(www\.)?/, "");
+  
+  // Remove any trailing path/querystring parameters
+  domain = domain.split("/")[0];
+  
+  if (!domain.endsWith(".myshopify.com")) {
+    domain = `${domain}.myshopify.com`;
+  }
+  
   return domain;
 }
 

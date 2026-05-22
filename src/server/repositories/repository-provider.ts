@@ -14,7 +14,7 @@ import * as inMemoryApprovals from "./in-memory/in-memory-approval.repository.js
 import * as inMemoryAudits from "./in-memory/in-memory-audit.repository.js";
 import * as inMemoryConversations from "./in-memory/in-memory-conversation.repository.js";
 
-import { isFirestoreConfigured } from "../config/firestore.config.js";
+import { isFirestoreConfigured, getFirestoreConfig } from "../config/firestore.config.js";
 import * as firestoreStores from "./firestore/firestore-store.repository.js";
 
 export interface Repositories {
@@ -40,7 +40,12 @@ export function getRepositories(): Repositories {
   // 4. Firestore security rules / IAM enforcement: configure tight IAM controls for Cloud Run runtime service account
   // 5. Cloud KMS token encryption: migrate from AES-256-GCM TokenCryptoService to GCP Cloud Key Management Service
   
-  const storesRepo = isFirestoreConfigured() ? firestoreStores : inMemoryStores;
+  const isConfigured = isFirestoreConfigured();
+  if (isConfigured) {
+    // Validate config at startup/repository provider initialization
+    getFirestoreConfig();
+  }
+  const storesRepo = isConfigured ? firestoreStores : inMemoryStores;
 
   return {
     users: inMemoryUsers,
