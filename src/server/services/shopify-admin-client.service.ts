@@ -218,6 +218,11 @@ export function hasScope(connectionScopes: string[], requiredScope: string): boo
   return connectionScopes.includes(requiredScope);
 }
 
+export function normalizeProductsLimit(value?: number): number {
+  if (value === undefined || value === null || !Number.isFinite(value)) return 20;
+  return Math.max(1, Math.min(50, Math.floor(value)));
+}
+
 export async function readProducts(
   shopDomain: string,
   options?: { limit?: number; query?: string; after?: string; }
@@ -228,8 +233,7 @@ export async function readProducts(
   }
 
   // Parse and enforce safe server-side limits
-  const rawLimit = options?.limit ?? 20;
-  const limit = Math.max(1, Math.min(50, rawLimit));
+  const limit = normalizeProductsLimit(options?.limit);
   const searchQuery = options?.query || null;
   const afterCursor = options?.after || null;
 
@@ -355,16 +359,6 @@ export async function readProducts(
               url
               altText
             }
-            priceRange {
-              minVariantPrice {
-                amount
-                currencyCode
-              }
-              maxVariantPrice {
-                amount
-                currencyCode
-              }
-            }
             priceRangeV2 {
               minVariantPrice {
                 amount
@@ -441,7 +435,7 @@ export async function readProducts(
 
   const products: NormalizedProduct[] = edges.map((edge: any) => {
     const node = edge.node || {};
-    const priceRangeRaw = node.priceRange || node.priceRangeV2 || null;
+    const priceRangeRaw = node.priceRangeV2 || null;
 
     return {
       id: node.id,
