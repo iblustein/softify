@@ -158,6 +158,75 @@ async function runSuite() {
     }
   });
 
+  // Test F: Catalog product sync endpoint validation
+  await check("F. Catalog product sync endpoint validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/catalog/products/sync?shop=${encodeURIComponent(shop)}&limit=5&t=${timestamp}`;
+    const res = await fetch(url, { method: "POST" });
+    if (!res.ok) {
+      throw new Error(`HTTP Error status ${res.status}`);
+    }
+    const data = await res.json();
+    scanForForbiddenKeys(data);
+
+    if (typeof data.count !== "number") {
+      throw new Error(`Expected count to be a number, got: ${typeof data.count}`);
+    }
+    if (typeof data.latestSyncAt !== "string") {
+      throw new Error(`Expected latestSyncAt to be a string, got: ${typeof data.latestSyncAt}`);
+    }
+  });
+
+  // Test G: Catalog product status endpoint validation
+  await check("G. Catalog product status endpoint validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/catalog/products/status?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP Error status ${res.status}`);
+    }
+    const data = await res.json();
+    scanForForbiddenKeys(data);
+
+    if (typeof data.count !== "number") {
+      throw new Error(`Expected count to be a number, got: ${typeof data.count}`);
+    }
+    if (data.latestSyncAt !== null && typeof data.latestSyncAt !== "string") {
+      throw new Error(`Expected latestSyncAt to be string or null, got: ${typeof data.latestSyncAt}`);
+    }
+  });
+
+  // Test H: Catalog products read endpoint validation
+  await check("H. Catalog products read endpoint validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/catalog/products?shop=${encodeURIComponent(shop)}&limit=5&t=${timestamp}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP Error status ${res.status}`);
+    }
+    const list = await res.json();
+    scanForForbiddenKeys(list);
+
+    if (!Array.isArray(list)) {
+      throw new Error(`Expected catalog products to be an array, got: ${typeof list}`);
+    }
+
+    for (const p of list) {
+      if (typeof p.id !== "string") throw new Error("Expected product id to be a string");
+      if (typeof p.shopDomain !== "string") throw new Error("Expected product shopDomain to be a string");
+      if (typeof p.shopifyProductId !== "string") throw new Error("Expected product shopifyProductId to be a string");
+      if (typeof p.title !== "string") throw new Error("Expected product title to be a string");
+      if (typeof p.handle !== "string") throw new Error("Expected product handle to be a string");
+      if (typeof p.status !== "string") throw new Error("Expected product status to be a string");
+      if (!Array.isArray(p.tags)) throw new Error("Expected product tags to be an array");
+      if (typeof p.variantsCount !== "number") throw new Error("Expected product variantsCount to be a number");
+      if (typeof p.imagesCount !== "number") throw new Error("Expected product imagesCount to be a number");
+      if (typeof p.createdAt !== "string") throw new Error("Expected product createdAt to be a string");
+      if (typeof p.updatedAt !== "string") throw new Error("Expected product updatedAt to be a string");
+      if (typeof p.syncedAt !== "string") throw new Error("Expected product syncedAt to be a string");
+    }
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

@@ -53,6 +53,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Pre-deployment static release verification
+        run: npm run verify:release
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:

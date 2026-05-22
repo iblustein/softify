@@ -109,3 +109,22 @@ $env:SOFTIFY_TEST_SHOP="yambasurf-co-il.myshopify.com"
 npm run smoke:prod
 ```
 
+---
+
+## 7. Automated Release Verification
+
+To ensure maximum safety and avoid breaking changes during deployment, the delivery pipeline incorporates two levels of validation:
+
+### 7.1. Pre-Deployment Static Release Verification
+- **Command**: `npm run verify:release`
+- **Execution Phase**: Runs immediately **after `npm run build`** and **before deployment**.
+- **Security & Integrity Role**: Operates strictly offline (requiring no database, API tokens, or external network access). It validates code structure, repository interfaces, products CRUD contracts, limit normalization edge cases, and dynamically scans entities to guarantee that no secret tokens (like `accessToken` or `Authorization` headers) are leaked in responses.
+- **Fail-Safe**: If `verify:release` fails, deployment is aborted, preventing structural bugs from ever hitting production.
+
+### 7.2. Post-Deployment Runtime Smoke Tests
+- **Command**: `npm run smoke:prod`
+- **Execution Phase**: Runs immediately **after successful deployment** to Cloud Run.
+- **Security & Integrity Role**: Executes live API requests against the newly deployed production endpoints. It tests live Shopify handshake, catalog sync behaviors, catalog statuses, and reads, ensuring correct runtime environment variables, Firestore DB connectivity, and active OAuth statuses.
+- **Fail-Safe**: If `smoke:prod` fails, the pipeline fails and reports a live runtime issue.
+
+

@@ -2,6 +2,7 @@ export interface FirestoreConfig {
   projectId: string;
   databaseId: string;
   storeConnectionsCollection: string;
+  productSnapshotsCollection: string;
 }
 
 /**
@@ -12,6 +13,7 @@ export function getFirestoreConfig(): FirestoreConfig {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT || "";
   const databaseId = process.env.FIRESTORE_DATABASE_ID || "(default)";
   const storeConnectionsCollection = process.env.FIRESTORE_STORE_CONNECTIONS_COLLECTION || "shopify_store_connections";
+  const productSnapshotsCollection = process.env.FIRESTORE_PRODUCT_SNAPSHOTS_COLLECTION || "product_snapshots";
 
   if (backend.toLowerCase() === "firestore" && !projectId) {
     throw new Error(
@@ -22,7 +24,8 @@ export function getFirestoreConfig(): FirestoreConfig {
   return {
     projectId,
     databaseId,
-    storeConnectionsCollection
+    storeConnectionsCollection,
+    productSnapshotsCollection
   };
 }
 

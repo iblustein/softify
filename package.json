@@ -9,6 +9,7 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "verify:release": "node scripts/release-check.mjs",
     "smoke:prod": "node scripts/smoke-test.mjs",
     "smoke": "node scripts/smoke-test.mjs"
   },

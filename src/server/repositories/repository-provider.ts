@@ -5,6 +5,7 @@ import { AgentInstallationRepository } from "./contracts/agent-installation.repo
 import { ApprovalRepository } from "./contracts/approval.repository.contract.js";
 import { AuditRepository } from "./contracts/audit.repository.contract.js";
 import { ConversationRepository } from "./contracts/conversation.repository.contract.js";
+import { ProductRepository } from "./contracts/product.repository.contract.js";
 
 import * as inMemoryUsers from "./in-memory/in-memory-user.repository.js";
 import * as inMemoryOrganizations from "./in-memory/in-memory-organization.repository.js";
@@ -13,9 +14,11 @@ import * as inMemoryAgentInstallations from "./in-memory/in-memory-agent-install
 import * as inMemoryApprovals from "./in-memory/in-memory-approval.repository.js";
 import * as inMemoryAudits from "./in-memory/in-memory-audit.repository.js";
 import * as inMemoryConversations from "./in-memory/in-memory-conversation.repository.js";
+import * as inMemoryProducts from "./in-memory/in-memory-product.repository.js";
 
 import { isFirestoreConfigured, getFirestoreConfig } from "../config/firestore.config.js";
 import * as firestoreStores from "./firestore/firestore-store.repository.js";
+import * as firestoreProducts from "./firestore/firestore-product.repository.js";
 
 export interface Repositories {
   users: UserRepository;
@@ -25,6 +28,7 @@ export interface Repositories {
   approvals: ApprovalRepository;
   audit: AuditRepository;
   conversations: ConversationRepository;
+  products: ProductRepository;
 }
 
 /**
@@ -46,6 +50,7 @@ export function getRepositories(): Repositories {
     getFirestoreConfig();
   }
   const storesRepo = isConfigured ? firestoreStores : inMemoryStores;
+  const productsRepo = isConfigured ? firestoreProducts : inMemoryProducts;
 
   return {
     users: inMemoryUsers,
@@ -54,6 +59,7 @@ export function getRepositories(): Repositories {
     agentInstallations: inMemoryAgentInstallations,
     approvals: inMemoryApprovals,
     audit: inMemoryAudits,
-    conversations: inMemoryConversations
+    conversations: inMemoryConversations,
+    products: productsRepo
   };
 }

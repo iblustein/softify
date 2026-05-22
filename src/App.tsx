@@ -572,6 +572,7 @@ export default function App() {
                 onDisconnect={handleDisconnectStore} 
                 onReset={handleResetDatabase}
                 isLoading={isActionLoading}
+                onRefresh={fetchAllData}
               />
             )}
 

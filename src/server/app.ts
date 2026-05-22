@@ -10,6 +10,7 @@ import dashboardRoutes from "./routes/dashboard.routes.js";
 import orchestratorRoutes from "./routes/orchestrator.routes.js";
 import shopifyOAuthRoutes from "./routes/shopify-oauth.routes.js";
 import shopifyAdminRoutes from "./routes/shopify-admin.routes.js";
+import catalogRoutes from "./routes/catalog.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -17,6 +18,7 @@ app.use(express.json());
 // Mount API routes under /api
 app.use("/api/shopify/oauth", shopifyOAuthRoutes);
 app.use("/api/shopify/admin", shopifyAdminRoutes);
+app.use("/api/catalog", catalogRoutes);
 app.use("/api", shopRoutes);
 app.use("/api", agentsRoutes);
 app.use("/api", productsRoutes);

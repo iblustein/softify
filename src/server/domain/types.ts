@@ -127,3 +127,23 @@ export interface ConversationMessage {
     approvalId?: string;
   }[];
 }
+
+export interface ProductSnapshot {
+  id: string;
+  organizationId: string;
+  storeConnectionId: string;
+  shopDomain: string;
+  shopifyProductId: string;
+  title: string;
+  handle: string;
+  status: string;
+  vendor?: string;
+  productType?: string;
+  tags: string[];
+  variantsCount: number;
+  imagesCount: number;
+  createdAt: string;
+  updatedAt: string;
+  syncedAt: string;
+}
+

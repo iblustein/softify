@@ -25,6 +25,7 @@ interface DashboardOverviewProps {
   isLoading: boolean;
   isOAuthConfigured?: boolean;
   testShop?: string | null;
+  onRefresh?: () => void;
 }
 
 const ALL_AVAILABLE_SCOPES = [
@@ -69,7 +70,8 @@ export default function DashboardOverview({
   onReset,
   isLoading,
   isOAuthConfigured,
-  testShop
+  testShop,
+  onRefresh
 }: DashboardOverviewProps) {
   const [storeInput, setStoreInput] = useState(() =>
     resolveStoreInputValue(store, isOAuthConfigured, testShop)
@@ -78,6 +80,28 @@ export default function DashboardOverview({
     store.scopes.length > 0 ? store.scopes : ['read_products', 'read_orders']
   );
   const [showConnectForm, setShowConnectForm] = useState(!store.connected);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncCatalog = async () => {
+    if (!store.url) return;
+    setIsSyncing(true);
+    try {
+      const res = await fetch(`/api/catalog/products/sync?shop=${encodeURIComponent(store.url)}&limit=50`, {
+        method: 'POST'
+      });
+      if (!res.ok) {
+        throw new Error('Catalog synchronization failed.');
+      }
+      if (onRefresh) {
+        onRefresh();
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || 'Failed to synchronize Shopify catalog. Please ensure OAuth status is active.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (!store.connected) {
@@ -356,17 +380,31 @@ export default function DashboardOverview({
           </div>
         </div>
 
-        <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm">
-          <div className="flex justify-between items-start">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Catalog Database</span>
-            <div className="p-1.5 bg-blue-50 rounded-xl text-blue-600 border border-blue-100/50">
-              <Database className="w-4 h-4" />
+        <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-start">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Catalog Database</span>
+              <div className="p-1.5 bg-blue-50 rounded-xl text-blue-600 border border-blue-100/50">
+                <Database className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-slate-900 mt-2 font-display">{stats.totalProductsCount}</p>
+            <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1.5 flex-wrap">
+              <span>{store.connected ? 'Shopify sync active' : '5 structured sandbox listings ready'}</span>
             </div>
           </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2 font-display">{stats.totalProductsCount}</p>
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1.5 flex-wrap">
-            <span>5 structured sandbox listings ready</span>
-          </div>
+          {store.connected && (
+            <div className="mt-4 pt-3 border-t border-slate-100">
+              <button
+                onClick={handleSyncCatalog}
+                disabled={isSyncing}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-2 text-3xs font-extrabold text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100/50 rounded-xl transition border border-indigo-100 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Syncing...' : 'Sync Catalog'}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="p-5 bg-white border border-slate-200 rounded-2xl shadow-sm">
