@@ -10,6 +10,7 @@ import {
   connectShopFromOAuth
 } from "../services/shopify-oauth.service.js";
 import { getRepositories } from "../repositories/repository-provider.js";
+import { checkHealth } from "../services/shopify-connection-health.service.js";
 
 const router = Router();
 
@@ -19,28 +20,23 @@ const router = Router();
  */
 router.get("/status", async (req, res) => {
   try {
-    const configured = isShopifyOAuthConfigured();
-    const repos = getRepositories();
     const { shop, check_setup } = req.query;
-    
-    let connectedStore = null;
-    if (shop && typeof shop === "string") {
-      const normalized = normalizeShopDomain(shop);
-      const conn = await repos.stores.getStoreConnectionByUrl(normalized);
-      if (conn && conn.status === "CONNECTED") {
-        connectedStore = conn;
-      }
-    } else {
-      // Find any connected store for sandbox demo org
-      const connections = await repos.stores.getStoreConnectionsByOrganizationId("demo-org-id");
-      connectedStore = connections.find(c => c.status === "CONNECTED");
-    }
+    const shopToCheck = typeof shop === "string" ? shop : null;
+
+    const health = await checkHealth(shopToCheck);
 
     const responseData: any = {
-      configured,
-      connected: Boolean(connectedStore),
-      shop: connectedStore ? connectedStore.storeUrl : null,
-      scopes: connectedStore ? connectedStore.scopes : []
+      configured: health.configured,
+      connected: health.connected,
+      status: health.status,
+      shop: health.shop,
+      scopes: health.actualScopes.length > 0 ? health.actualScopes : health.storedScopes,
+      requiredScopes: health.requiredScopes,
+      storedScopes: health.storedScopes,
+      actualScopes: health.actualScopes,
+      missingScopes: health.missingScopes,
+      tokenValid: health.tokenValid,
+      message: health.message
     };
 
     if (check_setup === "true") {

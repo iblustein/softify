@@ -29,7 +29,7 @@ export interface ShopifyStoreConnection {
   accessTokenEncrypted?: string;
   scopes: string[];
   connectedAt: string;
-  status: 'CONNECTED' | 'DISCONNECTED';
+  status: 'CONNECTED' | 'DISCONNECTED' | 'REAUTH_REQUIRED';
   plan: string;
   currency: string;
   createdAt: string;

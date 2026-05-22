@@ -56,6 +56,12 @@ async function runSuite() {
     if (data.configured !== true) {
       throw new Error(`Expected configured to be true, got: ${data.configured}`);
     }
+    if (data.status === "REAUTH_REQUIRED") {
+      throw new Error(`Smoke test failed: Connection status is REAUTH_REQUIRED. Re-authentication is required.`);
+    }
+    if (data.status === "MISSING_SCOPES") {
+      throw new Error(`Smoke test failed: Connection status is MISSING_SCOPES. Missing scopes: ${JSON.stringify(data.missingScopes)}`);
+    }
     if (data.connected !== true) {
       throw new Error(`Expected connected to be true, got: ${data.connected}`);
     }

@@ -36,6 +36,7 @@ export default function App() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [messages, setMessages] = useState<OrchestrationMessage[]>([]);
+  const [storeStatus, setStoreStatus] = useState<string | null>(null);
   
   // Loading & Error States
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -102,6 +103,7 @@ export default function App() {
       let isConfigured = false;
       let isConnected = false;
       let fetchedTestShop: string | null = null;
+      let latestStatus: string | null = null;
 
       try {
         const shopQuery = shopParam ? `&shop=${encodeURIComponent(shopParam)}` : '';
@@ -110,6 +112,8 @@ export default function App() {
           const statusData = await res.json();
           isConfigured = statusData.configured;
           isConnected = statusData.connected;
+          latestStatus = statusData.status || null;
+          setStoreStatus(statusData.status || null);
           setIsOAuthConfigured(statusData.configured);
           if (statusData.testShop) {
             fetchedTestShop = statusData.testShop;
@@ -117,15 +121,15 @@ export default function App() {
           }
 
           if (isConfigured) {
-            console.log(`[Shopify OAuth] Configured. Connected: ${isConnected}, testShop: ${statusData.testShop}`);
+            console.log(`[Shopify OAuth] Configured. Connected: ${isConnected}, status: ${latestStatus}, testShop: ${statusData.testShop}`);
             if (shopParam) {
               setShopifyLaunchShop(shopParam);
-              if (!isConnected) {
+              if (!isConnected && latestStatus !== "REAUTH_REQUIRED" && latestStatus !== "MISSING_SCOPES") {
                 console.log(`[Shopify OAuth] Shop ${shopParam} is not connected. Setting needsShopifyConnection flag.`);
                 setNeedsShopifyConnection(true);
                 isPendingConnection = true;
               }
-            } else if (!isConnected) {
+            } else if (!isConnected && latestStatus !== "REAUTH_REQUIRED" && latestStatus !== "MISSING_SCOPES") {
               console.log(`[Shopify OAuth] OAuth configured but no connected store found.`);
               isPendingConnection = true;
             }
@@ -152,7 +156,8 @@ export default function App() {
           url: prefillUrl,
           name: cleanName || "Unconnected Store",
           connected: false,
-          scopes: []
+          scopes: [],
+          status: (latestStatus as any) || "DISCONNECTED"
         });
       }
 
@@ -510,6 +515,32 @@ export default function App() {
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg transition text-3xs uppercase cursor-pointer"
             >
               Connect Now
+            </button>
+          </div>
+        )}
+
+        {(store.status === "REAUTH_REQUIRED" || store.status === "MISSING_SCOPES" || storeStatus === "REAUTH_REQUIRED" || storeStatus === "MISSING_SCOPES") && (
+          <div className="bg-rose-50 border-b border-rose-200 p-3.5 flex items-center justify-between gap-3 text-xs text-rose-900 animate-fade-in shrink-0">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 animate-pulse" />
+              <span>
+                <strong>Shopify Connection Alert:</strong>{" "}
+                {store.status === "MISSING_SCOPES" || storeStatus === "MISSING_SCOPES"
+                  ? "The application is missing required access scopes to execute agent workflows."
+                  : "Your Shopify access token is invalid, expired, or has been revoked."}{" "}
+                Please re-authorize the application to restore your connection.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                const targetShop = store.url || shopifyLaunchShop || shopifyTestShop || "";
+                if (targetShop) {
+                  handleConnectStore(targetShop, []);
+                }
+              }}
+              className="bg-rose-600 hover:bg-rose-700 text-white font-bold px-3 py-1.5 rounded-lg transition text-3xs uppercase cursor-pointer"
+            >
+              Re-authorize App
             </button>
           </div>
         )}

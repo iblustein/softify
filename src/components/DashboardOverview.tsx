@@ -11,7 +11,8 @@ import {
   ArrowRight,
   RefreshCw,
   TrendingUp,
-  Coins
+  Coins,
+  AlertCircle
 } from 'lucide-react';
 import { DashboardStats, ShopifyStore } from '../types';
 
@@ -126,19 +127,39 @@ export default function DashboardOverview({
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl ${store.connected ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+            <div className={`p-2 rounded-xl ${
+              store.status === 'REAUTH_REQUIRED' || store.status === 'MISSING_SCOPES'
+                ? 'bg-rose-50 text-rose-600 border border-rose-100'
+                : store.connected 
+                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' 
+                  : 'bg-amber-50 text-amber-600 border border-amber-100'
+            }`}>
               <LayoutDashboard className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-sm font-bold text-slate-900 leading-none">Shopify Store Credentials</h2>
               <p className="text-xs text-slate-500 mt-1.5">
-                {store.connected ? `Successfully authenticated using Managed Agents OAuth API` : 'Storefront link inactive'}
+                {store.status === 'REAUTH_REQUIRED'
+                  ? 'Access token is invalid or expired. Re-authorization required.'
+                  : store.status === 'MISSING_SCOPES'
+                    ? 'Store connection is missing required OAuth scopes.'
+                    : store.connected 
+                      ? 'Successfully authenticated using Managed Agents OAuth API' 
+                      : 'Storefront link inactive'}
               </p>
             </div>
           </div>
           
           <div className="flex gap-2">
-            {store.connected ? (
+            {store.status === 'REAUTH_REQUIRED' || store.status === 'MISSING_SCOPES' ? (
+              <button
+                onClick={() => onConnect(storeInput, selectedScopes)}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-xl transition border border-rose-100 cursor-pointer animate-pulse"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Re-authorize Store
+              </button>
+            ) : store.connected ? (
               <button
                 onClick={onDisconnect}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition border border-red-100 cursor-pointer"
@@ -158,8 +179,48 @@ export default function DashboardOverview({
           </div>
         </div>
 
+        {/* Deep Connection Integrity Alert details */}
+        {(store.status === 'REAUTH_REQUIRED' || store.status === 'MISSING_SCOPES') && (
+          <div className="p-6 bg-rose-50/20 border-b border-slate-100 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="p-1.5 bg-rose-100 text-rose-700 rounded-lg mt-0.5">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-xs font-extrabold text-rose-950 uppercase tracking-wider">
+                  {store.status === 'MISSING_SCOPES' ? 'Missing Permissions Required' : 'Invalid API Credentials'}
+                </h3>
+                <p className="text-xs text-rose-800 mt-1.5 leading-relaxed">
+                  {store.status === 'MISSING_SCOPES'
+                    ? 'Specialized Gemini Agent workers require additional permissions to invoke tools in the Tool Gateway. Please complete the re-authorization process.'
+                    : 'Shopify returned a 401 Unauthorized or 403 Forbidden error, meaning your merchant access token has expired or was revoked. Re-authenticating will securely refresh your session.'}
+                </p>
+              </div>
+            </div>
+
+            {store.status === 'MISSING_SCOPES' && (
+              <div className="pl-9 space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Requested Scopes Not Yet Granted:</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {ALL_AVAILABLE_SCOPES.map(s => {
+                    const isGranted = store.scopes.includes(s.id);
+                    if (!isGranted) {
+                      return (
+                        <span key={s.id} className="inline-flex items-center px-2.5 py-1 text-[10px] font-mono font-semibold rounded-full bg-rose-100 text-rose-700 border border-rose-200">
+                          {s.id}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Store Detail Metadata */}
-        {!showConnectForm && store.connected ? (
+        {!showConnectForm && (store.connected || store.status === 'REAUTH_REQUIRED' || store.status === 'MISSING_SCOPES') ? (
           <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-3">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Connected Storefront</span>

@@ -16,13 +16,13 @@ export async function getShop(shopDomain?: string): Promise<ShopifyStore> {
       if (shopDomain) {
         const cleanShop = shopDomain.trim().toLowerCase();
         connectedStore = await repos.stores.getStoreConnectionByUrl(cleanShop);
-        if (connectedStore && connectedStore.status !== "CONNECTED") {
-          connectedStore = null;
-        }
       }
       if (!connectedStore) {
         const connections = await repos.stores.getStoreConnectionsByOrganizationId("demo-org-id");
-        connectedStore = connections.find(c => c.status === "CONNECTED");
+        connectedStore = connections.find(c => c.status === "CONNECTED") || 
+                         connections.find(c => c.status === "REAUTH_REQUIRED") ||
+                         connections.find(c => c.status === "DISCONNECTED") ||
+                         connections[0] || null;
       }
       if (connectedStore) {
         const shopName = connectedStore.storeUrl.split(".")[0].replace(/[-_]/g, ' ')
@@ -30,11 +30,12 @@ export async function getShop(shopDomain?: string): Promise<ShopifyStore> {
         const synced: ShopifyStore = {
           url: connectedStore.storeUrl,
           name: shopName || "Shopify Store",
-          connected: true,
+          connected: connectedStore.status === "CONNECTED",
           connectedAt: connectedStore.connectedAt,
           plan: connectedStore.plan,
           currency: connectedStore.currency,
-          scopes: connectedStore.scopes
+          scopes: connectedStore.scopes,
+          status: connectedStore.status as any
         };
         // Update local mock store cache so subsequent tools/services match
         setShopifyStore(synced);

@@ -6,6 +6,8 @@ export interface ShopifyStore {
   plan?: string;
   currency?: string;
   scopes: string[];
+  status?: 'CONNECTED' | 'DISCONNECTED' | 'REAUTH_REQUIRED' | 'MISSING_SCOPES' | 'ERROR';
+  message?: string;
 }
 
 export type RiskLevel = 'Low' | 'Medium' | 'High';
