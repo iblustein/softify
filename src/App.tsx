@@ -41,6 +41,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isActionLoading, setIsActionLoading] = useState<boolean>(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [shopifyLaunchShop, setShopifyLaunchShop] = useState<string | null>(null);
+  const [needsShopifyConnection, setNeedsShopifyConnection] = useState<boolean>(false);
 
   // Fetch core parameters
   const fetchAllData = async () => {
@@ -94,16 +96,18 @@ export default function App() {
     const isShopifyLaunch = Boolean(shopParam && (hostParam || embeddedParam || hmacParam || timestampParam));
 
     async function checkOAuthAndSync() {
+      let isPendingConnection = false;
       if (shopParam) {
+        setShopifyLaunchShop(shopParam);
         try {
           const res = await fetch(`/api/shopify/oauth/status?shop=${encodeURIComponent(shopParam)}`);
           if (res.ok) {
             const statusData = await res.json();
             if (statusData.configured) {
               if (!statusData.connected) {
-                // Redirect browser to trigger installation flow
-                window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(shopParam)}`;
-                return;
+                console.log(`[Shopify OAuth] Shop ${shopParam} is not connected. Setting needsShopifyConnection flag.`);
+                setNeedsShopifyConnection(true);
+                isPendingConnection = true;
               } else {
                 console.log(`[Shopify OAuth] Shop ${shopParam} is already connected. Loading storefront data.`);
               }
@@ -115,6 +119,16 @@ export default function App() {
       }
 
       await fetchAllData();
+
+      if (isPendingConnection && shopParam) {
+        const cleanName = shopParam.split('.')[0].replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        setStore({
+          url: shopParam,
+          name: cleanName || "Shopify Store",
+          connected: false,
+          scopes: []
+        });
+      }
 
       // Handle query params on redirection callback
       if (urlParams.get("shopify_connected") === "true") {
@@ -151,6 +165,21 @@ export default function App() {
     setIsActionLoading(true);
     setErrorText(null);
     try {
+      // If OAuth is configured and a Shopify launch/current shop is known, redirect manually to installation
+      const checkShop = url || shopifyLaunchShop || "";
+      if (checkShop) {
+        const resStatus = await fetch(`/api/shopify/oauth/status?shop=${encodeURIComponent(checkShop)}`);
+        if (resStatus.ok) {
+          const statusData = await resStatus.json();
+          if (statusData.configured) {
+            console.log(`[Shopify OAuth] Redirecting manually to install for shop: ${checkShop}`);
+            window.location.href = `/api/shopify/oauth/install?shop=${encodeURIComponent(checkShop)}`;
+            return;
+          }
+        }
+      }
+
+      // Fallback: Mock connect flow
       const res = await fetch('/api/shop/connect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -435,6 +464,27 @@ export default function App() {
               className="text-amber-550 hover:text-amber-700 font-bold px-2 rounded hover:bg-amber-100 transition leading-none py-1 text-3xs uppercase cursor-pointer"
             >
               Acknowledge
+            </button>
+          </div>
+        )}
+
+        {needsShopifyConnection && (
+          <div className="bg-indigo-50 border-b border-indigo-200 p-3.5 flex items-center justify-between gap-3 text-xs text-indigo-900 animate-fade-in shrink-0">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 animate-pulse" />
+              <span>
+                <strong>Shopify Admin Launch Detected:</strong> Store <strong>{shopifyLaunchShop}</strong> is not connected yet. Click <strong>Connect Store</strong> on your dashboard to securely authorize.
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                if (shopifyLaunchShop) {
+                  handleConnectStore(shopifyLaunchShop, []);
+                }
+              }}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-1.5 rounded-lg transition text-3xs uppercase cursor-pointer"
+            >
+              Connect Now
             </button>
           </div>
         )}
