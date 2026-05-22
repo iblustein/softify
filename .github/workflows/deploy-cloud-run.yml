@@ -29,6 +29,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Validate required deployment secrets
+        run: |
+          test -n "${{ secrets.GCP_PROJECT_ID }}" || (echo "Missing secret: GCP_PROJECT_ID" && exit 1)
+          test -n "${{ secrets.GCP_REGION }}" || (echo "Missing secret: GCP_REGION" && exit 1)
+          test -n "${{ secrets.CLOUD_RUN_SERVICE }}" || (echo "Missing secret: CLOUD_RUN_SERVICE" && exit 1)
+          test -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" || (echo "Missing secret: GCP_WORKLOAD_IDENTITY_PROVIDER" && exit 1)
+          test -n "${{ secrets.GCP_SERVICE_ACCOUNT }}" || (echo "Missing secret: GCP_SERVICE_ACCOUNT" && exit 1)
+          test -n "${{ secrets.SOFTIFY_TEST_SHOP }}" || (echo "Missing secret: SOFTIFY_TEST_SHOP" && exit 1)        
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
