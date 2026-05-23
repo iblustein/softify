@@ -3,7 +3,19 @@ import { URL } from "url";
 const baseUrl = process.env.SOFTIFY_BASE_URL || "https://softify-595151907767.europe-west1.run.app";
 const shop = process.env.SOFTIFY_TEST_SHOP || "yambasurf-co-il.myshopify.com";
 const defaultLimit = process.env.SMOKE_PRODUCTS_LIMIT ? parseInt(process.env.SMOKE_PRODUCTS_LIMIT, 10) : 5;
-const bypassSecret = process.env.SOFTIFY_AGENT_DEV_BYPASS_SECRET || "dev-bypass-secret";
+
+const isLocalBaseUrl =
+  baseUrl.includes("localhost") ||
+  baseUrl.includes("127.0.0.1");
+
+const bypassSecretEnv = process.env.SOFTIFY_AGENT_DEV_BYPASS_SECRET;
+
+if (!bypassSecretEnv && !isLocalBaseUrl) {
+  throw new Error("SOFTIFY_AGENT_DEV_BYPASS_SECRET is required for non-local agent chat smoke tests.");
+}
+
+const effectiveBypassSecret = bypassSecretEnv || "dev-bypass-secret";
+const bypassSecret = effectiveBypassSecret;
 
 console.log(`\n\x1b[1m\x1b[36m=== SOFTIFY SAAS RELEASE SMOKE TEST SUITE ===\x1b[0m`);
 console.log(`\x1b[33mTarget base URL :\x1b[0m ${baseUrl}`);
@@ -221,6 +233,32 @@ async function runSuite() {
       if (typeof p.updatedAt !== "string") throw new Error("Expected product updatedAt to be a string");
       if (typeof p.syncedAt !== "string") throw new Error("Expected product syncedAt to be a string");
     }
+  });
+
+  // Test H.5: Agent chat missing bypass header negative validation
+  await check("H.5. Agent chat missing bypass header negative validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence",
+        message: "How many products are synced?"
+      })
+    });
+
+    if (res.status !== 401) {
+      throw new Error(`Expected HTTP status 401, got: ${res.status}`);
+    }
+    const data = await res.json();
+    if (data.ok !== false || data.code !== "UNAUTHORIZED") {
+      throw new Error(`Expected ok === false and code === "UNAUTHORIZED", got: ${JSON.stringify(data)}`);
+    }
+    scanForForbiddenKeys(data);
   });
 
   // Test I: Agent chat product summary validation

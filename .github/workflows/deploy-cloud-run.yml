@@ -37,6 +37,7 @@ jobs:
           test -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" || (echo "Missing secret: GCP_WORKLOAD_IDENTITY_PROVIDER" && exit 1)
           test -n "${{ secrets.GCP_SERVICE_ACCOUNT }}" || (echo "Missing secret: GCP_SERVICE_ACCOUNT" && exit 1)
           test -n "${{ secrets.SOFTIFY_TEST_SHOP }}" || (echo "Missing secret: SOFTIFY_TEST_SHOP" && exit 1)        
+          test -n "${{ secrets.SOFTIFY_AGENT_DEV_BYPASS_SECRET }}" || (echo "Missing secret: SOFTIFY_AGENT_DEV_BYPASS_SECRET" && exit 1)
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -70,10 +71,13 @@ jobs:
           service: ${{ secrets.CLOUD_RUN_SERVICE }}
           region: ${{ secrets.GCP_REGION }}
           source: .
-          flags: "--allow-unauthenticated"
+          flags: >-
+            --allow-unauthenticated
+            --set-env-vars=SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true,AI_PROVIDER=mock,SOFTIFY_AGENT_DEV_BYPASS_SECRET=${{ secrets.SOFTIFY_AGENT_DEV_BYPASS_SECRET }}
 
       - name: Smoke test deployed service
         env:
           SOFTIFY_BASE_URL: ${{ steps.deploy.outputs.url }}
           SOFTIFY_TEST_SHOP: ${{ secrets.SOFTIFY_TEST_SHOP }}
+          SOFTIFY_AGENT_DEV_BYPASS_SECRET: ${{ secrets.SOFTIFY_AGENT_DEV_BYPASS_SECRET }}
         run: npm run smoke:prod
