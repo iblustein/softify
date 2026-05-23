@@ -5,6 +5,7 @@ import { getMockProducts } from "../data/mock-products.js";
 import { getDemoPlatformContext } from "../services/platform-context.service.js";
 import { ToolExecutionContext } from "../services/tool-execution-context.service.js";
 import { readShopInfo, readProducts, ShopifyAdminApiError } from "../services/shopify-admin-client.service.js";
+import { getRepositories } from "../repositories/repository-provider.js";
 
 export interface ExecuteToolResult {
   toolName: string;
@@ -355,6 +356,123 @@ export async function executeToolWithContext(
         };
       }
     }
+    case "catalog.products.status": {
+      try {
+        let shopDomain = cleanArgs.shop;
+        if (!shopDomain) {
+          shopDomain = cleanArgs.shopDomain;
+        }
+        if (!shopDomain) {
+          shopDomain = context.storeConnection?.storeUrl;
+        }
+        if (!shopDomain) {
+          return {
+            toolName,
+            args: cleanArgs,
+            status: "failed",
+            result: { error: "No active shop domain found in context or arguments." }
+          };
+        }
+        const repos = getRepositories();
+        const count = await repos.products.countProductSnapshotsByShop(shopDomain);
+        const latestSyncAt = await repos.products.getLatestProductSyncAt(shopDomain);
+        return {
+          toolName,
+          args: cleanArgs,
+          status: "completed",
+          result: {
+            shop: shopDomain,
+            count,
+            latestSyncAt
+          }
+        };
+      } catch (error: any) {
+        return {
+          toolName,
+          args: cleanArgs,
+          status: "failed",
+          result: { error: error.message }
+        };
+      }
+    }
+
+    case "catalog.products.summary": {
+      try {
+        let shopDomain = cleanArgs.shop;
+        if (!shopDomain) {
+          shopDomain = cleanArgs.shopDomain;
+        }
+        if (!shopDomain) {
+          shopDomain = context.storeConnection?.storeUrl;
+        }
+        if (!shopDomain) {
+          return {
+            toolName,
+            args: cleanArgs,
+            status: "failed",
+            result: { error: "No active shop domain found in context or arguments." }
+          };
+        }
+        const repos = getRepositories();
+        const count = await repos.products.countProductSnapshotsByShop(shopDomain);
+        const latestSyncAt = await repos.products.getLatestProductSyncAt(shopDomain);
+        return {
+          toolName,
+          args: cleanArgs,
+          status: "completed",
+          result: {
+            shop: shopDomain,
+            syncedProductCount: count,
+            lastSyncedAt: latestSyncAt,
+            source: "product_snapshots"
+          }
+        };
+      } catch (error: any) {
+        return {
+          toolName,
+          args: cleanArgs,
+          status: "failed",
+          result: { error: error.message }
+        };
+      }
+    }
+
+    case "catalog.products.read":
+    case "catalog.products.list": {
+      try {
+        let shopDomain = cleanArgs.shop;
+        if (!shopDomain) {
+          shopDomain = cleanArgs.shopDomain;
+        }
+        if (!shopDomain) {
+          shopDomain = context.storeConnection?.storeUrl;
+        }
+        if (!shopDomain) {
+          return {
+            toolName,
+            args: cleanArgs,
+            status: "failed",
+            result: { error: "No active shop domain found in context or arguments." }
+          };
+        }
+        const limit = cleanArgs.limit !== undefined ? Number(cleanArgs.limit) : undefined;
+        const repos = getRepositories();
+        const results = await repos.products.listProductSnapshotsByShop(shopDomain, limit);
+        return {
+          toolName,
+          args: cleanArgs,
+          status: "completed",
+          result: results
+        };
+      } catch (error: any) {
+        return {
+          toolName,
+          args: cleanArgs,
+          status: "failed",
+          result: { error: error.message }
+        };
+      }
+    }
 
     default:
       return {
@@ -368,6 +486,39 @@ export async function executeToolWithContext(
   }
 }
 
+export function sanitizeResult(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeResult);
+  }
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+  if (typeof obj === "object") {
+    const sanitized: any = {};
+    const forbiddenPatterns = [
+      /token/i,
+      /access_?token/i,
+      /refresh_?token/i,
+      /api_?key/i,
+      /secret/i,
+      /password/i,
+      /credential/i,
+      /private_?key/i,
+      /authorization/i,
+      /bearer/i
+    ];
+    for (const [key, val] of Object.entries(obj)) {
+      const isForbidden = forbiddenPatterns.some(p => p.test(key));
+      if (!isForbidden) {
+        sanitized[key] = sanitizeResult(val);
+      }
+    }
+    return sanitized;
+  }
+  return obj;
+}
+
 /**
  * Unified execution gate for all AI agent tool calls.
  * Kept fully backward compatible with the current legacy signature.
@@ -378,10 +529,16 @@ export async function executeTool(
   agentOrContext: { id: string; name: string; allowedTools: string[]; requiredScopes: string[] } | ToolExecutionContext,
   customApprovalDetails?: { title: string; summary: string; before?: string }
 ): Promise<ExecuteToolResult> {
+  let result: ExecuteToolResult;
   if (isToolExecutionContext(agentOrContext)) {
-    return await executeToolWithContext(toolName, args, agentOrContext, customApprovalDetails);
+    result = await executeToolWithContext(toolName, args, agentOrContext, customApprovalDetails);
+  } else {
+    const context = buildCompatibilityContext(agentOrContext);
+    result = await executeToolWithContext(toolName, args, context, customApprovalDetails);
   }
 
-  const context = buildCompatibilityContext(agentOrContext);
-  return await executeToolWithContext(toolName, args, context, customApprovalDetails);
+  if (result && result.result) {
+    result.result = sanitizeResult(result.result);
+  }
+  return result;
 }

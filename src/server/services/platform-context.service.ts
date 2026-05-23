@@ -215,6 +215,34 @@ export function getDemoPlatformContext(): PlatformContext {
       parameters: '{"shopDomain": "string?", "limit": "number?", "query": "string?", "after": "string?"}',
       requiredScope: "read_products",
       riskLevel: "Low"
+    },
+    {
+      name: "catalog.products.status",
+      description: "Read catalog product snapshot sync status.",
+      parameters: '{"shop": "string"}',
+      requiredScope: "read_products",
+      riskLevel: "Low"
+    },
+    {
+      name: "catalog.products.summary",
+      description: "Get product sync count and timestamps summary.",
+      parameters: '{"shop": "string"}',
+      requiredScope: "read_products",
+      riskLevel: "Low"
+    },
+    {
+      name: "catalog.products.read",
+      description: "Read synced catalog product snapshot list.",
+      parameters: '{"shop": "string", "limit": "number?"}',
+      requiredScope: "read_products",
+      riskLevel: "Low"
+    },
+    {
+      name: "catalog.products.list",
+      description: "List synced catalog product snapshots.",
+      parameters: '{"shop": "string", "limit": "number?"}',
+      requiredScope: "read_products",
+      riskLevel: "Low"
     }
   ];
 

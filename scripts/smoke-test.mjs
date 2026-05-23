@@ -222,6 +222,80 @@ async function runSuite() {
     }
   });
 
+  // Test I: Agent chat product summary validation
+  await check("I. Agent chat product summary validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence",
+        message: "How many products are synced?"
+      })
+    });
+
+    await checkResponse(res);
+    const data = await res.json();
+    scanForForbiddenKeys(data);
+
+    if (data.ok !== true) {
+      throw new Error(`Expected ok to be true, got: ${data.ok}`);
+    }
+    if (data.provider !== "mock") {
+      throw new Error(`Expected provider to be "mock", got: ${data.provider}`);
+    }
+    if (!data.message || typeof data.message !== "string") {
+      throw new Error("Expected final message string to exist.");
+    }
+    if (!Array.isArray(data.toolCalls) || data.toolCalls.length === 0) {
+      throw new Error("Expected toolCalls list to contain catalog tool execution.");
+    }
+    
+    const summaryCall = data.toolCalls.find(t => t.toolName === "catalog.products.summary");
+    if (!summaryCall) {
+      throw new Error(`Expected catalog.products.summary tool call, got: ${JSON.stringify(data.toolCalls)}`);
+    }
+  });
+
+  // Test J: Agent chat missing write access validation
+  await check("J. Agent chat missing write access validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence",
+        message: "Update all product titles"
+      })
+    });
+
+    await checkResponse(res);
+    const data = await res.json();
+    scanForForbiddenKeys(data);
+
+    if (data.ok !== true) {
+      throw new Error(`Expected ok to be true, got: ${data.ok}`);
+    }
+    if (data.provider !== "mock") {
+      throw new Error(`Expected provider to be "mock", got: ${data.provider}`);
+    }
+    const lowerMsg = data.message.toLowerCase();
+    if (!lowerMsg.includes("read-only") && !lowerMsg.includes("cannot") && !lowerMsg.includes("write")) {
+      throw new Error(`Expected message to state write/update access is not available, got: "${data.message}"`);
+    }
+    if (Array.isArray(data.toolCalls) && data.toolCalls.length > 0) {
+      throw new Error(`Expected toolCalls to be empty for mutation refusal, got: ${JSON.stringify(data.toolCalls)}`);
+    }
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

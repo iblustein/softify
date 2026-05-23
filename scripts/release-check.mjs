@@ -217,6 +217,106 @@ async function runVerification() {
     scanForForbiddenKeys(sanitized);
   });
 
+  // Test 7: AI Provider Factory, Mock AI Provider, and Agent Runtime Imports
+  await check("7. AI Provider Factory, Mock AI Provider, and Agent Runtime Imports", async () => {
+    const { getAiProvider } = await import("../src/server/ai/ai-provider.factory.ts");
+    const { MockAiProvider } = await import("../src/server/ai/mock-ai.provider.ts");
+    const { runAgentChat } = await import("../src/server/services/agent-runtime.service.ts");
+
+    if (typeof getAiProvider !== "function") throw new Error("getAiProvider is not a function.");
+    if (typeof runAgentChat !== "function") throw new Error("runAgentChat is not a function.");
+
+    const provider = getAiProvider("mock");
+    if (provider.name !== "mock") throw new Error(`Expected mock provider name, got: ${provider.name}`);
+
+    // Verify Mock provider behavior A (catalog/read queries returns tool call)
+    const readResponse = await provider.generate({
+      agentId: "agent_product_intelligence",
+      shop: "test-shop.myshopify.com",
+      message: "How many products are synced?",
+      allowedTools: ["catalog.products.summary"]
+    });
+
+    if (readResponse.type !== "tool_call" || readResponse.toolName !== "catalog.products.summary") {
+      throw new Error(`Expected catalog.products.summary tool call, got: ${JSON.stringify(readResponse)}`);
+    }
+
+    // Verify Mock provider behavior B (write queries returns read-only refusal)
+    const writeResponse = await provider.generate({
+      agentId: "agent_product_intelligence",
+      shop: "test-shop.myshopify.com",
+      message: "Update all product titles",
+      allowedTools: ["catalog.products.summary"]
+    });
+
+    if (writeResponse.type !== "final") {
+      throw new Error(`Expected final answer for write intent, got: ${JSON.stringify(writeResponse)}`);
+    }
+    if (!writeResponse.message.toLowerCase().includes("read-only") && !writeResponse.message.toLowerCase().includes("cannot")) {
+      throw new Error(`Expected refusal message, got: ${writeResponse.message}`);
+    }
+  });
+
+  // Test 8: Tool Gateway recursive sanitization validation
+  await check("8. Tool Gateway recursive sanitization validation", async () => {
+    const { sanitizeResult } = await import("../src/server/tools/tool-gateway.ts");
+
+    const sensitiveObject = {
+      id: "prod_1",
+      title: "Test Shirt",
+      accessToken: "secret-token-123",
+      access_token: "secret-token-456",
+      accessTokenEncrypted: "encrypted-abc",
+      refreshToken: "refresh-abc",
+      apiKey: "key-123",
+      secret: "pass-abc",
+      password: "pass",
+      credentials: {
+        privateKey: "private-abc",
+        bearer: "bearer-abc"
+      },
+      authorization: "Bearer secret",
+      nestedList: [
+        {
+          id: "nested_1",
+          token: "secret-token"
+        }
+      ]
+    };
+
+    const sanitized = sanitizeResult(sensitiveObject);
+
+    // Scan for forbidden fields explicitly
+    const scanKeys = (obj) => {
+      if (obj === null || obj === undefined) return;
+      if (Array.isArray(obj)) {
+        obj.forEach(scanKeys);
+        return;
+      }
+      if (typeof obj === "object") {
+        const forbiddenKeys = [
+          "accesstoken", "access_token", "accesstokenencrypted", "refreshtoken",
+          "apikey", "api_key", "secret", "password", "credential", "credentials",
+          "token", "privatekey", "authorization", "bearer"
+        ];
+        for (const [key, val] of Object.entries(obj)) {
+          const lowerKey = key.toLowerCase();
+          const isForbidden = forbiddenKeys.some(f => lowerKey.includes(f));
+          if (isForbidden) {
+            throw new Error(`Forbidden key "${key}" was not removed by recursive sanitization.`);
+          }
+          scanKeys(val);
+        }
+      }
+    };
+
+    scanKeys(sanitized);
+
+    // Validate non-sensitive keys are kept
+    if (sanitized.id !== "prod_1") throw new Error("Sanitization removed valid ID field.");
+    if (sanitized.title !== "Test Shirt") throw new Error("Sanitization removed valid title field.");
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {
