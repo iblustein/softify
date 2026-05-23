@@ -72,7 +72,11 @@ export async function runAgentChat(params: {
     PRODUCT_INTELLIGENCE_AGENT.name,
     "AGENT_CHAT_REQUEST",
     `Received customer catalog query for store ${cleanShop}`,
-    { agentId, message } // Safe logging: never includes secrets
+    { 
+      agentId, 
+      messageLength: message.length, 
+      messagePreview: message.length > 60 ? `${message.slice(0, 60)}...` : message 
+    }
   );
 
   // 4. Invoke the pluggable AI provider

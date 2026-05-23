@@ -145,6 +145,19 @@ export async function executeToolWithContext(
   context: ToolExecutionContext,
   customApprovalDetails?: { title: string; summary: string; before?: string }
 ): Promise<ExecuteToolResult> {
+  const result = await executeToolWithContextRaw(toolName, args, context, customApprovalDetails);
+  if (result && result.result) {
+    result.result = sanitizeResult(result.result);
+  }
+  return result;
+}
+
+async function executeToolWithContextRaw(
+  toolName: string,
+  args: any,
+  context: ToolExecutionContext,
+  customApprovalDetails?: { title: string; summary: string; before?: string }
+): Promise<ExecuteToolResult> {
   const cleanArgs = args || {};
 
   // Run validation
