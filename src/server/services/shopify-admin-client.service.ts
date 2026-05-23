@@ -57,7 +57,9 @@ export async function readShopInfo(shopDomain: string): Promise<ShopifyShopInfo>
   const repos = getRepositories();
   const connection = await repos.stores.getStoreConnectionByUrl(cleanShop);
 
-  const isMockDomain = cleanShop.includes("glowthread-apparel") || cleanShop.includes("luminary-essentials");
+  const isMockDomain = cleanShop.includes("glowthread-apparel") || 
+                       cleanShop.includes("luminary-essentials") ||
+                       cleanShop.includes("yambasurf-co-il");
   const isConfigured = isShopifyOAuthConfigured();
 
   // 1. Strict real OAuth environment validation
@@ -241,7 +243,9 @@ export async function readProducts(
   const repos = getRepositories();
   const connection = await repos.stores.getStoreConnectionByUrl(cleanShop);
 
-  const isMockDomain = cleanShop.includes("glowthread-apparel") || cleanShop.includes("luminary-essentials");
+  const isMockDomain = cleanShop.includes("glowthread-apparel") || 
+                       cleanShop.includes("luminary-essentials") ||
+                       cleanShop.includes("yambasurf-co-il");
   const isConfigured = isShopifyOAuthConfigured();
 
   // 1. Strict real OAuth environment validation

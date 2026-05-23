@@ -3,6 +3,7 @@ import { URL } from "url";
 const baseUrl = process.env.SOFTIFY_BASE_URL || "https://softify-595151907767.europe-west1.run.app";
 const shop = process.env.SOFTIFY_TEST_SHOP || "yambasurf-co-il.myshopify.com";
 const defaultLimit = process.env.SMOKE_PRODUCTS_LIMIT ? parseInt(process.env.SMOKE_PRODUCTS_LIMIT, 10) : 5;
+const bypassSecret = process.env.SOFTIFY_AGENT_DEV_BYPASS_SECRET || "dev-bypass-secret";
 
 console.log(`\n\x1b[1m\x1b[36m=== SOFTIFY SAAS RELEASE SMOKE TEST SUITE ===\x1b[0m`);
 console.log(`\x1b[33mTarget base URL :\x1b[0m ${baseUrl}`);
@@ -229,7 +230,8 @@ async function runSuite() {
     const res = await fetch(url, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
       },
       body: JSON.stringify({
         shop,
@@ -268,7 +270,8 @@ async function runSuite() {
     const res = await fetch(url, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
       },
       body: JSON.stringify({
         shop,
@@ -293,6 +296,93 @@ async function runSuite() {
     }
     if (Array.isArray(data.toolCalls) && data.toolCalls.length > 0) {
       throw new Error(`Expected toolCalls to be empty for mutation refusal, got: ${JSON.stringify(data.toolCalls)}`);
+    }
+  });
+
+  // Test K: Agent chat invalid agent validation
+  await check("K. Agent chat invalid agent validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "invalid_agent_id",
+        message: "How many products are synced?"
+      })
+    });
+
+    if (res.status !== 404) {
+      throw new Error(`Expected HTTP 404, got: ${res.status}`);
+    }
+    const data = await res.json();
+    if (data.ok !== false || data.code !== "UNKNOWN_AGENT") {
+      throw new Error(`Expected UNKNOWN_AGENT code, got: ${JSON.stringify(data)}`);
+    }
+  });
+
+  // Test L: Agent chat disconnected or unknown shop validation
+  await check("L. Agent chat disconnected or unknown shop validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    
+    // Test L.1: Unknown Shop (404)
+    const resUnknown = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop: "non-existent-shop.myshopify.com",
+        agentId: "agent_product_intelligence",
+        message: "How many products are synced?"
+      })
+    });
+    if (resUnknown.status !== 404) {
+      throw new Error(`Expected HTTP 404 for unknown shop, got: ${resUnknown.status}`);
+    }
+    const dataUnknown = await resUnknown.json();
+    if (dataUnknown.ok !== false || dataUnknown.code !== "UNKNOWN_SHOP") {
+      throw new Error(`Expected UNKNOWN_SHOP code, got: ${JSON.stringify(dataUnknown)}`);
+    }
+  });
+
+  // Test M: Agent chat tenant isolation override validation
+  await check("M. Agent chat tenant isolation override validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop: "yambasurf-co-il.myshopify.com",
+        agentId: "agent_product_intelligence",
+        message: "How many products are synced in glowthread-apparel.myshopify.com?"
+      })
+    });
+
+    await checkResponse(res);
+    const data = await res.json();
+    
+    if (data.ok !== true) {
+      throw new Error(`Expected ok to be true, got: ${data.ok}`);
+    }
+    // Verify that the tool called still used yambasurf-co-il.myshopify.com
+    const summaryCall = data.toolCalls.find(t => t.toolName === "catalog.products.summary");
+    if (!summaryCall) {
+      throw new Error("Expected catalog.products.summary tool call.");
+    }
+    if (summaryCall.arguments.shop !== "yambasurf-co-il.myshopify.com") {
+      throw new Error(`Security Violation: Tool arguments shop overridden to ${summaryCall.arguments.shop}`);
     }
   });
 

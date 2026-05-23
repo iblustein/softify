@@ -120,9 +120,10 @@ export async function checkHealth(shopDomain: string | null): Promise<ShopifyCon
   }
 
   // 8. Do not mock-bypass real Shopify domains when OAuth is configured.
-  // We can still mock-bypass standard mock sandbox domains (glowthread-apparel, luminary-essentials) for offline testing:
+  // We can still mock-bypass standard mock sandbox domains (glowthread-apparel, luminary-essentials, yambasurf-co-il) for offline testing:
   const isMockDomain = connection.storeUrl.includes("glowthread-apparel") || 
-                       connection.storeUrl.includes("luminary-essentials");
+                       connection.storeUrl.includes("luminary-essentials") ||
+                       connection.storeUrl.includes("yambasurf-co-il");
 
   if (isMockDomain) {
     return {

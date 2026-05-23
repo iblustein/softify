@@ -1,9 +1,8 @@
-import { getRepositories } from "../repositories/repository-provider.js";
 import { getAiProvider } from "../ai/ai-provider.factory.js";
 import { executeTool, sanitizeResult } from "../tools/tool-gateway.js";
-import { getDemoPlatformContext } from "./platform-context.service.js";
-import { ToolExecutionContext } from "./tool-execution-context.service.js";
 import { writeLog } from "./audit-log.service.js";
+import { PlatformContext } from "./platform-context.service.js";
+import { ToolExecutionContext } from "./tool-execution-context.service.js";
 
 function normalizeShopDomain(shop: string): string {
   if (!shop) return "";
@@ -16,19 +15,6 @@ function normalizeShopDomain(shop: string): string {
   return domain;
 }
 
-export const PRODUCT_INTELLIGENCE_AGENT = {
-  id: "agent_product_intelligence",
-  name: "Product Intelligence Agent",
-  allowedTools: [
-    "catalog.products.status",
-    "catalog.products.summary",
-    "catalog.products.list",
-    "catalog.products.read"
-  ],
-  requiredScopes: ["read_products"],
-  systemInstruction: "You are the Product Intelligence Agent. You analyze the store's product catalog snapshots and answer questions using only allowed tools."
-};
-
 export interface AgentChatResult {
   ok: boolean;
   agentId: string;
@@ -40,42 +26,47 @@ export interface AgentChatResult {
   }>;
 }
 
+/**
+ * Handles read-only chat turn with a pre-validated platform context.
+ * Performs request validation, authoritative shop override, allowed tools enforcement,
+ * and secure logging to guarantee zero token or PII leakage.
+ */
 export async function runAgentChat(params: {
   shop: string;
   agentId: string;
   message: string;
+  context: PlatformContext;
 }): Promise<AgentChatResult> {
-  const { agentId, message } = params;
+  const { agentId, message, context } = params;
 
-  // 1. Validate requested agent ID
-  if (agentId !== PRODUCT_INTELLIGENCE_AGENT.id) {
-    throw new Error(`Agent not found: '${agentId}'`);
+  // 1. Resolve agent from pre-validated context
+  const agentDefinition = context.agentDefinitions.find(a => a.id === agentId);
+  if (!agentDefinition) {
+    throw new Error(`Agent not found in context: '${agentId}'`);
   }
 
-  // 2. Validate request-level shop domain & load store connection
+  // 2. Validate request-level shop domain against context store connection
   const cleanShop = normalizeShopDomain(params.shop);
   if (!cleanShop) {
     throw new Error("Shop domain parameter is required.");
   }
 
-  const repos = getRepositories();
-  const connection = await repos.stores.getStoreConnectionByUrl(cleanShop);
-  if (!connection) {
-    throw new Error(`Shopify store connection not found for shop domain '${cleanShop}'.`);
+  const contextShop = normalizeShopDomain(context.storeConnection.storeUrl);
+  if (cleanShop !== contextShop) {
+    throw new Error(`Tenant isolation violation: Request shop '${cleanShop}' does not match context shop '${contextShop}'.`);
   }
 
   // 3. Load provider through AI factory
   const provider = getAiProvider();
 
-  // Audit initial chat request
+  // Audit initial chat request - MASKED telemetry only
   writeLog(
-    PRODUCT_INTELLIGENCE_AGENT.name,
+    agentDefinition.name,
     "AGENT_CHAT_REQUEST",
     `Received customer catalog query for store ${cleanShop}`,
     { 
       agentId, 
-      messageLength: message.length, 
-      messagePreview: message.length > 60 ? `${message.slice(0, 60)}...` : message 
+      messageLength: message.length
     }
   );
 
@@ -84,19 +75,24 @@ export async function runAgentChat(params: {
     agentId,
     shop: cleanShop,
     message,
-    allowedTools: PRODUCT_INTELLIGENCE_AGENT.allowedTools
+    allowedTools: agentDefinition.allowedTools
   });
 
   const toolCalls: Array<{ toolName: string; arguments: Record<string, unknown> }> = [];
 
   // 5. Handle AI Response type
   if (response.type === "final") {
-    // Audit trace logging
+    // Audit trace logging - MASKED telemetry only
     writeLog(
-      PRODUCT_INTELLIGENCE_AGENT.name,
+      agentDefinition.name,
       "AGENT_CHAT_RESPONSE",
-      `Formulated final answer directly: "${response.message.slice(0, 60)}..."`,
-      { ok: true }
+      `Formulated final answer directly`,
+      { 
+        agentId,
+        messageLength: message.length,
+        provider: provider.name,
+        toolCallCount: 0
+      }
     );
 
     return {
@@ -113,13 +109,16 @@ export async function runAgentChat(params: {
     const requestedTool = response.toolName;
 
     // Enforce Allowed Tools check at the runtime level
-    if (!PRODUCT_INTELLIGENCE_AGENT.allowedTools.includes(requestedTool)) {
+    if (!agentDefinition.allowedTools.includes(requestedTool)) {
       const refusal = "I cannot perform this action because the requested capability is not available to this agent.";
       writeLog(
-        PRODUCT_INTELLIGENCE_AGENT.name,
+        agentDefinition.name,
         "AGENT_CHAT_RESPONSE",
-        `Refused tool call '${requestedTool}' as it is not in the allowed list.`,
-        { toolName: requestedTool }
+        `Refused tool call '${requestedTool}' as it is not in the allowed list`,
+        { 
+          agentId,
+          toolName: requestedTool
+        }
       );
 
       return {
@@ -142,46 +141,37 @@ export async function runAgentChat(params: {
       arguments: toolArgs
     });
 
-    // Construct full ToolExecutionContext for Gateway security policies
-    const platformCtx = getDemoPlatformContext();
-    const context: ToolExecutionContext = {
-      currentUser: platformCtx.currentUser,
-      currentOrganization: platformCtx.currentOrganization,
-      storeConnection: connection,
-      agentDefinition: {
-        id: PRODUCT_INTELLIGENCE_AGENT.id,
-        name: PRODUCT_INTELLIGENCE_AGENT.name,
-        description: "Analyzes Shopify product snapshots.",
-        systemInstruction: PRODUCT_INTELLIGENCE_AGENT.systemInstruction,
-        allowedTools: PRODUCT_INTELLIGENCE_AGENT.allowedTools,
-        requiredScopes: PRODUCT_INTELLIGENCE_AGENT.requiredScopes,
-        riskLevel: "Low",
-        avatarColor: "bg-teal-600 text-white",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      agentInstallation: {
-        id: `inst_${PRODUCT_INTELLIGENCE_AGENT.id}`,
-        organizationId: connection.organizationId,
-        storeConnectionId: connection.id,
-        agentDefinitionId: PRODUCT_INTELLIGENCE_AGENT.id,
+    // Map active platform context back to singular ToolExecutionContext for unified Tool Gateway execution gate
+    const toolExecContext: ToolExecutionContext = {
+      currentUser: context.currentUser,
+      currentOrganization: context.currentOrganization,
+      storeConnection: context.storeConnection,
+      agentDefinition: agentDefinition,
+      agentInstallation: context.agentInstallations[0] || {
+        id: `inst_${agentDefinition.id}`,
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentDefinitionId: agentDefinition.id,
         enabled: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       },
-      enabledTools: platformCtx.enabledTools
+      enabledTools: context.enabledTools
     };
 
-    // Execute tool ONLY via unified Tool Gateway execution gate
-    const gatewayRes = await executeTool(requestedTool, toolArgs, context);
+    // Execute tool ONLY via unified Tool Gateway execution gate using the resolved platform context
+    const gatewayRes = await executeTool(requestedTool, toolArgs, toolExecContext);
 
     if (gatewayRes.status === "failed") {
       const failMsg = "I cannot perform this action because the required tool or access is missing.";
       writeLog(
-        PRODUCT_INTELLIGENCE_AGENT.name,
+        agentDefinition.name,
         "AGENT_CHAT_RESPONSE",
-        `Tool call '${requestedTool}' execution failed inside the Gateway.`,
-        { toolName: requestedTool }
+        `Tool call execution failed inside the Gateway`,
+        { 
+          agentId,
+          toolName: requestedTool
+        }
       );
 
       return {
@@ -201,7 +191,7 @@ export async function runAgentChat(params: {
       agentId,
       shop: cleanShop,
       message,
-      allowedTools: PRODUCT_INTELLIGENCE_AGENT.allowedTools,
+      allowedTools: agentDefinition.allowedTools,
       toolResults: [
         {
           toolName: requestedTool,
@@ -219,10 +209,15 @@ export async function runAgentChat(params: {
     }
 
     writeLog(
-      PRODUCT_INTELLIGENCE_AGENT.name,
+      agentDefinition.name,
       "AGENT_CHAT_RESPONSE",
-      `Formulated final answer after gateway call: "${finalMessage.slice(0, 60)}..."`,
-      { ok: true }
+      `Formulated final answer after gateway call`,
+      { 
+        agentId,
+        messageLength: message.length,
+        provider: provider.name,
+        toolCallCount: toolCalls.length
+      }
     );
 
     return {

@@ -317,6 +317,138 @@ async function runVerification() {
     if (sanitized.title !== "Test Shirt") throw new Error("Sanitization removed valid title field.");
   });
 
+  // Test 9: getDemoPlatformContext static imports scan
+  await check("9. getDemoPlatformContext imports scan", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    const runtimePath = path.resolve(process.cwd(), "src/server/services/agent-runtime.service.ts");
+    const resolverPath = path.resolve(process.cwd(), "src/server/services/platform-context-resolver.service.ts");
+    
+    const runtimeContent = fs.readFileSync(runtimePath, "utf8");
+    const resolverContent = fs.readFileSync(resolverPath, "utf8");
+    
+    if (runtimeContent.includes("getDemoPlatformContext")) {
+      throw new Error("Security Violation: agent-runtime.service.ts imports getDemoPlatformContext");
+    }
+    if (resolverContent.includes("getDemoPlatformContext")) {
+      throw new Error("Security Violation: platform-context-resolver.service.ts imports getDemoPlatformContext");
+    }
+  });
+
+  // Test 10: Static Agent Registry allowed tools validation
+  await check("10. Static Agent Registry allowed tools validation", async () => {
+    const { AGENT_PRODUCT_INTELLIGENCE, getAgentDefinition } = await import("../src/server/agents/agent-definitions.ts");
+    
+    if (!AGENT_PRODUCT_INTELLIGENCE) {
+      throw new Error("Static Agent AGENT_PRODUCT_INTELLIGENCE is not defined.");
+    }
+    if (AGENT_PRODUCT_INTELLIGENCE.id !== "agent_product_intelligence") {
+      throw new Error(`Expected ID agent_product_intelligence, got ${AGENT_PRODUCT_INTELLIGENCE.id}`);
+    }
+    
+    const resolvedAgent = getAgentDefinition("agent_product_intelligence");
+    if (!resolvedAgent || resolvedAgent.id !== "agent_product_intelligence") {
+      throw new Error("Failed to resolve static agent from getAgentDefinition.");
+    }
+    
+    const forbiddenRegistryTools = resolvedAgent.allowedTools.filter(t => !t.startsWith("catalog.products."));
+    if (forbiddenRegistryTools.length > 0) {
+      throw new Error(`Security Violation: Agent allowed tools contains forbidden non-read-only tools: ${forbiddenRegistryTools.join(", ")}`);
+    }
+  });
+
+  // Test 11: Platform Context Resolver rejections and scope validation
+  await check("11. Platform Context Resolver rejections and scope validation", async () => {
+    const { resolvePlatformContext } = await import("../src/server/services/platform-context-resolver.service.ts");
+    const inMemoryStore = await import("../src/server/repositories/in-memory/in-memory-store.repository.ts");
+    
+    await inMemoryStore.clearStoreConnections();
+    
+    const testShop = "resolver-test-shop.myshopify.com";
+    
+    // Create disconnected store
+    const connInfo = {
+      id: "conn_resolver_test",
+      organizationId: "org_resolver_test",
+      storeUrl: testShop,
+      scopes: ["read_products"],
+      status: "DISCONNECTED",
+      plan: "Standard Plan",
+      currency: "USD"
+    };
+    await inMemoryStore.createStoreConnection(connInfo);
+    
+    // Set up mock request headers for dev-bypass
+    const bypassHeaders = {
+      "x-softify-dev-bypass": "test-bypass-secret"
+    };
+    
+    process.env.SOFTIFY_ALLOW_AGENT_DEV_BYPASS = "true";
+    process.env.SOFTIFY_AGENT_DEV_BYPASS_SECRET = "test-bypass-secret";
+    
+    // Verify disconnected rejection (409)
+    try {
+      await resolvePlatformContext({
+        shop: testShop,
+        agentId: "agent_product_intelligence",
+        request: { headers: bypassHeaders }
+      });
+      throw new Error("Resolver should have rejected disconnected store.");
+    } catch (err) {
+      if (err.httpStatus !== 409 || err.code !== "DISCONNECTED_SHOP") {
+        throw new Error(`Expected DISCONNECTED_SHOP (409) error, got: ${err.code} (${err.httpStatus})`);
+      }
+    }
+    
+    // Update store status to CONNECTED
+    await inMemoryStore.updateStoreConnection("conn_resolver_test", { status: "CONNECTED" });
+    
+    // Verify unknown agent rejection (404)
+    try {
+      await resolvePlatformContext({
+        shop: testShop,
+        agentId: "non_existent_agent",
+        request: { headers: bypassHeaders }
+      });
+      throw new Error("Resolver should have rejected unknown agent.");
+    } catch (err) {
+      if (err.httpStatus !== 404 || err.code !== "UNKNOWN_AGENT") {
+        throw new Error(`Expected UNKNOWN_AGENT (404) error, got: ${err.code} (${err.httpStatus})`);
+      }
+    }
+    
+    // Verify missing scopes rejection (403) by removing scopes from store
+    await inMemoryStore.updateStoreConnection("conn_resolver_test", { scopes: [] });
+    try {
+      await resolvePlatformContext({
+        shop: testShop,
+        agentId: "agent_product_intelligence",
+        request: { headers: bypassHeaders }
+      });
+      throw new Error("Resolver should have rejected missing scopes.");
+    } catch (err) {
+      if (err.httpStatus !== 403 || err.code !== "MISSING_REQUIRED_SCOPES") {
+        throw new Error(`Expected MISSING_REQUIRED_SCOPES (403) error, got: ${err.code} (${err.httpStatus})`);
+      }
+    }
+    
+    // Restore scopes and test successful resolve
+    await inMemoryStore.updateStoreConnection("conn_resolver_test", { scopes: ["read_products"] });
+    const context = await resolvePlatformContext({
+      shop: testShop,
+      agentId: "agent_product_intelligence",
+      request: { headers: bypassHeaders }
+    });
+    
+    if (context.storeConnection.id !== "conn_resolver_test") {
+      throw new Error("Resolver returned incorrect store connection.");
+    }
+    if (context.currentOrganization.id !== "org_resolver_test") {
+      throw new Error(`Derive currentOrganization.id failed: expected org_resolver_test, got ${context.currentOrganization.id}`);
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {
