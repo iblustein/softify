@@ -93,12 +93,21 @@ To test Firestore persistence locally without committing service account keys:
 
 ## 6. Post-Deployment Smoke Test
 
-After each deployment, execute the native smoke test suite to validate critical OAuth status and product/shop read capabilities.
+After each deployment, execute the native smoke test suite to validate critical OAuth status, product/shop read, and agent runtime capabilities.
+
+> [!IMPORTANT]
+> Running the agent chat smoke tests in deployed environments requires **BOTH**:
+> 1. `SOFTIFY_ALLOW_AGENT_DEV_BYPASS` set to `"true"` in the Cloud Run configuration/secrets.
+> 2. `SOFTIFY_AGENT_DEV_BYPASS_SECRET` configured (e.g. `"dev-bypass-secret"`) in the Cloud Run configuration/secrets.
+> Make sure these are defined in `cloudrun-firestore.env.yaml` or added to Cloud Run's environment variables.
+>
+> When launching the smoke tests locally or in the pipeline, make sure `SOFTIFY_AGENT_DEV_BYPASS_SECRET` is available in your shell so that the client sends the correct `X-Softify-Dev-Bypass` header.
 
 ### Windows CMD
 ```cmd
 set SOFTIFY_BASE_URL=https://softify-595151907767.europe-west1.run.app
 set SOFTIFY_TEST_SHOP=yambasurf-co-il.myshopify.com
+set SOFTIFY_AGENT_DEV_BYPASS_SECRET=dev-bypass-secret
 npm run smoke:prod
 ```
 
@@ -106,6 +115,7 @@ npm run smoke:prod
 ```powershell
 $env:SOFTIFY_BASE_URL="https://softify-595151907767.europe-west1.run.app"
 $env:SOFTIFY_TEST_SHOP="yambasurf-co-il.myshopify.com"
+$env:SOFTIFY_AGENT_DEV_BYPASS_SECRET="dev-bypass-secret"
 npm run smoke:prod
 ```
 
