@@ -657,7 +657,7 @@ async function runVerification() {
   // Test 28: Validate that no write/mutation tools are added in tool definitions
   await check("28. No write tools, product update tools, or mutation tools exist", async () => {
     const { ENABLED_TOOLS } = await import("../src/server/tools/tool-definitions.ts");
-    const preExistingAllowed = ["shopify.prepareProductUpdate", "shopify.prepareThemePatch"];
+    const preExistingAllowed = ["shopify.prepareProductUpdate", "shopify.prepareThemePatch", "catalog.products.update", "theme.assets.patch"];
     const forbiddenKeywords = ["write", "update", "delete", "create", "mutate", "inventory", "patch", "publish", "unpublish"];
     
     for (const tool of ENABLED_TOOLS) {
@@ -810,6 +810,36 @@ async function runVerification() {
     if (meta.accessToken && !meta.accessToken.includes("[REDACTED")) throw new Error("Exposed raw accessToken in metadata.");
     if (meta.secret && !meta.secret.includes("[REDACTED")) throw new Error("Exposed raw secret in metadata.");
     if (meta.customer && !meta.customer.includes("[REDACTED")) throw new Error("Exposed raw customer in metadata.");
+  });
+
+  // Test 37: Firestore approval repository contract compliance check
+  await check("37. Firestore approval repository contract compliance check", async () => {
+    const firestoreRepo = await import("../src/server/repositories/firestore/firestore-approval.repository.ts");
+    if (!firestoreRepo.getApprovalById) throw new Error("Missing getApprovalById implementation in Firestore approvals repo.");
+    if (!firestoreRepo.getApprovalsByOrganizationId) throw new Error("Missing getApprovalsByOrganizationId implementation in Firestore approvals repo.");
+    if (!firestoreRepo.createApprovalRequest) throw new Error("Missing createApprovalRequest implementation in Firestore approvals repo.");
+    if (!firestoreRepo.updateApprovalRequest) throw new Error("Missing updateApprovalRequest implementation in Firestore approvals repo.");
+  });
+
+  // Test 38: Repository provider contract wireup check
+  await check("38. Repository provider contract wireup check", async () => {
+    const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+    const repos = getRepositories();
+    if (!repos.approvals) throw new Error("Repository provider does not expose approvals reference.");
+  });
+
+  // Test 39: Tool definitions write/mutation registration check
+  await check("39. Tool definitions write/mutation registration check", async () => {
+    const { ENABLED_TOOLS } = await import("../src/server/tools/tool-definitions.ts");
+    const updateProduct = ENABLED_TOOLS.find(t => t.name === "catalog.products.update");
+    if (!updateProduct) throw new Error("Missing catalog.products.update in ENABLED_TOOLS definitions.");
+    if (updateProduct.riskLevel !== "Medium") throw new Error(`Incorrect risk level for product update tool: ${updateProduct.riskLevel}`);
+    if (updateProduct.requiredScope !== "write_products") throw new Error(`Incorrect scope for product update tool: ${updateProduct.requiredScope}`);
+
+    const patchTheme = ENABLED_TOOLS.find(t => t.name === "theme.assets.patch");
+    if (!patchTheme) throw new Error("Missing theme.assets.patch in ENABLED_TOOLS definitions.");
+    if (patchTheme.riskLevel !== "High") throw new Error(`Incorrect risk level for theme patch tool: ${patchTheme.riskLevel}`);
+    if (patchTheme.requiredScope !== "write_themes") throw new Error(`Incorrect scope for theme patch tool: ${patchTheme.requiredScope}`);
   });
 
   // Print PASS/FAIL Summary

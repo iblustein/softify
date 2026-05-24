@@ -16,7 +16,8 @@ export const AGENT_PRODUCT_INTELLIGENCE: AgentDefinition = {
     "catalog.insights.missing_product_type",
     "catalog.insights.vendor_summary",
     "catalog.insights.product_type_summary",
-    "catalog.insights.stale_snapshots"
+    "catalog.insights.stale_snapshots",
+    "catalog.products.update"
   ],
   requiredScopes: ["read_products"],
   riskLevel: "Low",

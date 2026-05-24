@@ -72,12 +72,26 @@ export interface ToolDefinition {
   riskLevel: 'Low' | 'Medium' | 'High';
 }
 
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "APPLIED" | "FAILED";
+
 export interface ApprovalRequest {
   id: string;
   organizationId: string;
   storeConnectionId: string;
   agentInstallationId: string;
-  agentName: string;
+  agentId: string;
+  toolName: string;
+  requestedBy: string; // Agent name
+  requestedAt: string;
+  decidedAt?: string;
+  decidedBy?: string;
+  status: ApprovalStatus;
+  riskLevel: 'Low' | 'Medium' | 'High';
+  summary: string;
+  beforeState: string;
+  afterState: string;
+  diff?: string;
+  // Keep backward-compatible properties for legacy routes
   actionType: 'PRODUCT_UPDATE' | 'THEME_PATCH';
   targetId: string;
   details: {
@@ -90,10 +104,6 @@ export interface ApprovalRequest {
     fields?: any;
     patch?: string;
   };
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
-  requestedAt: string;
-  decidedAt?: string;
-  decidedBy?: string;
 }
 
 export type AuditDecision = "allowed" | "blocked" | "completed" | "failed";
@@ -104,6 +114,10 @@ export const AuditEventNames = {
   TOOL_CALL: "TOOL_CALL",
   APPROVAL_CREATED: "APPROVAL_CREATED",
   APPROVAL_DECISION: "APPROVAL_DECISION",
+  APPROVAL_APPROVED: "APPROVAL_APPROVED",
+  APPROVAL_REJECTED: "APPROVAL_REJECTED",
+  APPROVAL_APPLIED: "APPROVAL_APPLIED",
+  APPROVAL_FAILED: "APPROVAL_FAILED",
   AGENT_CHAT_REQUEST: "AGENT_CHAT_REQUEST",
   PROVIDER_FINAL_RESPONSE: "PROVIDER_FINAL_RESPONSE",
   RUNTIME_ALLOWED_TOOLS_BLOCK: "RUNTIME_ALLOWED_TOOLS_BLOCK",

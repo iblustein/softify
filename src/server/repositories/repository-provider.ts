@@ -21,6 +21,7 @@ import * as firestoreStores from "./firestore/firestore-store.repository.js";
 import * as firestoreProducts from "./firestore/firestore-product.repository.js";
 import * as firestoreAgentInstallations from "./firestore/firestore-agent-installation.repository.js";
 import * as firestoreAudits from "./firestore/firestore-audit.repository.js";
+import * as firestoreApprovals from "./firestore/firestore-approval.repository.js";
 
 export interface Repositories {
   users: UserRepository;
@@ -55,13 +56,14 @@ export function getRepositories(): Repositories {
   const productsRepo = isConfigured ? firestoreProducts : inMemoryProducts;
   const agentInstallationsRepo = isConfigured ? firestoreAgentInstallations : inMemoryAgentInstallations;
   const auditsRepo = isConfigured ? firestoreAudits : inMemoryAudits;
+  const approvalsRepo = isConfigured ? firestoreApprovals : inMemoryApprovals;
 
   return {
     users: inMemoryUsers,
     organizations: inMemoryOrganizations,
     stores: storesRepo,
     agentInstallations: agentInstallationsRepo,
-    approvals: inMemoryApprovals,
+    approvals: approvalsRepo,
     audit: auditsRepo,
     conversations: inMemoryConversations,
     products: productsRepo

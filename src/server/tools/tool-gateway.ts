@@ -236,6 +236,96 @@ async function executeToolWithContextRaw(
     };
   }
 
+  // Intercept write/mutation tools and convert them into approvals!
+  if (toolName === "catalog.products.update" || toolName === "theme.assets.patch") {
+    const repos = getRepositories();
+    const isProduct = toolName === "catalog.products.update";
+    const riskLevel = isProduct ? "Medium" : "High";
+    const actionType = isProduct ? "PRODUCT_UPDATE" : "THEME_PATCH";
+    const targetId = isProduct ? String(cleanArgs.productId || "") : String(cleanArgs.themeId || "");
+    const title = isProduct 
+      ? `Update catalog product snapshot: '${targetId}'`
+      : `Apply custom style/layout patch to active theme: '${targetId}'`;
+    
+    const summary = cleanArgs.summary || (isProduct 
+      ? "AI-suggested catalog attributes/fields description optimization."
+      : "AI-suggested theme layout rules patch.");
+    
+    const beforeState = isProduct
+      ? "Standard synced catalog metadata."
+      : "Active CSS/HTML theme layout code rules.";
+    
+    const afterState = isProduct
+      ? JSON.stringify(cleanArgs.fields || {})
+      : String(cleanArgs.patch || "");
+
+    const approvalId = `APV-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+    await repos.approvals.createApprovalRequest({
+      id: approvalId,
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallation.id,
+      agentId: context.agentDefinition.id,
+      toolName,
+      requestedBy: context.agentDefinition.name,
+      status: "PENDING",
+      riskLevel,
+      summary,
+      beforeState,
+      afterState,
+      diff: "",
+      actionType,
+      targetId,
+      details: {
+        title,
+        before: beforeState,
+        after: afterState,
+        summary,
+        productId: isProduct ? Number(targetId) : undefined,
+        themeId: !isProduct ? targetId : undefined,
+        fields: isProduct ? cleanArgs.fields : undefined,
+        patch: !isProduct ? cleanArgs.patch : undefined
+      }
+    });
+
+    // Audit approval creation using writeAuditEvent
+    await writeAuditEvent({
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallation.id,
+      agentId: context.agentDefinition.id,
+      agentDefinitionId: context.agentDefinition.id,
+      toolName,
+      initiator: context.agentDefinition.name,
+      event: AuditEventNames.APPROVAL_CREATED,
+      description: `Created approval request '${approvalId}' for tool '${toolName}'`,
+      decision: "blocked",
+      reason: "requires_merchant_approval",
+      metadata: {
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentInstallationId: context.agentInstallation.id,
+        agentId: context.agentDefinition.id,
+        toolName,
+        approvalId,
+        decision: "blocked",
+        reason: "requires_merchant_approval"
+      }
+    });
+
+    return {
+      toolName,
+      args: cleanArgs,
+      status: "failed", // Blocked waiting for approval
+      result: {
+        requires_approval: true,
+        approvalId,
+        message: `Action requires merchant approval. Created request: ${approvalId}`
+      }
+    };
+  }
+
   // Record validation allowed decision securely via the async writeAuditEvent path
   await writeAuditEvent({
     organizationId: context.currentOrganization.id,

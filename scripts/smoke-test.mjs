@@ -751,6 +751,128 @@ async function runSuite() {
     console.log(`   [AUDIT TESTS] Retrieved ${logs.length} sanitized audit events successfully.`);
   });
 
+  // Test O: Merchant Approvals & Mutation Tools Foundation validation
+  await check("O. Merchant Approvals & Mutation Tools Foundation validation", async () => {
+    const timestamp = Date.now();
+    const chatUrl = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+
+    // 1. Trigger the mutation tool by posting a simulated chat query
+    const resChat = await fetch(chatUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence",
+        message: "simulate tool catalog.products.update"
+      })
+    });
+
+    await checkResponse(resChat);
+    const chatData = await resChat.json();
+    if (chatData.ok !== true) {
+      throw new Error(`Expected chat query to succeed, got: ${JSON.stringify(chatData)}`);
+    }
+
+    // 2. Fetch the approvals list strictly for our organization (expect 200)
+    const approvalsUrl = `${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`;
+    const resApprovals = await fetch(approvalsUrl);
+    await checkResponse(resApprovals);
+    const approvals = await resApprovals.json();
+
+    if (!Array.isArray(approvals)) {
+      throw new Error(`Expected approvals to be an array, got: ${typeof approvals}`);
+    }
+
+    // Find the newly created PENDING approval request for catalog.products.update
+    const pendingApproval = approvals.find(
+      a => a.status === "PENDING" && a.toolName === "catalog.products.update"
+    );
+    if (!pendingApproval) {
+      throw new Error("Expected to find a PENDING approval request for catalog.products.update.");
+    }
+
+    if (pendingApproval.riskLevel !== "Medium") {
+      throw new Error(`Expected riskLevel to be Medium, got: ${pendingApproval.riskLevel}`);
+    }
+
+    const approvalId = pendingApproval.id;
+
+    // 3. Verify approvals list tenant scoping and rejections
+    // GET without organizationId (expect 400)
+    const resNoOrg = await fetch(`${baseUrl}/api/approvals?t=${timestamp}`);
+    if (resNoOrg.status !== 400) {
+      throw new Error(`Expected HTTP 400 for GET approvals without organizationId, got: ${resNoOrg.status}`);
+    }
+
+    // GET with mismatched store connection cross-tenant check (expect 403)
+    const resCrossOrg = await fetch(`${baseUrl}/api/approvals?organizationId=different-org-id&shop=${shop}&t=${timestamp}`);
+    if (resCrossOrg.status !== 403) {
+      throw new Error(`Expected HTTP 403 Forbidden for cross-tenant GET approvals, got: ${resCrossOrg.status}`);
+    }
+
+    // 4. Verify decision tenant isolation (POST decide with wrong organizationId expect 403)
+    const decideUrl = `${baseUrl}/api/approvals/${approvalId}/decide?t=${timestamp}`;
+    const resDecideWrong = await fetch(decideUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision: "APPROVE",
+        organizationId: "different-org-id"
+      })
+    });
+    if (resDecideWrong.status !== 403) {
+      throw new Error(`Expected HTTP 403 Forbidden for cross-tenant POST decide, got: ${resDecideWrong.status}`);
+    }
+
+    // 5. Approve the request (expect 200 and state APPLIED)
+    const resDecideRight = await fetch(decideUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision: "APPROVE",
+        organizationId: "demo-org-id"
+      })
+    });
+    await checkResponse(resDecideRight);
+    const decideResult = await resDecideRight.json();
+    if (decideResult.status !== "APPLIED" && decideResult.status !== "APPROVED") {
+      throw new Error(`Expected decision status to be APPROVED or APPLIED, got: ${decideResult.status}`);
+    }
+
+    // 6. Verify that mock catalog changes were committed successfully
+    const resProducts = await fetch(`${baseUrl}/api/catalog/products?shop=${shop}&t=${timestamp}`);
+    await checkResponse(resProducts);
+    const products = await resProducts.json();
+    const targetProduct = products.find(p => String(p.shopifyProductId || p.id) === "101");
+    if (!targetProduct) {
+      throw new Error("Expected to find product 101 in catalog.");
+    }
+    if (targetProduct.title !== "Super Polished Tee") {
+      throw new Error(`Expected product 101 title to be updated to 'Super Polished Tee', got: ${targetProduct.title}`);
+    }
+
+    // 7. Verify audit logs trail for APPROVAL_CREATED, APPROVAL_APPROVED, and APPROVAL_APPLIED
+    const resAudits = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+    await checkResponse(resAudits);
+    const audits = await resAudits.json();
+
+    const createdEvent = audits.find(a => a.event === "APPROVAL_CREATED" && a.metadata?.approvalId === approvalId);
+    const approvedEvent = audits.find(a => a.event === "APPROVAL_APPROVED" && a.metadata?.approvalId === approvalId);
+    const appliedEvent = audits.find(a => a.event === "APPROVAL_APPLIED" && a.metadata?.approvalId === approvalId);
+
+    if (!createdEvent) throw new Error("Missing APPROVAL_CREATED audit log event.");
+    if (!approvedEvent) throw new Error("Missing APPROVAL_APPROVED audit log event.");
+    if (!appliedEvent) throw new Error("Missing APPROVAL_APPLIED audit log event.");
+
+    // Check zero-PII/security constraints on approvals
+    scanForForbiddenKeys(pendingApproval);
+
+    console.log(`   [APPROVAL TESTS] Successfully intercepted tool catalog.products.update, created approval request, rejected unauthorized access, committed mock catalog changes, and verified chronological audit trails.`);
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

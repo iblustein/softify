@@ -9,6 +9,7 @@ This index acts as the central directory for Softify's completed and planned dev
 | **10.3** | Agent Installations and Permission Policy Foundation | **Completed** | `agent_installations` collection/repository, installation routes, resolved installations in resolver, Tool Gateway allowedTools checking | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.4** | Product Intelligence Agent v2 — Read-Only Catalog Insights | **Completed** | `catalog-insights.service.ts` health scoring and metrics, `catalog.insights.*` read-only tools, extended 32 release checks & 20 smoke tests | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.5** | Agent Execution Audit Foundation | **Completed** | PERSIST audit records for agent runs and tool calls, telemetry scrubbing, tenant-isolated lookups | 100% Passed (Pre-deploy checks & smoke tests) |
+| **10.6** | Merchant Approvals & Mutation Tools Foundation | **Completed** | Secure write tool registry, gateway mutation interceptor, tenant-safe approvals REST router, mock commits and full lifecycle auditing | 100% Passed (Pre-deploy checks & smoke tests) |
 
 ## Ongoing Workflow & Maintenance Rules
 For every future phase, Antigravity must create or update the phase folder before and after implementation.

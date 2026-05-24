@@ -6,9 +6,22 @@ export class MockAiProvider implements AiProvider {
   async generate(input: AiProviderInput): Promise<AiProviderResponse> {
     const msg = (input.message || "").toLowerCase();
 
+    // Simulation path for testing approvals and gateway write block
+    if (msg.includes("simulate tool catalog.products.update")) {
+      return {
+        type: "tool_call",
+        toolName: "catalog.products.update",
+        arguments: {
+          productId: "101",
+          fields: { title: "Super Polished Tee" },
+          summary: "Overhaul metadata description copy"
+        }
+      };
+    }
+
     // 1. Detect write/mutation intent FIRST (precedence over catalog/read intent)
     const writeKeywords = ["update", "change", "delete", "modify", "patch", "price", "title", "write", "create", "upsert"];
-    const hasWriteIntent = writeKeywords.some(keyword => msg.includes(keyword));
+    const hasWriteIntent = writeKeywords.some(keyword => msg.includes(keyword) && !msg.includes("simulate"));
 
     if (hasWriteIntent) {
       return {
