@@ -741,6 +741,77 @@ async function runVerification() {
     }
   });
 
+  // Test 33: Validate firestore-audit.repository imports successfully
+  await check("33. firestore-audit.repository imports successfully", async () => {
+    const firestoreRepo = await import("../src/server/repositories/firestore/firestore-audit.repository.ts");
+    if (typeof firestoreRepo.createAuditEvent !== "function" || typeof firestoreRepo.getAuditEventsByOrganizationId !== "function") {
+      throw new Error("firestore-audit.repository.ts is missing critical contract operations.");
+    }
+  });
+
+  // Test 34: Validate repository provider exposes audit repository reference
+  await check("34. Repository provider exposes audit reference", async () => {
+    const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+    const repos = getRepositories();
+    if (!repos.audit) {
+      throw new Error("Repository provider is missing 'audit' repository reference.");
+    }
+    if (typeof repos.audit.createAuditEvent !== "function") {
+      throw new Error("Exposed audit repository is missing createAuditEvent function.");
+    }
+  });
+
+  // Test 35: Centralized sanitizeAuditPayload allowlist filters credentials, secrets, raw Shopify details, and raw query messages
+  await check("35. Centralized sanitizeAuditPayload allowlist filters credentials, secrets, raw Shopify details, and raw query messages", async () => {
+    const { sanitizeAuditPayload } = await import("../src/server/services/audit-log.service.ts");
+    const highRiskPayload = {
+      id: "LOG-999",
+      organizationId: "org-abc",
+      accessToken: "secret-token",
+      apiKey: "secret-key",
+      customer: { name: "John Doe", email: "john@example.com", phone: "123456" },
+      rawShopifyResponse: { status: "ACTIVE", token: "x" },
+      rawUserQuery: "Select all products...",
+      messageLength: 200,
+      toolName: "catalog.products.status"
+    };
+
+    const sanitized = sanitizeAuditPayload(highRiskPayload);
+
+    // Allowlisted keys must be present and match
+    if (sanitized.organizationId !== "org-abc") throw new Error("Allowlist key organizationId was incorrectly modified.");
+    if (sanitized.messageLength !== 200) throw new Error("Allowlist key messageLength was incorrectly modified.");
+    if (sanitized.toolName !== "catalog.products.status") throw new Error("Allowlist key toolName was incorrectly modified.");
+
+    // Non-allowlisted/high-risk keys must be redacted
+    if (!sanitized.accessToken.includes("[REDACTED")) throw new Error("Sanitization failed: accessToken was not redacted.");
+    if (!sanitized.apiKey.includes("[REDACTED")) throw new Error("Sanitization failed: apiKey was not redacted.");
+    if (!sanitized.customer.includes("[REDACTED")) throw new Error("Sanitization failed: customer object was not redacted.");
+    if (!sanitized.rawShopifyResponse.includes("[REDACTED")) throw new Error("Sanitization failed: rawShopifyResponse was not redacted.");
+    if (!sanitized.rawUserQuery.includes("[REDACTED")) throw new Error("Sanitization failed: rawUserQuery was not redacted.");
+  });
+
+  // Test 36: No token/secret exposure inside logged events
+  await check("36. No token/secret exposure inside logged events", async () => {
+    const { writeLog, getAuditLogs } = await import("../src/server/services/audit-log.service.ts");
+    writeLog("Test Initiator", "TEST_EVENT", "Testing log security", {
+      organizationId: "demo-org-id",
+      accessToken: "exposed-token",
+      shopifyToken: "exposed",
+      secret: "pass",
+      customer: { email: "j@j.com" }
+    });
+
+    const logs = getAuditLogs("demo-org-id");
+    const testLog = logs.find(l => l.event === "TEST_EVENT");
+    if (!testLog) throw new Error("Failed to find logged test event.");
+
+    const meta = testLog.metadata;
+    if (meta.accessToken && !meta.accessToken.includes("[REDACTED")) throw new Error("Exposed raw accessToken in metadata.");
+    if (meta.secret && !meta.secret.includes("[REDACTED")) throw new Error("Exposed raw secret in metadata.");
+    if (meta.customer && !meta.customer.includes("[REDACTED")) throw new Error("Exposed raw customer in metadata.");
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

@@ -96,15 +96,44 @@ export interface ApprovalRequest {
   decidedBy?: string;
 }
 
+export type AuditDecision = "allowed" | "blocked" | "completed" | "failed";
+
+export const AuditEventNames = {
+  SHOP_CONNECTED: "SHOP_CONNECTED",
+  SHOP_DISCONNECTED: "SHOP_DISCONNECTED",
+  TOOL_CALL: "TOOL_CALL",
+  APPROVAL_CREATED: "APPROVAL_CREATED",
+  APPROVAL_DECISION: "APPROVAL_DECISION",
+  AGENT_CHAT_REQUEST: "AGENT_CHAT_REQUEST",
+  PROVIDER_FINAL_RESPONSE: "PROVIDER_FINAL_RESPONSE",
+  RUNTIME_ALLOWED_TOOLS_BLOCK: "RUNTIME_ALLOWED_TOOLS_BLOCK",
+  PROVIDER_TOOL_CALL: "PROVIDER_TOOL_CALL",
+  GATEWAY_TOOL_EXECUTION: "GATEWAY_TOOL_EXECUTION",
+  GATEWAY_VALIDATION_BLOCKED: "GATEWAY_VALIDATION_BLOCKED",
+  GATEWAY_VALIDATION_ALLOWED: "GATEWAY_VALIDATION_ALLOWED",
+  NESTED_TOOL_CALL_BLOCKED: "NESTED_TOOL_CALL_BLOCKED",
+} as const;
+
+export type AuditEventType = keyof typeof AuditEventNames;
+
 export interface AuditEvent {
   id: string;
   organizationId: string;
   storeConnectionId?: string;
   timestamp: string;
   initiator: string;
-  event: string;
+  event: AuditEventType | string;
   description: string;
   metadata?: any;
+  // Structured fields for Phase 10.5
+  agentId?: string;
+  agentDefinitionId?: string;
+  agentInstallationId?: string;
+  toolName?: string;
+  provider?: string;
+  decision?: AuditDecision;
+  reason?: string;
+  correlationId?: string;
 }
 
 export interface Conversation {

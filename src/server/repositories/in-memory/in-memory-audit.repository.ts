@@ -13,9 +13,11 @@ export async function getAuditEventsByOrganizationId(organizationId: string): Pr
   return auditEvents.filter(e => e.organizationId === organizationId);
 }
 
-export async function createAuditEvent(event: Omit<AuditEvent, 'timestamp'>): Promise<AuditEvent> {
+export async function createAuditEvent(event: Omit<AuditEvent, 'id' | 'timestamp'> & { id?: string }): Promise<AuditEvent> {
+  const id = event.id || `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const newEvent: AuditEvent = {
     ...event,
+    id,
     timestamp: new Date().toISOString()
   };
   auditEvents.unshift(newEvent); // Newest first

@@ -23,14 +23,15 @@ This document provides a highly durable and centralized technical reference for 
 ## Current Capabilities
 - **Shopify OAuth**: Working connection flow, callback handling, and scope detection.
 - **Reconnect & Diagnostics**: Status endpoint and diagnostics to verify active configurations.
-- **Firestore Persistence**: Durable, tenant-isolated data storage for connections, snapshots, and installations.
+- **Firestore Persistence**: Durable, tenant-isolated data storage for connections, snapshots, installations, and audit telemetry.
 - **Product Snapshots Sync**: manual and incremental product syncing from live Shopify REST/Admin API into Firestore.
 - **AI Provider Abstraction**: Pluggable provider system with active Gemini AI and deterministic Mock AI provider configurations.
 - **Tool Gateway**: A centralized SDK boundary that authoritatively checks definitions, tenant restrictions, dynamic permission subsets, and recursively sanitizes sensitive fields.
 - **Platform Context Resolver**: Security resolver that checks dev-bypass credentials, Normalizes shops, verifies connected stores, and validates installed agents.
 - **Agent Installations**: System to install/enable specific agents per store and provision subsets of `allowedTools`.
 - **Read-Only Catalog Insights**: Structured calculations for catalog health scores (via clear comment deductions), missing images, missing vendors, missing types, and sync freshness.
-- **CI/CD & Production Smoke Tests**: All static release checks (32 tests) and live local/deployed smoke tests (20 tests) pass cleanly.
+- **Agent Execution Audit**: Durable, sanitized, tenant-safe Firestore audit logging (collection `agent_audit_logs`) tracking agent chat requests, tool invocations, and Gateway decisions (`allowed`, `blocked`, `completed`, `failed`) using centralized constants. Includes a recursive, allowlist-first sanitizer and strict cross-tenant endpoint query protection.
+- **CI/CD & Production Smoke Tests**: All static release checks (36 tests) and live local/deployed smoke tests (21 tests) pass cleanly.
 
 ## Current Non-Goals
 - **No Write Tools**: No tools or endpoints to create/modify catalog elements.

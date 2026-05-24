@@ -688,6 +688,69 @@ async function runSuite() {
     }
   });
 
+  // Test N: Audit log tenant safety, scoping, and sanitization validation
+  await check("N. Audit log tenant safety, scoping, and sanitization validation", async () => {
+    const timestamp = Date.now();
+    
+    // 1. Verify organizationId is mandatory (expect 400)
+    const resNoOrg = await fetch(`${baseUrl}/api/audit-logs?t=${timestamp}`);
+    if (resNoOrg.status !== 400) {
+      throw new Error(`Expected HTTP 400 for missing organizationId, got: ${resNoOrg.status}`);
+    }
+    const dataNoOrg = await resNoOrg.json();
+    if (!dataNoOrg.error || !dataNoOrg.error.includes("organizationId")) {
+      throw new Error(`Expected error message specifying organizationId, got: ${JSON.stringify(dataNoOrg)}`);
+    }
+
+    // 2. Verify shop-only cross-tenant lookup is blocked (expect 403 when shop does not belong to organizationId)
+    const resCrossOrg = await fetch(`${baseUrl}/api/audit-logs?organizationId=different-org-id&shop=${shop}&t=${timestamp}`);
+    if (resCrossOrg.status !== 403) {
+      throw new Error(`Expected HTTP 403 Forbidden for cross-tenant shop lookup, got: ${resCrossOrg.status}`);
+    }
+    const dataCrossOrg = await resCrossOrg.json();
+    if (!dataCrossOrg.error || !dataCrossOrg.error.includes("Access denied")) {
+      throw new Error(`Expected access denied error message, got: ${JSON.stringify(dataCrossOrg)}`);
+    }
+
+    // 3. Verify valid scoped lookup with organizationId (expect 200)
+    const resValid = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+    await checkResponse(resValid);
+    const logs = await resValid.json();
+    if (!Array.isArray(logs)) {
+      throw new Error(`Expected audit logs to be an array, got: ${typeof logs}`);
+    }
+
+    // 4. Verify sanitization and security of returned logs (no raw credentials, bypass secrets, or raw tool inputs)
+    for (const log of logs) {
+      scanForForbiddenKeys(log);
+
+      // Verify that metadata is sanitized if it contains tool invocation data
+      if (log.metadata) {
+        if (log.metadata.message) {
+          throw new Error("Security Violation: Raw message text leaked in audit log metadata.");
+        }
+        if (log.metadata.args) {
+          throw new Error("Security Violation: Raw tool arguments leaked in audit log metadata.");
+        }
+        if (log.metadata.result) {
+          throw new Error("Security Violation: Raw tool results leaked in audit log metadata.");
+        }
+      }
+
+      // Check critical event constraints (organizationId must be mandatory)
+      if (log.event === "AGENT_CHAT_REQUEST" || log.event === "GATEWAY_TOOL_EXECUTION") {
+        if (!log.organizationId) {
+          throw new Error("Violation: organizationId must be mandatory in critical events.");
+        }
+        if (log.metadata && log.metadata.decision && !["allowed", "blocked", "completed", "failed"].includes(log.metadata.decision)) {
+          throw new Error(`Violation: decision must use the typed AuditDecision enum, got: ${log.metadata.decision}`);
+        }
+      }
+    }
+
+    console.log(`   [AUDIT TESTS] Retrieved ${logs.length} sanitized audit events successfully.`);
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

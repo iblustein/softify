@@ -1,12 +1,13 @@
 import * as mockTools from "./mock-shopify-tools.js";
 import { createApproval } from "../services/approval.service.js";
-import { writeLog } from "../services/audit-log.service.js";
+import { writeLog, writeAuditEvent } from "../services/audit-log.service.js";
 import { getMockProducts } from "../data/mock-products.js";
 import { getDemoPlatformContext } from "../services/platform-context.service.js";
 import { ToolExecutionContext } from "../services/tool-execution-context.service.js";
 import { readShopInfo, readProducts, ShopifyAdminApiError } from "../services/shopify-admin-client.service.js";
 import { getRepositories } from "../repositories/repository-provider.js";
 import * as insightsService from "../services/catalog-insights.service.js";
+import { AuditEventNames } from "../domain/types.js";
 
 export interface ExecuteToolResult {
   toolName: string;
@@ -156,6 +157,34 @@ export async function executeToolWithContext(
   customApprovalDetails?: { title: string; summary: string; before?: string }
 ): Promise<ExecuteToolResult> {
   const result = await executeToolWithContextRaw(toolName, args, context, customApprovalDetails);
+  
+  const status = result.status === "failed" ? "failed" : "completed";
+  const decision = result.status === "failed" ? "failed" : "completed";
+
+  await writeAuditEvent({
+    organizationId: context.currentOrganization.id,
+    storeConnectionId: context.storeConnection.id,
+    agentInstallationId: context.agentInstallation.id,
+    agentId: context.agentDefinition.id,
+    agentDefinitionId: context.agentDefinition.id,
+    toolName,
+    initiator: context.agentDefinition.name,
+    event: AuditEventNames.GATEWAY_TOOL_EXECUTION,
+    description: `Tool \`${toolName}\` execution status: ${status}`,
+    decision,
+    reason: result.status === "failed" ? "tool_execution_failed" : undefined,
+    metadata: {
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallation.id,
+      agentId: context.agentDefinition.id,
+      toolName,
+      decision,
+      status,
+      argsCount: Object.keys(args || {}).length
+    }
+  });
+
   if (result && result.result) {
     result.result = sanitizeResult(result.result);
   }
@@ -173,20 +202,29 @@ async function executeToolWithContextRaw(
   // Run validation
   const validation = validateToolExecutionContext(toolName, context);
   if (!validation.isValid) {
-    writeLog(
-      context.agentDefinition.name,
-      "TOOL_BLOCKED",
-      `Tool \`${toolName}\` blocked: ${validation.error}`,
-      {
-        toolName,
-        reason: validation.reason,
+    await writeAuditEvent({
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallation.id,
+      agentId: context.agentDefinition.id,
+      agentDefinitionId: context.agentDefinition.id,
+      toolName,
+      initiator: context.agentDefinition.name,
+      event: AuditEventNames.GATEWAY_VALIDATION_BLOCKED,
+      description: `Tool \`${toolName}\` validation blocked: ${validation.error}`,
+      decision: "blocked",
+      reason: validation.reason,
+      metadata: {
         organizationId: context.currentOrganization.id,
         storeConnectionId: context.storeConnection.id,
-        agentDefinitionId: context.agentDefinition.id,
         agentInstallationId: context.agentInstallation.id,
-        args: cleanArgs
+        agentId: context.agentDefinition.id,
+        toolName,
+        decision: "blocked",
+        reason: validation.reason,
+        argsCount: Object.keys(cleanArgs).length
       }
-    );
+    });
 
     return {
       toolName,
@@ -198,13 +236,28 @@ async function executeToolWithContextRaw(
     };
   }
 
-  // Standard logging for tool execution
-  writeLog(
-    context.agentDefinition.name,
-    "TOOL_CALL",
-    `Executed SDK Gateway task: \`${toolName}\` for store ${context.storeConnection.storeUrl}`,
-    { args: cleanArgs }
-  );
+  // Record validation allowed decision securely via the async writeAuditEvent path
+  await writeAuditEvent({
+    organizationId: context.currentOrganization.id,
+    storeConnectionId: context.storeConnection.id,
+    agentInstallationId: context.agentInstallation.id,
+    agentId: context.agentDefinition.id,
+    agentDefinitionId: context.agentDefinition.id,
+    toolName,
+    initiator: context.agentDefinition.name,
+    event: AuditEventNames.GATEWAY_VALIDATION_ALLOWED,
+    description: `Tool \`${toolName}\` validation allowed for store ${context.storeConnection.storeUrl}`,
+    decision: "allowed",
+    metadata: {
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallation.id,
+      agentId: context.agentDefinition.id,
+      toolName,
+      decision: "allowed",
+      argsCount: Object.keys(cleanArgs).length
+    }
+  });
 
   switch (toolName) {
     case "shopify.getShopInfo": {

@@ -12,6 +12,13 @@ Implement durable, sanitized, tenant-safe Firestore audit log persistence for ag
 > - **Centralized Allowlist-First Sanitizer**: We implement an allowlist-first `sanitizeAuditPayload` function that recursively strips all customer PII, raw access tokens, API keys, dev-bypass secrets, raw Shopify responses, customer/order objects, raw tool arguments, raw tool results, and raw user messages.
 > - **Exposing Filtered Audits Only**: The GET `/api/audit-logs` endpoint requires `organizationId` or `shop` querying to enforce tenant-isolated access, with no global `getAllAuditEvents` exposure.
 
+### Approved Refinements
+- **Typed Decision Union**: `decision` field is constrained to `"allowed" | "blocked" | "completed" | "failed"`.
+- **Centralized Event Names**: Centralized TS union/constants for all new audit events.
+- **Mandatory Organization Scoping**: `organizationId` is strictly mandatory for all critical audits. `storeConnectionId` and `agentInstallationId` are logged whenever available.
+- **Shop Ownership Scope Validation**: The GET `/api/audit-logs` endpoint validates that any queried `shop` is resolved through `StoreRepository` and authoritatively scopes to the provided `organizationId`.
+- **Tenant-Filtered InMemory Cache**: The `getAuditLogs()` caching utility strictly filters logs by the requesting tenant's `organizationId` and never exposes a global log state.
+
 ---
 
 ## Proposed Changes
@@ -19,13 +26,15 @@ Implement durable, sanitized, tenant-safe Firestore audit log persistence for ag
 ### Component 1: Domain & Contract Updates
 
 #### [MODIFY] [types.ts](file:///c:/Projects/softify/softify/src/server/domain/types.ts)
+- Define `AuditDecision = "allowed" | "blocked" | "completed" | "failed"`.
+- Define `AuditEventType` constants union.
 - Extend the `AuditEvent` interface to include optional structured fields:
   - `agentId?: string`
   - `agentDefinitionId?: string`
   - `agentInstallationId?: string`
   - `toolName?: string`
   - `provider?: string`
-  - `decision?: string`
+  - `decision?: AuditDecision`
   - `reason?: string`
   - `correlationId?: string`
 
@@ -61,6 +70,7 @@ Implement durable, sanitized, tenant-safe Firestore audit log persistence for ag
   export async function writeAuditEvent(event: Omit<AuditEvent, "id" | "timestamp"> & { id?: string }): Promise<AuditEvent>
   ```
   This function awaits repository writes before resolving, performs centralized sanitization, and appends to in-memory cache lists for client synchronization.
+- **Tenant-Filtered InMemory Cache**: The `getAuditLogs()` caching utility strictly filters logs by the requesting tenant's `organizationId` and never exposes a global log state.
 - **Backward-Compatible `writeLog`**: Keep `writeLog` as a legacy, fire-and-forget logging utility for non-critical telemetry runs.
 
 ---
@@ -80,7 +90,7 @@ Implement durable, sanitized, tenant-safe Firestore audit log persistence for ag
 
 #### [MODIFY] [tool-gateway.ts](file:///c:/Projects/softify/softify/src/server/tools/tool-gateway.ts)
 - Replace direct logging of raw arguments and outputs with summarized metadata (e.g. `argsCount`).
-- Record critical Gateway decisions via the async `writeAuditEvent` path:
+- Record critical Gateway decisions securely via the async `writeAuditEvent` path:
   - **GATEWAY_VALIDATION_ALLOWED** & **GATEWAY_VALIDATION_BLOCKED**
   - **GATEWAY_TOOL_EXECUTION_SUCCESS** & **GATEWAY_TOOL_EXECUTION_FAILURE**
 

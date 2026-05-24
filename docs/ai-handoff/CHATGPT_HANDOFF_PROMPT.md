@@ -19,13 +19,15 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - A secure SDK Tool Gateway enforces strict tenant isolation, allowedTools permission checking, and recursive telemetry sanitization (masking secrets).
 - Store-level agent installations are live, allowing custom provisioning of allowed tools per shop.
 - The Product Intelligence Agent v2 is fully operational, providing read-only capped catalog insights (health scores, missing images, top vendors list, etc.) with safe fallbacks and constants.
-- Robust pre-deployment static checks (32 tests) and integration smoke test suites (20 tests) are passing completely.
+- Durable, sanitized, tenant-safe Firestore audit logging is established (Phase 10.5) to track all agent executions and gateway decisions.
+- Robust pre-deployment static checks (36 tests) and integration smoke test suites (21 tests) are passing completely.
 
 ### Completed Milestones
 - Phase 10.1 — AI Engine Interface and Catalog Agent POC
 - Phase 10.2 — Tenant-Safe Platform Context Resolver
 - Phase 10.3 — Agent Installations and Permission Policy Foundation
 - Phase 10.4 — Product Intelligence Agent v2 — Read-Only Catalog Insights
+- Phase 10.5 — Agent Execution Audit Foundation
 
 ### Core Architectural Guardrails & Constraints
 - Softify strictly owns runtime execution, permissions, tenant isolation, and integrations.
@@ -55,7 +57,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.5 — Agent Execution Audit Foundation. The goal is to implement durable, sanitized, tenant-safe Firestore audit logs for all agent and tool execution gate decisions.
+We are ready to initiate Phase 10.6 — Merchant Approvals & Mutation Tools Foundation. The goal is to introduce mutation (write) capabilities protected by a secure merchant approvals queue and interactive approval endpoints.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

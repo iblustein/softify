@@ -1,8 +1,9 @@
 import { getAiProvider } from "../ai/ai-provider.factory.js";
 import { executeTool, sanitizeResult } from "../tools/tool-gateway.js";
-import { writeLog } from "./audit-log.service.js";
+import { writeLog, writeAuditEvent } from "./audit-log.service.js";
 import { PlatformContext } from "./platform-context.service.js";
 import { ToolExecutionContext } from "./tool-execution-context.service.js";
+import { AuditEventNames } from "../domain/types.js";
 
 function normalizeShopDomain(shop: string): string {
   if (!shop) return "";
@@ -65,15 +66,23 @@ export async function runAgentChat(params: {
   const provider = getAiProvider();
 
   // Audit initial chat request - MASKED telemetry only
-  writeLog(
-    agentDefinition.name,
-    "AGENT_CHAT_REQUEST",
-    `Received customer catalog query for store ${cleanShop}`,
-    { 
-      agentId, 
+  await writeAuditEvent({
+    organizationId: context.currentOrganization.id,
+    storeConnectionId: context.storeConnection.id,
+    agentInstallationId: context.agentInstallations[0]?.id,
+    agentId,
+    agentDefinitionId: agentDefinition.id,
+    initiator: "user",
+    event: AuditEventNames.AGENT_CHAT_REQUEST,
+    description: `Received customer catalog query for store ${cleanShop}`,
+    metadata: {
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallations[0]?.id,
+      agentId,
       messageLength: message.length
     }
-  );
+  });
 
   // 4. Invoke the pluggable AI provider
   const response = await provider.generate({
@@ -88,17 +97,28 @@ export async function runAgentChat(params: {
   // 5. Handle AI Response type
   if (response.type === "final") {
     // Audit trace logging - MASKED telemetry only
-    writeLog(
-      agentDefinition.name,
-      "AGENT_CHAT_RESPONSE",
-      `Formulated final answer directly`,
-      { 
+    await writeAuditEvent({
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallations[0]?.id,
+      agentId,
+      agentDefinitionId: agentDefinition.id,
+      initiator: agentDefinition.name,
+      event: AuditEventNames.PROVIDER_FINAL_RESPONSE,
+      description: `Formulated final answer directly`,
+      decision: "completed",
+      provider: provider.name,
+      metadata: {
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentInstallationId: context.agentInstallations[0]?.id,
         agentId,
         messageLength: message.length,
         provider: provider.name,
-        toolCallCount: 0
+        toolCallCount: 0,
+        decision: "completed"
       }
-    );
+    });
 
     return {
       ok: true,
@@ -116,15 +136,28 @@ export async function runAgentChat(params: {
     // Enforce Allowed Tools check at the runtime level
     if (!agentDefinition.allowedTools.includes(requestedTool)) {
       const refusal = "I cannot perform this action because the requested capability is not available to this agent.";
-      writeLog(
-        agentDefinition.name,
-        "AGENT_CHAT_RESPONSE",
-        `Refused tool call '${requestedTool}' as it is not in the allowed list`,
-        { 
+      await writeAuditEvent({
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentInstallationId: context.agentInstallations[0]?.id,
+        agentId,
+        agentDefinitionId: agentDefinition.id,
+        toolName: requestedTool,
+        initiator: agentDefinition.name,
+        event: AuditEventNames.RUNTIME_ALLOWED_TOOLS_BLOCK,
+        description: `Refused tool call '${requestedTool}' as it is not in the allowed list`,
+        decision: "blocked",
+        reason: "tool_not_allowed_by_agent_definition",
+        metadata: {
+          organizationId: context.currentOrganization.id,
+          storeConnectionId: context.storeConnection.id,
+          agentInstallationId: context.agentInstallations[0]?.id,
           agentId,
-          toolName: requestedTool
+          toolName: requestedTool,
+          decision: "blocked",
+          reason: "tool_not_allowed_by_agent_definition"
         }
-      );
+      });
 
       return {
         ok: true,
@@ -134,6 +167,30 @@ export async function runAgentChat(params: {
         toolCalls
       };
     }
+
+    // Log the AI Provider's tool call request
+    await writeAuditEvent({
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallations[0]?.id,
+      agentId,
+      agentDefinitionId: agentDefinition.id,
+      toolName: requestedTool,
+      initiator: agentDefinition.name,
+      event: AuditEventNames.PROVIDER_TOOL_CALL,
+      description: `AI Provider requested tool call: ${requestedTool}`,
+      decision: "allowed",
+      provider: provider.name,
+      metadata: {
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentInstallationId: context.agentInstallations[0]?.id,
+        agentId,
+        toolName: requestedTool,
+        provider: provider.name,
+        decision: "allowed"
+      }
+    });
 
     // Authoritative request-level shop check: Override AI provider shop argument entirely
     const toolArgs = {
@@ -161,15 +218,28 @@ export async function runAgentChat(params: {
 
     if (gatewayRes.status === "failed") {
       const failMsg = "I cannot perform this action because the required tool or access is missing.";
-      writeLog(
-        agentDefinition.name,
-        "AGENT_CHAT_RESPONSE",
-        `Tool call execution failed inside the Gateway`,
-        { 
+      await writeAuditEvent({
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentInstallationId: context.agentInstallations[0]?.id,
+        agentId,
+        agentDefinitionId: agentDefinition.id,
+        toolName: requestedTool,
+        initiator: agentDefinition.name,
+        event: AuditEventNames.GATEWAY_TOOL_EXECUTION,
+        description: `Tool call execution failed inside the Gateway`,
+        decision: "failed",
+        reason: "gateway_execution_failed",
+        metadata: {
+          organizationId: context.currentOrganization.id,
+          storeConnectionId: context.storeConnection.id,
+          agentInstallationId: context.agentInstallations[0]?.id,
           agentId,
-          toolName: requestedTool
+          toolName: requestedTool,
+          decision: "failed",
+          reason: "gateway_execution_failed"
         }
-      );
+      });
 
       return {
         ok: true,
@@ -203,19 +273,50 @@ export async function runAgentChat(params: {
     } else {
       // Bounded tool call: block subsequent or nested tool call requests
       finalMessage = "I cannot fulfill this request because subsequent nested tool calls are blocked.";
+      await writeAuditEvent({
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentInstallationId: context.agentInstallations[0]?.id,
+        agentId,
+        agentDefinitionId: agentDefinition.id,
+        initiator: agentDefinition.name,
+        event: AuditEventNames.NESTED_TOOL_CALL_BLOCKED,
+        description: "Subsequent nested tool call request was blocked by runtime boundary policies",
+        decision: "blocked",
+        reason: "subsequent_tool_calls_blocked",
+        metadata: {
+          organizationId: context.currentOrganization.id,
+          storeConnectionId: context.storeConnection.id,
+          agentInstallationId: context.agentInstallations[0]?.id,
+          agentId,
+          decision: "blocked",
+          reason: "subsequent_tool_calls_blocked"
+        }
+      });
     }
 
-    writeLog(
-      agentDefinition.name,
-      "AGENT_CHAT_RESPONSE",
-      `Formulated final answer after gateway call`,
-      { 
+    await writeAuditEvent({
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallations[0]?.id,
+      agentId,
+      agentDefinitionId: agentDefinition.id,
+      initiator: agentDefinition.name,
+      event: AuditEventNames.PROVIDER_FINAL_RESPONSE,
+      description: `Formulated final answer after gateway call`,
+      decision: "completed",
+      provider: provider.name,
+      metadata: {
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentInstallationId: context.agentInstallations[0]?.id,
         agentId,
         messageLength: message.length,
         provider: provider.name,
-        toolCallCount: toolCalls.length
+        toolCallCount: toolCalls.length,
+        decision: "completed"
       }
-    );
+    });
 
     return {
       ok: true,
