@@ -111,23 +111,51 @@ export async function resolvePlatformContext(params: {
     updatedAt: new Date().toISOString()
   };
 
-  const agentInstallations: AgentInstallation[] = [
-    {
-      id: `inst_${agentDefinition.id}`,
-      organizationId: currentOrganization.id,
-      storeConnectionId: storeConnection.id,
-      agentDefinitionId: agentDefinition.id,
-      enabled: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-  ];
+  // 8. Resolve agent installation by shop/store + agentId
+  const installation = await repos.agentInstallations.getByShopAndAgent(cleanShop, agentDefinition.id);
+  if (!installation) {
+    throw new PlatformContextError(
+      "AGENT_NOT_INSTALLED",
+      `Agent ${agentDefinition.name} is not installed for this shop.`,
+      403
+    );
+  }
+
+  if (installation.enabled !== true) {
+    throw new PlatformContextError(
+      "AGENT_DISABLED",
+      `Agent ${agentDefinition.name} is disabled for this shop.`,
+      403
+    );
+  }
+
+  // Validate allowedTools subset constraint
+  const allowedToolsSet = new Set(agentDefinition.allowedTools);
+  const instAllowedTools = installation.allowedTools || [];
+  const invalidTools = instAllowedTools.filter(t => !allowedToolsSet.has(t));
+  if (invalidTools.length > 0) {
+    throw new PlatformContextError(
+      "AGENT_INSTALLATION_INVALID",
+      `Agent installation allowedTools contains tools not supported by the static definition: ${invalidTools.join(", ")}`,
+      409
+    );
+  }
+
+  // Intersect runtime allowed tools
+  const runtimeAllowedTools = agentDefinition.allowedTools.filter(t => instAllowedTools.includes(t));
+
+  const resolvedAgentDefinition = {
+    ...agentDefinition,
+    allowedTools: runtimeAllowedTools
+  };
+
+  const agentInstallations: AgentInstallation[] = [installation];
 
   return {
     currentUser,
     currentOrganization,
     storeConnection,
-    agentDefinitions: [agentDefinition],
+    agentDefinitions: [resolvedAgentDefinition],
     agentInstallations,
     enabledTools: ENABLED_TOOLS
   };

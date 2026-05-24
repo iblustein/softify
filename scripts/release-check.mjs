@@ -434,6 +434,20 @@ async function runVerification() {
     }
     
     // Restore scopes and test successful resolve
+    const inMemoryAgentInstallations = await import("../src/server/repositories/in-memory/in-memory-agent-installation.repository.js");
+    await inMemoryAgentInstallations.clearAgentInstallations();
+    await inMemoryAgentInstallations.upsertInstallation({
+      id: "conn_resolver_test_agent_product_intelligence",
+      organizationId: "org_resolver_test",
+      storeConnectionId: "conn_resolver_test",
+      shopDomain: testShop,
+      agentId: "agent_product_intelligence",
+      enabled: true,
+      allowedTools: ["catalog.products.status", "catalog.products.summary", "catalog.products.read", "catalog.products.list"],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
     await inMemoryStore.updateStoreConnection("conn_resolver_test", { scopes: ["read_products"] });
     const context = await resolvePlatformContext({
       shop: testShop,
@@ -585,6 +599,75 @@ async function runVerification() {
     const content = fs.readFileSync(workflowPath, "utf8");
     if (!content.includes("--set-env-vars=^|^")) {
       throw new Error(".github/workflows/deploy-cloud-run.yml is missing custom delimiter syntax '^|^' for --set-env-vars.");
+    }
+  });
+
+  // Test 24: Validate Agent Installation repository contract imports
+  await check("24. Agent Installation Repository Contract imports", async () => {
+    const contract = await import("../src/server/repositories/contracts/agent-installation.repository.contract.ts");
+    if (!contract) {
+      throw new Error("Failed to import agent-installation.repository.contract.ts");
+    }
+  });
+
+  // Test 25: Validate Firestore agent installation repository exists and can be imported
+  await check("25. Firestore Agent Installation Repository imports", async () => {
+    const firestoreRepo = await import("../src/server/repositories/firestore/firestore-agent-installation.repository.ts");
+    if (typeof firestoreRepo.getByShopAndAgent !== "function" || typeof firestoreRepo.upsertInstallation !== "function") {
+      throw new Error("firestore-agent-installation.repository.ts does not export getByShopAndAgent or upsertInstallation as functions.");
+    }
+  });
+
+  // Test 26: Validate repository provider exposes agentInstallations repository reference
+  await check("26. Repository provider exposes agentInstallations reference", async () => {
+    const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+    const repos = getRepositories();
+    if (!repos.agentInstallations) {
+      throw new Error("Repository provider is missing 'agentInstallations' repository reference.");
+    }
+    if (typeof repos.agentInstallations.getByShopAndAgent !== "function") {
+      throw new Error("Exposed agentInstallations repository is missing getByShopAndAgent function.");
+    }
+    if (typeof repos.agentInstallations.upsertInstallation !== "function") {
+      throw new Error("Exposed agentInstallations repository is missing upsertInstallation function.");
+    }
+  });
+
+  // Test 27: Validate platform-context-resolver looks up and validates installations
+  await check("27. platform-context-resolver references agent installation lookup and rejects invalid states", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const resolverPath = path.resolve(process.cwd(), "src/server/services/platform-context-resolver.service.ts");
+    const content = fs.readFileSync(resolverPath, "utf8");
+    
+    if (!content.includes("getByShopAndAgent")) {
+      throw new Error("platform-context-resolver.service.ts does not call 'getByShopAndAgent'.");
+    }
+    if (!content.includes("AGENT_NOT_INSTALLED")) {
+      throw new Error("platform-context-resolver.service.ts does not reject with 'AGENT_NOT_INSTALLED'.");
+    }
+    if (!content.includes("AGENT_DISABLED")) {
+      throw new Error("platform-context-resolver.service.ts does not reject with 'AGENT_DISABLED'.");
+    }
+    if (!content.includes("AGENT_INSTALLATION_INVALID")) {
+      throw new Error("platform-context-resolver.service.ts does not reject with 'AGENT_INSTALLATION_INVALID'.");
+    }
+  });
+
+  // Test 28: Validate that no write/mutation tools are added in tool definitions
+  await check("28. No write tools, product update tools, or mutation tools exist", async () => {
+    const { ENABLED_TOOLS } = await import("../src/server/tools/tool-definitions.ts");
+    const preExistingAllowed = ["shopify.prepareProductUpdate", "shopify.prepareThemePatch"];
+    const forbiddenKeywords = ["write", "update", "delete", "mutate", "inventory", "patch"];
+    
+    for (const tool of ENABLED_TOOLS) {
+      if (preExistingAllowed.includes(tool.name)) continue;
+      
+      const lowerName = tool.name.toLowerCase();
+      const isForbidden = forbiddenKeywords.some(kw => lowerName.includes(kw));
+      if (isForbidden) {
+        throw new Error(`Security Violation: Forbidden tool name detected: '${tool.name}'`);
+      }
     }
   });
 

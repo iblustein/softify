@@ -282,6 +282,88 @@ async function runSuite() {
     }
   });
 
+  // Test H.1: POST /api/agents/install
+  await check("H.1. Agent Installation creation", async () => {
+    const url = `${baseUrl}/api/agents/install`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence"
+      })
+    });
+    
+    await checkResponse(res);
+    const data = await res.json();
+    
+    if (data.ok !== true || !data.installation) {
+      throw new Error(`Failed to install agent: ${JSON.stringify(data)}`);
+    }
+    
+    const inst = data.installation;
+    if (inst.enabled !== true) {
+      throw new Error(`Expected installation.enabled to be true, got: ${inst.enabled}`);
+    }
+    if (inst.shopDomain !== shop) {
+      throw new Error(`Expected installation.shopDomain to be "${shop}", got: "${inst.shopDomain}"`);
+    }
+    if (inst.agentId !== "agent_product_intelligence") {
+      throw new Error(`Expected installation.agentId to be "agent_product_intelligence", got: "${inst.agentId}"`);
+    }
+    
+    // Verify allowedTools contains only catalog.products.* tools
+    if (!Array.isArray(inst.allowedTools) || inst.allowedTools.length === 0) {
+      throw new Error("Allowed tools list should not be empty");
+    }
+    for (const tool of inst.allowedTools) {
+      if (!tool.startsWith("catalog.products.")) {
+        throw new Error(`Agent allowedTools expanded beyond static limits: '${tool}'`);
+      }
+    }
+    
+    // Verify no token/secret fields are returned
+    const forbidden = ["accessTokenEncrypted", "accessToken", "refreshToken", "apiKey", "secret", "password", "credentials", "authorization", "bearer"];
+    for (const key of forbidden) {
+      if (key in inst || key in data) {
+        throw new Error(`Security Violation: Sensitive field '${key}' was exposed in the installation response.`);
+      }
+    }
+  });
+
+  // Test H.2: GET /api/agents/installations/status
+  await check("H.2. Agent Installation status validation", async () => {
+    const url = `${baseUrl}/api/agents/installations/status?shop=${encodeURIComponent(shop)}&agentId=agent_product_intelligence`;
+    const res = await fetch(url, {
+      headers: {
+        "X-Softify-Dev-Bypass": bypassSecret
+      }
+    });
+    
+    await checkResponse(res);
+    const data = await res.json();
+    
+    if (data.ok !== true || data.installed !== true || data.enabled !== true) {
+      throw new Error(`Expected installation status to be installed and enabled, got: ${JSON.stringify(data)}`);
+    }
+    
+    for (const tool of data.allowedTools) {
+      if (!tool.startsWith("catalog.products.")) {
+        throw new Error(`Agent allowedTools expanded beyond static limits: '${tool}'`);
+      }
+    }
+    
+    const forbidden = ["accessTokenEncrypted", "accessToken", "refreshToken", "apiKey", "secret", "password", "credentials", "authorization", "bearer"];
+    for (const key of forbidden) {
+      if (key in data) {
+        throw new Error(`Security Violation: Sensitive field '${key}' was exposed in the installation status response.`);
+      }
+    }
+  });
+
   // Test H.5: Agent chat missing bypass header negative validation
   await check("H.5. Agent chat missing bypass header negative validation", async () => {
     const timestamp = Date.now();

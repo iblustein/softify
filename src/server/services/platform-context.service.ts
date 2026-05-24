@@ -153,7 +153,10 @@ export function getDemoPlatformContext(): PlatformContext {
     id: `inst_${def.id}`,
     organizationId: "org_demo",
     storeConnectionId: "conn_demo",
+    shopDomain: "luminary-essentials.myshopify.com",
+    agentId: def.id,
     agentDefinitionId: def.id,
+    allowedTools: def.allowedTools,
     enabled: true,
     createdAt: "2026-05-18T12:05:00.000Z",
     updatedAt: "2026-05-18T12:05:00.000Z"

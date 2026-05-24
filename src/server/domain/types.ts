@@ -53,11 +53,15 @@ export interface AgentInstallation {
   id: string;
   organizationId: string;
   storeConnectionId: string;
-  agentDefinitionId: string;
+  shopDomain?: string;
+  agentId?: string;
+  allowedTools?: string[];
   enabled: boolean;
-  customSettings?: Record<string, any>;
   createdAt: string;
   updatedAt: string;
+  // Legacy fields for read compatibility
+  agentDefinitionId?: string;
+  customSettings?: Record<string, any>;
 }
 
 export interface ToolDefinition {

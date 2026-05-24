@@ -33,8 +33,8 @@ export function getDemoToolExecutionContext(agentId: string): ToolExecutionConte
     throw new Error(`Agent definition not found for agentId: ${agentId}`);
   }
 
-  // Find the matching AgentInstallation by agentDefinitionId
-  const agentInstallation = platformContext.agentInstallations.find(inst => inst.agentDefinitionId === agentId);
+  // Find the matching AgentInstallation by agentId or agentDefinitionId
+  const agentInstallation = platformContext.agentInstallations.find(inst => (inst.agentId || inst.agentDefinitionId) === agentId);
   if (!agentInstallation) {
     throw new Error(`Agent installation not found for agentId: ${agentId}`);
   }
@@ -80,8 +80,8 @@ export async function getToolExecutionContextForShop(
     throw new Error(`Agent definition not found for agentId: ${agentId}`);
   }
 
-  // Find the matching AgentInstallation by agentDefinitionId
-  const agentInstallation = platformContext.agentInstallations.find(inst => inst.agentDefinitionId === agentId);
+  // Find the matching AgentInstallation by agentId or agentDefinitionId
+  const agentInstallation = platformContext.agentInstallations.find(inst => (inst.agentId || inst.agentDefinitionId) === agentId);
   if (!agentInstallation) {
     throw new Error(`Agent installation not found for agentId: ${agentId}`);
   }
