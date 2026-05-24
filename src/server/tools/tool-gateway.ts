@@ -6,6 +6,7 @@ import { getDemoPlatformContext } from "../services/platform-context.service.js"
 import { ToolExecutionContext } from "../services/tool-execution-context.service.js";
 import { readShopInfo, readProducts, ShopifyAdminApiError } from "../services/shopify-admin-client.service.js";
 import { getRepositories } from "../repositories/repository-provider.js";
+import * as insightsService from "../services/catalog-insights.service.js";
 
 export interface ExecuteToolResult {
   toolName: string;
@@ -493,6 +494,97 @@ async function executeToolWithContextRaw(
           status: "failed",
           result: { error: error.message }
         };
+      }
+    }
+
+    case "catalog.insights.health": {
+      try {
+        const shopDomain = cleanArgs.shop || cleanArgs.shopDomain || context.storeConnection?.storeUrl;
+        if (!shopDomain) {
+          throw new Error("No active shop domain found in context or arguments.");
+        }
+        const result = await insightsService.getCatalogHealth(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        return { toolName, args: cleanArgs, status: "failed", result: { error: error.message } };
+      }
+    }
+
+    case "catalog.insights.missing_images": {
+      try {
+        const shopDomain = cleanArgs.shop || cleanArgs.shopDomain || context.storeConnection?.storeUrl;
+        if (!shopDomain) {
+          throw new Error("No active shop domain found in context or arguments.");
+        }
+        const result = await insightsService.getProductsMissingImages(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        return { toolName, args: cleanArgs, status: "failed", result: { error: error.message } };
+      }
+    }
+
+    case "catalog.insights.missing_vendor": {
+      try {
+        const shopDomain = cleanArgs.shop || cleanArgs.shopDomain || context.storeConnection?.storeUrl;
+        if (!shopDomain) {
+          throw new Error("No active shop domain found in context or arguments.");
+        }
+        const result = await insightsService.getProductsMissingVendor(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        return { toolName, args: cleanArgs, status: "failed", result: { error: error.message } };
+      }
+    }
+
+    case "catalog.insights.missing_product_type": {
+      try {
+        const shopDomain = cleanArgs.shop || cleanArgs.shopDomain || context.storeConnection?.storeUrl;
+        if (!shopDomain) {
+          throw new Error("No active shop domain found in context or arguments.");
+        }
+        const result = await insightsService.getProductsMissingProductType(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        return { toolName, args: cleanArgs, status: "failed", result: { error: error.message } };
+      }
+    }
+
+    case "catalog.insights.vendor_summary": {
+      try {
+        const shopDomain = cleanArgs.shop || cleanArgs.shopDomain || context.storeConnection?.storeUrl;
+        if (!shopDomain) {
+          throw new Error("No active shop domain found in context or arguments.");
+        }
+        const result = await insightsService.getVendorSummary(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        return { toolName, args: cleanArgs, status: "failed", result: { error: error.message } };
+      }
+    }
+
+    case "catalog.insights.product_type_summary": {
+      try {
+        const shopDomain = cleanArgs.shop || cleanArgs.shopDomain || context.storeConnection?.storeUrl;
+        if (!shopDomain) {
+          throw new Error("No active shop domain found in context or arguments.");
+        }
+        const result = await insightsService.getProductTypeSummary(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        return { toolName, args: cleanArgs, status: "failed", result: { error: error.message } };
+      }
+    }
+
+    case "catalog.insights.stale_snapshots": {
+      try {
+        const shopDomain = cleanArgs.shop || cleanArgs.shopDomain || context.storeConnection?.storeUrl;
+        if (!shopDomain) {
+          throw new Error("No active shop domain found in context or arguments.");
+        }
+        const result = await insightsService.getStaleSnapshots(shopDomain);
+        return { toolName, args: cleanArgs, status: "completed", result };
+      } catch (error: any) {
+        return { toolName, args: cleanArgs, status: "failed", result: { error: error.message } };
       }
     }
 

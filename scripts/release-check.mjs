@@ -352,7 +352,7 @@ async function runVerification() {
       throw new Error("Failed to resolve static agent from getAgentDefinition.");
     }
     
-    const forbiddenRegistryTools = resolvedAgent.allowedTools.filter(t => !t.startsWith("catalog.products."));
+    const forbiddenRegistryTools = resolvedAgent.allowedTools.filter(t => !t.startsWith("catalog.products.") && !t.startsWith("catalog.insights."));
     if (forbiddenRegistryTools.length > 0) {
       throw new Error(`Security Violation: Agent allowed tools contains forbidden non-read-only tools: ${forbiddenRegistryTools.join(", ")}`);
     }
@@ -658,7 +658,7 @@ async function runVerification() {
   await check("28. No write tools, product update tools, or mutation tools exist", async () => {
     const { ENABLED_TOOLS } = await import("../src/server/tools/tool-definitions.ts");
     const preExistingAllowed = ["shopify.prepareProductUpdate", "shopify.prepareThemePatch"];
-    const forbiddenKeywords = ["write", "update", "delete", "mutate", "inventory", "patch"];
+    const forbiddenKeywords = ["write", "update", "delete", "create", "mutate", "inventory", "patch", "publish", "unpublish"];
     
     for (const tool of ENABLED_TOOLS) {
       if (preExistingAllowed.includes(tool.name)) continue;
@@ -668,6 +668,76 @@ async function runVerification() {
       if (isForbidden) {
         throw new Error(`Security Violation: Forbidden tool name detected: '${tool.name}'`);
       }
+    }
+  });
+
+  // Test 29: Validate catalog-insights.service imports successfully
+  await check("29. catalog-insights.service imports successfully", async () => {
+    const service = await import("../src/server/services/catalog-insights.service.ts");
+    if (typeof service.getCatalogHealth !== "function" || typeof service.getProductsMissingImages !== "function" || typeof service.getVendorSummary !== "function") {
+      throw new Error("catalog-insights.service.ts is missing required insight methods.");
+    }
+  });
+
+  // Test 30: Validate registration of new catalog.insights.* tools in tool definitions and agent definition
+  await check("30. Registration of catalog.insights.* tools in definitions", async () => {
+    const { ENABLED_TOOLS } = await import("../src/server/tools/tool-definitions.ts");
+    const { AGENT_PRODUCT_INTELLIGENCE } = await import("../src/server/agents/agent-definitions.ts");
+    
+    const requiredTools = [
+      "catalog.insights.health",
+      "catalog.insights.missing_images",
+      "catalog.insights.missing_vendor",
+      "catalog.insights.missing_product_type",
+      "catalog.insights.vendor_summary",
+      "catalog.insights.product_type_summary",
+      "catalog.insights.stale_snapshots"
+    ];
+
+    for (const tool of requiredTools) {
+      const isRegistered = ENABLED_TOOLS.some(t => t.name === tool);
+      if (!isRegistered) {
+        throw new Error(`Tool definitions are missing tool: '${tool}'`);
+      }
+      const isAllowedByAgent = AGENT_PRODUCT_INTELLIGENCE.allowedTools.includes(tool);
+      if (!isAllowedByAgent) {
+        throw new Error(`AGENT_PRODUCT_INTELLIGENCE is missing allowedTool: '${tool}'`);
+      }
+    }
+  });
+
+  // Test 31: Validate mock provider maps catalog health question to catalog.insights.health
+  await check("31. Mock AI Provider maps catalog health queries to catalog.insights.health", async () => {
+    const { MockAiProvider } = await import("../src/server/ai/mock-ai.provider.ts");
+    const provider = new MockAiProvider();
+    
+    const res = await provider.generate({
+      agentId: "agent_product_intelligence",
+      shop: "test-shop.myshopify.com",
+      message: "What is the health of my catalog?",
+      allowedTools: []
+    });
+
+    if (res.type !== "tool_call" || res.toolName !== "catalog.insights.health") {
+      throw new Error(`Expected catalog.insights.health tool call, got: ${JSON.stringify(res)}`);
+    }
+  });
+
+  // Test 32: Validate smoke-test.mjs contains catalog health, missing images, and vendor summary validations
+  await check("32. smoke-test.mjs includes catalog health, missing images, and vendor summary validations", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const smokePath = path.resolve(process.cwd(), "scripts/smoke-test.mjs");
+    const content = fs.readFileSync(smokePath, "utf8");
+    
+    if (!content.includes("catalog.insights.health")) {
+      throw new Error("smoke-test.mjs is missing 'catalog.insights.health' validation.");
+    }
+    if (!content.includes("catalog.insights.missing_images")) {
+      throw new Error("smoke-test.mjs is missing 'catalog.insights.missing_images' validation.");
+    }
+    if (!content.includes("catalog.insights.vendor_summary")) {
+      throw new Error("smoke-test.mjs is missing 'catalog.insights.vendor_summary' validation.");
     }
   });
 

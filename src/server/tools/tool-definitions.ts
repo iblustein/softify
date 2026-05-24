@@ -84,5 +84,54 @@ export const ENABLED_TOOLS: ToolDefinition[] = [
     parameters: '{"shop": "string", "limit": "number?"}',
     requiredScope: "read_products",
     riskLevel: "Low"
+  },
+  {
+    name: "catalog.insights.health",
+    description: "Get general catalog health overview, including deterministic score and counts of missing fields.",
+    parameters: '{"shop": "string"}',
+    requiredScope: "read_products",
+    riskLevel: "Low"
+  },
+  {
+    name: "catalog.insights.missing_images",
+    description: "Get a list of products that are missing images, including count and limited samples.",
+    parameters: '{"shop": "string"}',
+    requiredScope: "read_products",
+    riskLevel: "Low"
+  },
+  {
+    name: "catalog.insights.missing_vendor",
+    description: "Get a list of products that are missing vendor configurations, including count and limited samples.",
+    parameters: '{"shop": "string"}',
+    requiredScope: "read_products",
+    riskLevel: "Low"
+  },
+  {
+    name: "catalog.insights.missing_product_type",
+    description: "Get a list of products that are missing product types, including count and limited samples.",
+    parameters: '{"shop": "string"}',
+    requiredScope: "read_products",
+    riskLevel: "Low"
+  },
+  {
+    name: "catalog.insights.vendor_summary",
+    description: "Get a summary of top vendors in the catalog sorted by product counts.",
+    parameters: '{"shop": "string"}',
+    requiredScope: "read_products",
+    riskLevel: "Low"
+  },
+  {
+    name: "catalog.insights.product_type_summary",
+    description: "Get a summary of top product types in the catalog sorted by product counts.",
+    parameters: '{"shop": "string"}',
+    requiredScope: "read_products",
+    riskLevel: "Low"
+  },
+  {
+    name: "catalog.insights.stale_snapshots",
+    description: "Get sync freshness diagnostics including stale count and sample products.",
+    parameters: '{"shop": "string"}',
+    requiredScope: "read_products",
+    riskLevel: "Low"
   }
 ];

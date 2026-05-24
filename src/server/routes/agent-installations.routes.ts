@@ -81,27 +81,9 @@ router.post("/agents/install", async (req: any, res: any) => {
       });
     }
 
-    // Validate allowedTools subset
-    let finalAllowedTools = agentDefinition.allowedTools;
-    if (allowedTools) {
-      if (!Array.isArray(allowedTools)) {
-        return res.status(400).json({
-          ok: false,
-          code: "INVALID_PARAMETERS",
-          error: "allowedTools must be an array of strings."
-        });
-      }
-      const staticTools = new Set(agentDefinition.allowedTools);
-      const invalidTools = allowedTools.filter(t => !staticTools.has(t));
-      if (invalidTools.length > 0) {
-        return res.status(409).json({
-          ok: false,
-          code: "AGENT_INSTALLATION_INVALID",
-          error: `Requested tools exceed static definition limits: ${invalidTools.join(", ")}`
-        });
-      }
-      finalAllowedTools = allowedTools;
-    }
+    // For Phase 10.4, POST /api/agents/install upserts allowedTools to match the current static agent definition.
+    // Do not allow arbitrary client-provided tools outside agentDefinition.allowedTools.
+    const finalAllowedTools = agentDefinition.allowedTools;
 
     const docId = `${storeConnection.id}_${agentDefinition.id}`;
     const now = new Date().toISOString();

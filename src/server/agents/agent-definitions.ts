@@ -9,7 +9,14 @@ export const AGENT_PRODUCT_INTELLIGENCE: AgentDefinition = {
     "catalog.products.status",
     "catalog.products.summary",
     "catalog.products.list",
-    "catalog.products.read"
+    "catalog.products.read",
+    "catalog.insights.health",
+    "catalog.insights.missing_images",
+    "catalog.insights.missing_vendor",
+    "catalog.insights.missing_product_type",
+    "catalog.insights.vendor_summary",
+    "catalog.insights.product_type_summary",
+    "catalog.insights.stale_snapshots"
   ],
   requiredScopes: ["read_products"],
   riskLevel: "Low",

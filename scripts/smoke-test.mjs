@@ -315,12 +315,15 @@ async function runSuite() {
       throw new Error(`Expected installation.agentId to be "agent_product_intelligence", got: "${inst.agentId}"`);
     }
     
-    // Verify allowedTools contains only catalog.products.* tools
+    // Verify allowedTools contains catalog.products.* and catalog.insights.* tools, and catalog.insights.health is present
     if (!Array.isArray(inst.allowedTools) || inst.allowedTools.length === 0) {
       throw new Error("Allowed tools list should not be empty");
     }
+    if (!inst.allowedTools.includes("catalog.insights.health")) {
+      throw new Error("Expected allowedTools to include 'catalog.insights.health'");
+    }
     for (const tool of inst.allowedTools) {
-      if (!tool.startsWith("catalog.products.")) {
+      if (!tool.startsWith("catalog.products.") && !tool.startsWith("catalog.insights.")) {
         throw new Error(`Agent allowedTools expanded beyond static limits: '${tool}'`);
       }
     }
@@ -350,8 +353,11 @@ async function runSuite() {
       throw new Error(`Expected installation status to be installed and enabled, got: ${JSON.stringify(data)}`);
     }
     
+    if (!data.allowedTools.includes("catalog.insights.health")) {
+      throw new Error("Expected allowedTools in status response to include 'catalog.insights.health'");
+    }
     for (const tool of data.allowedTools) {
-      if (!tool.startsWith("catalog.products.")) {
+      if (!tool.startsWith("catalog.products.") && !tool.startsWith("catalog.insights.")) {
         throw new Error(`Agent allowedTools expanded beyond static limits: '${tool}'`);
       }
     }
@@ -427,6 +433,135 @@ async function runSuite() {
     const summaryCall = data.toolCalls.find(t => t.toolName === "catalog.products.summary");
     if (!summaryCall) {
       throw new Error(`Expected catalog.products.summary tool call, got: ${JSON.stringify(data.toolCalls)}`);
+    }
+  });
+
+  // Test I.1: Agent chat catalog health validation
+  await check("I.1. Agent chat catalog health validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence",
+        message: "What is the health of my catalog?"
+      })
+    });
+
+    await checkResponse(res);
+    const data = await res.json();
+    scanForForbiddenKeys(data);
+
+    if (data.ok !== true) {
+      throw new Error(`Expected ok to be true, got: ${data.ok}`);
+    }
+    if (data.provider !== "mock") {
+      throw new Error(`Expected provider to be "mock", got: ${data.provider}`);
+    }
+    if (!data.message || typeof data.message !== "string") {
+      throw new Error("Expected final message string to exist.");
+    }
+    if (!Array.isArray(data.toolCalls) || data.toolCalls.length === 0) {
+      throw new Error("Expected toolCalls list to contain catalog tool execution.");
+    }
+    
+    const healthCall = data.toolCalls.find(t => t.toolName === "catalog.insights.health");
+    if (!healthCall) {
+      throw new Error(`Expected catalog.insights.health tool call, got: ${JSON.stringify(data.toolCalls)}`);
+    }
+    if (!data.message.toLowerCase().includes("health score")) {
+      throw new Error(`Expected health score details in response message, got: "${data.message}"`);
+    }
+  });
+
+  // Test I.2: Agent chat products missing images validation
+  await check("I.2. Agent chat products missing images validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence",
+        message: "Which products are missing images?"
+      })
+    });
+
+    await checkResponse(res);
+    const data = await res.json();
+    scanForForbiddenKeys(data);
+
+    if (data.ok !== true) {
+      throw new Error(`Expected ok to be true, got: ${data.ok}`);
+    }
+    if (data.provider !== "mock") {
+      throw new Error(`Expected provider to be "mock", got: ${data.provider}`);
+    }
+    if (!data.message || typeof data.message !== "string") {
+      throw new Error("Expected final message string to exist.");
+    }
+    if (!Array.isArray(data.toolCalls) || data.toolCalls.length === 0) {
+      throw new Error("Expected toolCalls list to contain catalog tool execution.");
+    }
+    
+    const missingCall = data.toolCalls.find(t => t.toolName === "catalog.insights.missing_images");
+    if (!missingCall) {
+      throw new Error(`Expected catalog.insights.missing_images tool call, got: ${JSON.stringify(data.toolCalls)}`);
+    }
+    if (!data.message.toLowerCase().includes("missing images")) {
+      throw new Error(`Expected missing images details in response message, got: "${data.message}"`);
+    }
+  });
+
+  // Test I.3: Agent chat top vendors summary validation
+  await check("I.3. Agent chat top vendors summary validation", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence",
+        message: "Show me the top vendors"
+      })
+    });
+
+    await checkResponse(res);
+    const data = await res.json();
+    scanForForbiddenKeys(data);
+
+    if (data.ok !== true) {
+      throw new Error(`Expected ok to be true, got: ${data.ok}`);
+    }
+    if (data.provider !== "mock") {
+      throw new Error(`Expected provider to be "mock", got: ${data.provider}`);
+    }
+    if (!data.message || typeof data.message !== "string") {
+      throw new Error("Expected final message string to exist.");
+    }
+    if (!Array.isArray(data.toolCalls) || data.toolCalls.length === 0) {
+      throw new Error("Expected toolCalls list to contain catalog tool execution.");
+    }
+    
+    const vendorCall = data.toolCalls.find(t => t.toolName === "catalog.insights.vendor_summary");
+    if (!vendorCall) {
+      throw new Error(`Expected catalog.insights.vendor_summary tool call, got: ${JSON.stringify(data.toolCalls)}`);
+    }
+    if (!data.message.toLowerCase().includes("top vendors")) {
+      throw new Error(`Expected top vendors details in response message, got: "${data.message}"`);
     }
   });
 
