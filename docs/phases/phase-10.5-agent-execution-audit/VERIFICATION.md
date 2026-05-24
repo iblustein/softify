@@ -48,3 +48,16 @@ node scripts/smoke-test.mjs
 - **Cross-Tenant Prevention**: Verified that cross-tenant queries (requesting a store that does not belong to the requested `organizationId`) correctly returns `403 Forbidden`.
 - **Sanitization Checks**: Scanned all returned logs to verify zero leakage of credentials, access tokens, bypass secrets, or PII. Verified that raw messages, raw tool arguments, and raw tool results are recursively stripped.
 - **Decision Integrity**: Verified that critical audit events strictly include `organizationId` and adhere to the `AuditDecision` union values (`"allowed" | "blocked" | "completed" | "failed"`).
+
+---
+
+## 4. Firestore Composite Index Configuration & Deployment
+To prevent `FAILED_PRECONDITION` index errors in multi-attribute queries, we have checked-in configuration for Firestore composite indexes:
+- **`firebase.json`**: Mounted to the root pointing to `firestore.indexes.json` for the `softify` database.
+- **`firestore.indexes.json`**: Configures ASCENDING `organizationId` / `storeConnectionId` and DESCENDING `timestamp` indexes for the `agent_audit_logs` collection.
+
+These indexes were successfully deployed to the `softify-dev` project:
+```bash
+firebase deploy --only firestore:indexes --project softify-dev
+```
+Status: `✓ Deployed successfully` (queries on `agent_audit_logs` using `organizationId` and ordered by `timestamp` now execute fully in Firestore mode).
