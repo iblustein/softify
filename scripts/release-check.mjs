@@ -518,6 +518,65 @@ async function runVerification() {
     }
   });
 
+  // Test 18: Validate that .github/workflows/deploy-cloud-run.yml contains gcloud secrets describe SHOPIFY_API_SECRET
+  await check("18. deploy-cloud-run.yml contains gcloud secrets describe SHOPIFY_API_SECRET", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
+    const content = fs.readFileSync(workflowPath, "utf8");
+    if (!content.includes("gcloud secrets describe SHOPIFY_API_SECRET")) {
+      throw new Error(".github/workflows/deploy-cloud-run.yml is missing 'gcloud secrets describe SHOPIFY_API_SECRET'.");
+    }
+  });
+
+  // Test 19: Validate that .github/workflows/deploy-cloud-run.yml contains gcloud secrets describe SHOPIFY_TOKEN_ENCRYPTION_KEY
+  await check("19. deploy-cloud-run.yml contains gcloud secrets describe SHOPIFY_TOKEN_ENCRYPTION_KEY", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
+    const content = fs.readFileSync(workflowPath, "utf8");
+    if (!content.includes("gcloud secrets describe SHOPIFY_TOKEN_ENCRYPTION_KEY")) {
+      throw new Error(".github/workflows/deploy-cloud-run.yml is missing 'gcloud secrets describe SHOPIFY_TOKEN_ENCRYPTION_KEY'.");
+    }
+  });
+
+  // Test 20: Validate that .github/workflows/deploy-cloud-run.yml contains gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET
+  await check("20. deploy-cloud-run.yml contains gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
+    const content = fs.readFileSync(workflowPath, "utf8");
+    if (!content.includes("gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET")) {
+      throw new Error(".github/workflows/deploy-cloud-run.yml is missing 'gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET'.");
+    }
+  });
+
+  // Test 21: Validate that .github/workflows/deploy-cloud-run.yml does not require SHOPIFY_API_SECRET as GitHub secret if using --set-secrets
+  await check("21. deploy-cloud-run.yml does not require SHOPIFY_API_SECRET as GitHub secret if using --set-secrets", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
+    const content = fs.readFileSync(workflowPath, "utf8");
+    if (content.includes("--set-secrets")) {
+      if (content.includes('test -n "${{ secrets.SHOPIFY_API_SECRET }}"')) {
+        throw new Error(".github/workflows/deploy-cloud-run.yml requires 'SHOPIFY_API_SECRET' as GitHub secret via test -n check.");
+      }
+    }
+  });
+
+  // Test 22: Validate that .github/workflows/deploy-cloud-run.yml does not require SHOPIFY_TOKEN_ENCRYPTION_KEY as GitHub secret if using --set-secrets
+  await check("22. deploy-cloud-run.yml does not require SHOPIFY_TOKEN_ENCRYPTION_KEY as GitHub secret if using --set-secrets", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
+    const content = fs.readFileSync(workflowPath, "utf8");
+    if (content.includes("--set-secrets")) {
+      if (content.includes('test -n "${{ secrets.SHOPIFY_TOKEN_ENCRYPTION_KEY }}"')) {
+        throw new Error(".github/workflows/deploy-cloud-run.yml requires 'SHOPIFY_TOKEN_ENCRYPTION_KEY' as GitHub secret via test -n check.");
+      }
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

@@ -38,9 +38,7 @@ jobs:
           test -n "${{ secrets.GCP_SERVICE_ACCOUNT }}" || (echo "Missing secret: GCP_SERVICE_ACCOUNT" && exit 1)
           test -n "${{ secrets.SOFTIFY_TEST_SHOP }}" || (echo "Missing secret: SOFTIFY_TEST_SHOP" && exit 1)        
           test -n "${{ secrets.SHOPIFY_API_KEY }}" || (echo "Missing secret: SHOPIFY_API_KEY" && exit 1)
-          test -n "${{ secrets.SHOPIFY_API_SECRET }}" || (echo "Missing secret: SHOPIFY_API_SECRET" && exit 1)
           test -n "${{ secrets.SHOPIFY_APP_URL }}" || (echo "Missing secret: SHOPIFY_APP_URL" && exit 1)
-          test -n "${{ secrets.SHOPIFY_TOKEN_ENCRYPTION_KEY }}" || (echo "Missing secret: SHOPIFY_TOKEN_ENCRYPTION_KEY" && exit 1)
           test -n "${{ secrets.SOFTIFY_AGENT_DEV_BYPASS_SECRET }}" || (echo "Missing secret: SOFTIFY_AGENT_DEV_BYPASS_SECRET" && exit 1)
 
       - name: Setup Node.js
@@ -68,6 +66,55 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
+      - name: Validate GCP Secret Manager Secrets
+        run: |
+          echo "Verifying Secret Manager configuration..."
+          
+          # Check SHOPIFY_API_SECRET
+          if gcloud secrets describe SHOPIFY_API_SECRET --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null && \
+             gcloud secrets versions list SHOPIFY_API_SECRET --project="${{ secrets.GCP_PROJECT_ID }}" --filter='state=ENABLED' --format='value(name)' | grep -q .; then
+            echo "- SHOPIFY_API_SECRET exists and has enabled version: yes"
+          else
+            echo "- SHOPIFY_API_SECRET exists and has enabled version: no"
+            exit 1
+          fi
+
+          # Check SHOPIFY_TOKEN_ENCRYPTION_KEY
+          if gcloud secrets describe SHOPIFY_TOKEN_ENCRYPTION_KEY --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null && \
+             gcloud secrets versions list SHOPIFY_TOKEN_ENCRYPTION_KEY --project="${{ secrets.GCP_PROJECT_ID }}" --filter='state=ENABLED' --format='value(name)' | grep -q .; then
+            echo "- SHOPIFY_TOKEN_ENCRYPTION_KEY exists and has enabled version: yes"
+          else
+            echo "- SHOPIFY_TOKEN_ENCRYPTION_KEY exists and has enabled version: no"
+            exit 1
+          fi
+
+          # Check SOFTIFY_AGENT_DEV_BYPASS_SECRET
+          if gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET --project="${{ secrets.GCP_PROJECT_ID }}" >/dev/null && \
+             gcloud secrets versions list SOFTIFY_AGENT_DEV_BYPASS_SECRET --project="${{ secrets.GCP_PROJECT_ID }}" --filter='state=ENABLED' --format='value(name)' | grep -q .; then
+            echo "- SOFTIFY_AGENT_DEV_BYPASS_SECRET exists and has enabled version: yes"
+          else
+            echo "- SOFTIFY_AGENT_DEV_BYPASS_SECRET exists and has enabled version: no"
+            exit 1
+          fi
+
+      - name: Pre-deployment Configuration Summary
+        run: |
+          echo "=== CONFIGURATION SUMMARY ==="
+          echo "- GitHub env configured: yes"
+          echo "- GCP Secret Manager secret exists: yes"
+          echo "- Firestore backend: firestore"
+          echo "- Firestore database: softify"
+          if [ -n "${{ secrets.SHOPIFY_APP_URL }}" ]; then
+            echo "- Shopify app URL configured: yes"
+          else
+            echo "- Shopify app URL configured: no"
+          fi
+          echo "============================="
+
+      # NOTE: The Cloud Run runtime service account must have roles/secretmanager.secretAccessor role on:
+      # - SHOPIFY_API_SECRET
+      # - SHOPIFY_TOKEN_ENCRYPTION_KEY
+      # - SOFTIFY_AGENT_DEV_BYPASS_SECRET
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v3
