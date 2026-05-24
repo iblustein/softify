@@ -37,6 +37,10 @@ jobs:
           test -n "${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}" || (echo "Missing secret: GCP_WORKLOAD_IDENTITY_PROVIDER" && exit 1)
           test -n "${{ secrets.GCP_SERVICE_ACCOUNT }}" || (echo "Missing secret: GCP_SERVICE_ACCOUNT" && exit 1)
           test -n "${{ secrets.SOFTIFY_TEST_SHOP }}" || (echo "Missing secret: SOFTIFY_TEST_SHOP" && exit 1)        
+          test -n "${{ secrets.SHOPIFY_API_KEY }}" || (echo "Missing secret: SHOPIFY_API_KEY" && exit 1)
+          test -n "${{ secrets.SHOPIFY_API_SECRET }}" || (echo "Missing secret: SHOPIFY_API_SECRET" && exit 1)
+          test -n "${{ secrets.SHOPIFY_APP_URL }}" || (echo "Missing secret: SHOPIFY_APP_URL" && exit 1)
+          test -n "${{ secrets.SHOPIFY_TOKEN_ENCRYPTION_KEY }}" || (echo "Missing secret: SHOPIFY_TOKEN_ENCRYPTION_KEY" && exit 1)
           test -n "${{ secrets.SOFTIFY_AGENT_DEV_BYPASS_SECRET }}" || (echo "Missing secret: SOFTIFY_AGENT_DEV_BYPASS_SECRET" && exit 1)
 
       - name: Setup Node.js
@@ -73,7 +77,8 @@ jobs:
           source: .
           flags: >-
             --allow-unauthenticated
-            --set-env-vars=SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true,AI_PROVIDER=mock,SOFTIFY_AGENT_DEV_BYPASS_SECRET=${{ secrets.SOFTIFY_AGENT_DEV_BYPASS_SECRET }}
+            --set-env-vars=REPOSITORY_BACKEND=firestore,GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }},FIRESTORE_DATABASE_ID=softify,FIRESTORE_STORE_CONNECTIONS_COLLECTION=shopify_store_connections,FIRESTORE_PRODUCT_SNAPSHOTS_COLLECTION=product_snapshots,AI_PROVIDER=mock,SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true,SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }},SHOPIFY_APP_URL=${{ secrets.SHOPIFY_APP_URL }},APP_URL=${{ secrets.SHOPIFY_APP_URL }},SHOPIFY_SCOPES=read_products\,read_orders\,read_customers\,read_themes\,read_content,SHOPIFY_APP_HANDLE=softify,SHOPIFY_TEST_SHOP=${{ secrets.SOFTIFY_TEST_SHOP }},NODE_ENV=production
+            --set-secrets=SHOPIFY_API_SECRET=SHOPIFY_API_SECRET:latest,SHOPIFY_TOKEN_ENCRYPTION_KEY=SHOPIFY_TOKEN_ENCRYPTION_KEY:latest,SOFTIFY_AGENT_DEV_BYPASS_SECRET=SOFTIFY_AGENT_DEV_BYPASS_SECRET:latest
 
       - name: Smoke test deployed service
         env:

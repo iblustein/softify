@@ -66,6 +66,53 @@ async function checkResponse(res) {
 }
 
 async function runSuite() {
+  // 0. Pre-smoke runtime diagnostics check
+  await check("0. Pre-smoke runtime diagnostics check", async () => {
+    const timestamp = Date.now();
+    const url = `${baseUrl}/api/diagnostics?t=${timestamp}`;
+    const res = await fetch(url);
+    await checkResponse(res);
+    const data = await res.json();
+    scanForForbiddenKeys(data);
+
+    if (data.ok !== true || !data.diagnostics) {
+      throw new Error(`Diagnostics returned failure status: ${JSON.stringify(data)}`);
+    }
+
+    const {
+      shopifyOAuthConfigured,
+      repositoryBackend,
+      firestoreDatabaseConfigured,
+      agentDevBypassAllowed,
+      agentDevBypassSecretConfigured
+    } = data.diagnostics;
+
+    console.log(`   [DIAGNOSTICS] shopifyOAuthConfigured         : ${shopifyOAuthConfigured}`);
+    console.log(`   [DIAGNOSTICS] repositoryBackend              : ${repositoryBackend}`);
+    console.log(`   [DIAGNOSTICS] firestoreDatabaseConfigured    : ${firestoreDatabaseConfigured}`);
+    console.log(`   [DIAGNOSTICS] agentDevBypassAllowed          : ${agentDevBypassAllowed}`);
+    console.log(`   [DIAGNOSTICS] agentDevBypassSecretConfigured : ${agentDevBypassSecretConfigured}`);
+
+    // Deploy/Release Guard: fail if Shopify OAuth is not configured
+    if (shopifyOAuthConfigured !== true) {
+      throw new Error("Release Guard Failure: Deployed service Shopify OAuth is not configured!");
+    }
+
+    // Deploy/Release Guard: fail if firestore backend is requested but database is not configured
+    if (repositoryBackend === "firestore" && firestoreDatabaseConfigured !== true) {
+      throw new Error("Release Guard Failure: Repository backend is set to firestore, but Firestore database is not configured!");
+    }
+
+    // Dev bypass validations for smoke testing
+    if (agentDevBypassAllowed !== true) {
+      throw new Error("Release Guard Failure: Agent Dev Bypass is not allowed on the server!");
+    }
+
+    if (agentDevBypassSecretConfigured !== true) {
+      throw new Error("Release Guard Failure: Agent Dev Bypass Secret is missing/unconfigured on the server!");
+    }
+  });
+
   // Test A: OAuth Status validation
   await check("A. OAuth Status endpoint validation", async () => {
     const timestamp = Date.now();

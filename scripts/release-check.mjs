@@ -504,6 +504,20 @@ async function runVerification() {
     }
   });
 
+  // Test 17: Validate diagnostics router is imported and mounted in app.ts
+  await check("17. diagnostics router is imported and mounted in app.ts", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const appPath = path.resolve(process.cwd(), "src/server/app.ts");
+    const content = fs.readFileSync(appPath, "utf8");
+    if (!content.includes("diagnostics.routes.js")) {
+      throw new Error("src/server/app.ts is missing 'diagnostics.routes.js' import.");
+    }
+    if (!content.includes("app.use(\"/api\", diagnosticsRoutes)")) {
+      throw new Error("src/server/app.ts is missing '/api' mount for diagnosticsRoutes.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

@@ -12,6 +12,7 @@ import shopifyOAuthRoutes from "./routes/shopify-oauth.routes.js";
 import shopifyAdminRoutes from "./routes/shopify-admin.routes.js";
 import catalogRoutes from "./routes/catalog.routes.js";
 import agentChatRoutes from "./routes/agent-chat.routes.js";
+import diagnosticsRoutes from "./routes/diagnostics.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -30,5 +31,6 @@ app.use("/api", approvalsRoutes);
 app.use("/api", auditRoutes);
 app.use("/api", dashboardRoutes);
 app.use("/api", orchestratorRoutes);
+app.use("/api", diagnosticsRoutes);
 
 export { app };
