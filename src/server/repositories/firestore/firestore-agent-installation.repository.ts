@@ -34,7 +34,7 @@ function mapDocument(doc: FirebaseFirestore.DocumentSnapshot): AgentInstallation
   if (!data) return null;
 
   return {
-    id: data.id,
+    id: data.id || doc.id,
     organizationId: data.organizationId,
     storeConnectionId: data.storeConnectionId,
     shopDomain: data.shopDomain,

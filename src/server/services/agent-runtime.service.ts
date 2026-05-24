@@ -45,6 +45,11 @@ export async function runAgentChat(params: {
     throw new Error(`Agent not found in context: '${agentId}'`);
   }
 
+  // Ensure real installation exists
+  if (!context.agentInstallations || context.agentInstallations.length === 0 || !context.agentInstallations[0]) {
+    throw new Error(`Agent installation is missing for agentId: '${agentId}'`);
+  }
+
   // 2. Validate request-level shop domain against context store connection
   const cleanShop = normalizeShopDomain(params.shop);
   if (!cleanShop) {
@@ -147,15 +152,7 @@ export async function runAgentChat(params: {
       currentOrganization: context.currentOrganization,
       storeConnection: context.storeConnection,
       agentDefinition: agentDefinition,
-      agentInstallation: context.agentInstallations[0] || {
-        id: `inst_${agentDefinition.id}`,
-        organizationId: context.currentOrganization.id,
-        storeConnectionId: context.storeConnection.id,
-        agentDefinitionId: agentDefinition.id,
-        enabled: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      },
+      agentInstallation: context.agentInstallations[0],
       enabledTools: context.enabledTools
     };
 

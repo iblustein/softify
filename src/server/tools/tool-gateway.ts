@@ -76,6 +76,15 @@ export function validateToolExecutionContext(toolName: string, context: ToolExec
     };
   }
 
+  // 4.5. Tool not allowed by agentInstallation.allowedTools check
+  if (!context.agentInstallation.allowedTools || !context.agentInstallation.allowedTools.includes(toolName)) {
+    return {
+      isValid: false,
+      error: `Tool ${toolName} is not allowed by agent installation`,
+      reason: "tool_not_allowed_by_installation"
+    };
+  }
+
   // TODO: Shopify scope validation (verify agent required scopes map onto store connection scopes)
   // TODO: billing / plan enforcement (verify monthly quotas or tier limits)
 

@@ -6,15 +6,13 @@ export async function getByShopAndAgent(shopDomain: string, agentId: string): Pr
   const normalizedShop = shopDomain.trim().toLowerCase();
   
   const inst = agentInstallations.find(ai => {
-    if (ai.shopDomain && ai.agentId) {
-      return ai.shopDomain.trim().toLowerCase() === normalizedShop && ai.agentId === agentId;
+    const recordShop = ai.shopDomain ? ai.shopDomain.trim().toLowerCase() : null;
+    if (!recordShop || recordShop !== normalizedShop) {
+      return false;
     }
-    // Legacy fallback check
+    
     const checkAgentId = ai.agentId || ai.agentDefinitionId;
-    if (checkAgentId === agentId) {
-      return true;
-    }
-    return false;
+    return checkAgentId === agentId;
   });
   
   return inst || null;
