@@ -2,6 +2,20 @@ import { AuditEvent } from "../../domain/types.js";
 import { getFirestoreClient } from "../../services/firestore-client.service.js";
 
 /**
+ * FIRESTORE COMPOSITE INDEX REQUIREMENTS:
+ * Collection: agent_audit_logs
+ * 
+ * Index 1:
+ * - organizationId: ASC
+ * - timestamp: DESC
+ * 
+ * Index 2 (Optional but highly recommended for fast store-scoped query execution):
+ * - organizationId: ASC
+ * - storeConnectionId: ASC
+ * - timestamp: DESC
+ */
+
+/**
  * Helper to retrieve the Firestore CollectionReference configured for agent audit logs.
  */
 function getCollection() {
@@ -76,6 +90,9 @@ export async function getAllAuditEvents(): Promise<AuditEvent[]> {
 }
 
 export async function clearAuditEvents(): Promise<void> {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Violation: clearAuditEvents is strictly disabled in production environments.");
+  }
   const collection = getCollection();
   const querySnap = await collection.get();
   const batch = collection.firestore.batch();

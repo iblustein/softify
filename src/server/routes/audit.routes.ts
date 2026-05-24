@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { getAuditLogs } from "../services/audit-log.service.js";
+import { getAuditLogs, writeAuditEvent } from "../services/audit-log.service.js";
 import { getRepositories } from "../repositories/repository-provider.js";
 import { normalizeShopDomain } from "../services/shopify-oauth.service.js";
+import { isFirestoreConfigured } from "../config/firestore.config.js";
+import { AuditEventNames } from "../domain/types.js";
 
 const router = Router();
 
@@ -25,6 +27,23 @@ router.get("/audit-logs", async (req: any, res: any) => {
 
       // Strict tenant scoping check: verify store connection scopes to requesting organizationId
       if (storeConnection.organizationId !== organizationId) {
+        // Add audit logging for tenant isolation shop mismatch before throwing/returning
+        await writeAuditEvent({
+          organizationId: storeConnection.organizationId,
+          storeConnectionId: storeConnection.id,
+          initiator: "system",
+          event: AuditEventNames.GATEWAY_VALIDATION_BLOCKED,
+          description: `Access denied. Store '${cleanShop}' queried with organizationId '${organizationId}' does not belong to it.`,
+          decision: "blocked",
+          reason: "tenant_isolation_violation",
+          metadata: {
+            organizationId: storeConnection.organizationId,
+            queriedOrganizationId: organizationId,
+            storeConnectionId: storeConnection.id,
+            decision: "blocked",
+            reason: "tenant_isolation_violation"
+          }
+        });
         return res.status(403).json({ ok: false, error: "Access denied. Store does not belong to this organization." });
       }
 
@@ -42,8 +61,8 @@ router.get("/audit-logs", async (req: any, res: any) => {
     // Sync context to in-memory audit logs strictly filtered by organizationId
     const cachedLogs = getAuditLogs(organizationId, storeConnectionId);
 
-    // Prefer database records, otherwise use filtered cache
-    const finalLogs = filteredEvents.length > 0 ? filteredEvents : cachedLogs;
+    // Prefer database records if Firestore is configured (never fall back to in-memory), otherwise use filtered cache
+    const finalLogs = isFirestoreConfigured() ? filteredEvents : (filteredEvents.length > 0 ? filteredEvents : cachedLogs);
 
     res.json(finalLogs);
   } catch (error: any) {

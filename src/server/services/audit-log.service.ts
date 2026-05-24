@@ -139,6 +139,31 @@ export function getAuditLogs(organizationId?: string, storeConnectionId?: string
 }
 
 /**
+ * Sanitizes event descriptions to prevent embedding raw exception/error stacks, long tokens, or JWTs.
+ */
+export function sanitizeDescription(desc: string): string {
+  if (!desc) return "";
+  let sanitized = desc;
+  
+  // Mask anything that looks like a token, hex key, or JWT
+  sanitized = sanitized.replace(/xox[bap]-[0-9]{12}-[0-9]{12}-[0-9]{12}-[a-z0-9]{32}/gi, "[REDACTED TOKEN]");
+  sanitized = sanitized.replace(/shpat_[a-fA-F0-9]{32}/g, "[REDACTED TOKEN]");
+  sanitized = sanitized.replace(/[\w-]{30,}\.[\w-]{30,}\.[\w-]{30,}/g, "[REDACTED JWT]");
+  
+  // Redact raw developer exceptions/error stack traces (containing at, Error:, .ts, .js references)
+  if (sanitized.includes("Error:") || sanitized.includes("at ") || sanitized.includes(".ts:") || sanitized.includes(".js:")) {
+    const firstLine = sanitized.split("\n")[0];
+    if (firstLine.includes("at ") || firstLine.includes("Error:")) {
+      sanitized = "An internal execution error occurred (system details redacted).";
+    } else {
+      sanitized = firstLine;
+    }
+  }
+  
+  return sanitized;
+}
+
+/**
  * Asynchronously logs and persists critical audit events.
  * Performs centralized, allowlist-first payload sanitization and awaits database commit.
  */
@@ -148,13 +173,14 @@ export async function writeAuditEvent(event: Omit<AuditEvent, "id" | "timestamp"
   }
 
   const repos = getRepositories();
-  const now = new Date().toISOString();
   
   // Recursively sanitize all metadata properties using our allowlist-first strategy
   const sanitizedMetadata = sanitizeAuditPayload(event.metadata || {});
+  const cleanDescription = sanitizeDescription(event.description || "");
 
   const newEventInput = {
     ...event,
+    description: cleanDescription,
     metadata: {
       ...sanitizedMetadata,
       organizationId: event.organizationId,
@@ -193,48 +219,51 @@ export function writeLog(initiator: string, event: string, description: string, 
   const logId = `LOG-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const now = new Date().toISOString();
   
-  const orgId = metadata?.organizationId || "demo-org-id";
+  const orgId = metadata?.organizationId; // Remove demo-org-id fallback for DB persistence
   const storeConnId = metadata?.storeConnectionId;
 
   // Sanitize the metadata payload
   const sanitizedMetadata = sanitizeAuditPayload(metadata || {});
+  const cleanDescription = sanitizeDescription(description || "");
 
   const log: AuditLog = {
     id: logId,
     timestamp: now,
     initiator,
     event,
-    description,
+    description: cleanDescription,
     metadata: {
       ...sanitizedMetadata,
-      organizationId: orgId,
+      organizationId: orgId || "demo-org-id", // Keep local fallback only for legacy UI representation
       storeConnectionId: storeConnId
     }
   };
 
   auditLogs.unshift(log);
 
-  // Background fire-and-forget persistence to database
-  const repos = getRepositories();
-  repos.audit.createAuditEvent({
-    id: logId,
-    organizationId: orgId,
-    storeConnectionId: storeConnId,
-    initiator,
-    event,
-    description,
-    metadata: log.metadata,
-    agentId: metadata?.agentId,
-    agentDefinitionId: metadata?.agentDefinitionId || metadata?.agentId,
-    agentInstallationId: metadata?.agentInstallationId,
-    toolName: metadata?.toolName,
-    provider: metadata?.provider,
-    decision: metadata?.decision,
-    reason: metadata?.reason,
-    correlationId: metadata?.correlationId
-  }).catch(err => {
-    console.error("[AUDIT LOG ERROR] Failed to persist background audit event:", err);
-  });
+  // Background fire-and-forget persistence to database ONLY if organizationId is present
+  if (orgId) {
+    const repos = getRepositories();
+    repos.audit.createAuditEvent({
+      id: logId,
+      organizationId: orgId,
+      storeConnectionId: storeConnId,
+      initiator,
+      event,
+      description: log.description,
+      metadata: log.metadata,
+      agentId: metadata?.agentId,
+      agentDefinitionId: metadata?.agentDefinitionId || metadata?.agentId,
+      agentInstallationId: metadata?.agentInstallationId,
+      toolName: metadata?.toolName,
+      provider: metadata?.provider,
+      decision: metadata?.decision,
+      reason: metadata?.reason,
+      correlationId: metadata?.correlationId
+    }).catch(err => {
+      console.error("[AUDIT LOG ERROR] Failed to persist background audit event:", err);
+    });
+  }
 
   return log;
 }

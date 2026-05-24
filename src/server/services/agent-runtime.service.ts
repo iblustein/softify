@@ -59,6 +59,28 @@ export async function runAgentChat(params: {
 
   const contextShop = normalizeShopDomain(context.storeConnection.storeUrl);
   if (cleanShop !== contextShop) {
+    await writeAuditEvent({
+      organizationId: context.currentOrganization.id,
+      storeConnectionId: context.storeConnection.id,
+      agentInstallationId: context.agentInstallations[0]?.id,
+      agentId,
+      agentDefinitionId: agentDefinition.id,
+      initiator: "system",
+      event: AuditEventNames.GATEWAY_VALIDATION_BLOCKED,
+      description: `Tenant isolation violation: Request shop '${cleanShop}' does not match context shop '${contextShop}'.`,
+      decision: "blocked",
+      reason: "tenant_isolation_violation",
+      metadata: {
+        organizationId: context.currentOrganization.id,
+        storeConnectionId: context.storeConnection.id,
+        agentInstallationId: context.agentInstallations[0]?.id,
+        agentId,
+        decision: "blocked",
+        reason: "tenant_isolation_violation",
+        requestShop: cleanShop,
+        contextShop: contextShop
+      }
+    });
     throw new Error(`Tenant isolation violation: Request shop '${cleanShop}' does not match context shop '${contextShop}'.`);
   }
 
