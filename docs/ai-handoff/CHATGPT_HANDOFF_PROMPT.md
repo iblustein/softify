@@ -41,6 +41,19 @@ All project configurations, deployment architecture, and completed phases are do
 - `/docs/phases/`
 - `/docs/PHASE_INDEX.md`
 
+### Ongoing Workflow Rules
+For every future phase, the implementation agent (Antigravity) must create or update the phase folder before and after implementation:
+1. **Before Implementation**:
+   - Create or update `/docs/phases/phase-*/IMPLEMENTATION_PLAN.md`
+2. **After Implementation**:
+   - Update `/docs/phases/phase-*/WALKTHROUGH.md`
+   - Update `/docs/phases/phase-*/REVIEW_NOTES.md` (after ChatGPT review)
+   - Update `/docs/phases/phase-*/VERIFICATION.md` (after tests and deployment validation)
+   - Update `/docs/ai-handoff/SOFTIFY_PROJECT_STATE.md`
+   - Update `/docs/ai-handoff/CHATGPT_HANDOFF_PROMPT.md`
+   - Update `/docs/ai-handoff/NEXT_STEPS.md`
+   - Update `/docs/PHASE_INDEX.md`
+
 ### Next Step
 We are ready to initiate Phase 10.5 — Agent Execution Audit Foundation. The goal is to implement durable, sanitized, tenant-safe Firestore audit logs for all agent and tool execution gate decisions.
 
@@ -51,10 +64,19 @@ Acknowledge your understanding, state the core architectural rules you will enfo
 
 ---
 
-### Maintenance Rule
-After every completed phase, update:
+## Ongoing Workflow & Maintenance Rules
+For every future phase, Antigravity must create or update the phase folder before and after implementation.
+
+### 1. Before Implementation
+Create or update:
+- `/docs/phases/phase-*/IMPLEMENTATION_PLAN.md`
+
+### 2. After Implementation
+Update or create:
+- `/docs/phases/phase-*/WALKTHROUGH.md`
+- `/docs/phases/phase-*/REVIEW_NOTES.md` (after ChatGPT review)
+- `/docs/phases/phase-*/VERIFICATION.md` (after tests and deployment validation)
 - `/docs/ai-handoff/SOFTIFY_PROJECT_STATE.md`
 - `/docs/ai-handoff/CHATGPT_HANDOFF_PROMPT.md`
 - `/docs/ai-handoff/NEXT_STEPS.md`
 - `/docs/PHASE_INDEX.md`
-- the relevant `/docs/phases/phase-*/` files.

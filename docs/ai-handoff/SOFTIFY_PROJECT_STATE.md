@@ -40,12 +40,19 @@ This document provides a highly durable and centralized technical reference for 
 - **No Agent Management UI**: Front-end visual dashboard for installing agents is deferred.
 - **No Agent Frameworks**: Avoid importing third-party frameworks like LangChain, CrewAI, or LangGraph.
 
----
+## Ongoing Workflow & Maintenance Rules
+For every future phase, Antigravity must create or update the phase folder before and after implementation.
 
-### Maintenance Rule
-After every completed phase, update:
+### 1. Before Implementation
+Create or update:
+- `/docs/phases/phase-*/IMPLEMENTATION_PLAN.md`
+
+### 2. After Implementation
+Update or create:
+- `/docs/phases/phase-*/WALKTHROUGH.md`
+- `/docs/phases/phase-*/REVIEW_NOTES.md` (after ChatGPT review)
+- `/docs/phases/phase-*/VERIFICATION.md` (after tests and deployment validation)
 - `/docs/ai-handoff/SOFTIFY_PROJECT_STATE.md`
 - `/docs/ai-handoff/CHATGPT_HANDOFF_PROMPT.md`
 - `/docs/ai-handoff/NEXT_STEPS.md`
 - `/docs/PHASE_INDEX.md`
-- the relevant `/docs/phases/phase-*/` files.
