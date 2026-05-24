@@ -577,6 +577,17 @@ async function runVerification() {
     }
   });
 
+  // Test 23: Validate that .github/workflows/deploy-cloud-run.yml uses gcloud custom delimiter syntax "^|^" for --set-env-vars
+  await check("23. deploy-cloud-run.yml uses gcloud custom delimiter syntax ^|^ for --set-env-vars", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
+    const content = fs.readFileSync(workflowPath, "utf8");
+    if (!content.includes("--set-env-vars=^|^")) {
+      throw new Error(".github/workflows/deploy-cloud-run.yml is missing custom delimiter syntax '^|^' for --set-env-vars.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {
