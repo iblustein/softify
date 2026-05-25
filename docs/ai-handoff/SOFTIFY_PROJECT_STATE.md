@@ -36,12 +36,17 @@ This document provides a highly durable and centralized technical reference for 
 - **Agent Execution Audit**: Durable, sanitized, tenant-safe Firestore audit logging (collection `agent_audit_logs`) tracking agent chat requests, tool invocations, and Gateway decisions (`allowed`, `blocked`, `completed`, `failed`) using centralized constants. Includes a recursive, allowlist-first sanitizer and strict cross-tenant endpoint query protection.
 - **Merchant Approvals Pipeline**: Secure merchant-in-the-loop approvals gateway intercepting proposal tools (`catalog.products.propose_update`), registering strictly-sanitized proposal shapes in `merchant_approvals`, enforcing strict tenant-scoping, dynamically mapping legacy UI parameters on-the-fly in router responses, and dispatching async transition audit records (`APPROVAL_CREATED`, `APPROVAL_APPROVED`, `APPROVAL_REJECTED`).
 - **Safe Product Mutation Execution Pipeline**: An explicitly approved request can be securely executed via the `POST /api/approvals/:id/execute` endpoint. Integrates a secure Shopify Admin GraphQL `productUpdate` write mutator, fully private token resolution, strict payload length-capping and tag-deduplication, transactional concurrency state claim locks (`APPROVED` -> `EXECUTING`), incremental sync refreshes on success, and graceful failure transitions.
-- **CI/CD & Production Smoke Tests**: All static release checks (47 tests) and live local/deployed smoke tests (23 tests) pass cleanly.
+- **Approval Execution Operations & Recovery**: Telemetry session tracking metrics, `APPROVAL_EXECUTION_STARTED` race-safe audits, stuck execution timeout configurations, state-only reset recovery API (`POST /api/approvals/:id/reset-failed`), and operator stuck-marked failed API (`POST /api/approvals/:id/mark-execution-failed`) under strict trimmed actor limits.
+- **Embedded Admin Tenant Context Regression Fix**: Seamless backend shop-based dynamic context resolution for audit, approvals list, and approvals decide API endpoints. Frontend shop context persistence across url-redirection cleanups (preserving shop context and discarding only transient signatures), and premium visual sync warning recovery cards preventing infinite loaders.
+- **CI/CD & Production Smoke Tests**: All static release checks (52 tests) and live local/deployed smoke tests (25 tests) pass cleanly.
 
 ## Current Non-Goals
-- **No Theme Patching**: Theme layout/CSS patching is entirely out-of-scope and disabled.
+- **No Theme Patching / Theme Tools**: Theme layout/CSS patching is entirely out-of-scope and disabled. No theme tools or read/write theme scopes may be used.
+- **No write_themes**: The `write_themes` scope remains strictly unauthorized and forbidden.
 - **No Direct AI Mutations**: AI provider runtime may never invoke write tools directly on live stores; mutations must go through the merchant proposal and approval execution pipelines.
-- **No Price, Variant, Media, or Inventory Mutations**: Excluded in Phase 10.7 (only catalog text updates like `title`, `vendor`, `productType`, `status`, `tags` are authorized).
+- **No Price, Variant, Media, DescriptionHtml, or Inventory Mutations**: Excluded (only catalog text updates like `title`, `vendor`, `productType`, `status`, `tags` are authorized).
+- **No Auto-Execution**: Automatic execution on approval is strictly prohibited. Approved proposals must wait for explicit execution dispatches.
+- **Recovery Endpoints Shopify Containment**: Recovery reset/marking endpoints must remain state-only and are strictly forbidden from calling live Shopify APIs.
 - **No Agent Management UI**: Front-end visual dashboard for installing agents is deferred.
 - **No Agent Frameworks**: Avoid importing third-party frameworks like LangChain, CrewAI, or LangGraph.
 - **No Cross-Store Bulk Approvals**: Multi-store/bulk approval decision lists are deferred.

@@ -22,7 +22,9 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Durable, sanitized, tenant-safe Firestore audit logging is established (Phase 10.5) to track all agent executions and gateway decisions.
 - A secure merchant-in-the-loop approvals queue, proposal tool gateway interception, dynamically mapped REST approvals router, and deferred execution contract are fully implemented (Phase 10.6).
 - A safe execution pipeline (`POST /api/approvals/:id/execute`) connects merchant-approved proposals to store items via the Shopify Admin GraphQL API `productUpdate` mutation with atomic transactional claims (`APPROVED` -> `EXECUTING`), private token resolution, trimmed/validated payloads, post-execution product sync refreshes, and e2e integration smoke tests (Phase 10.7).
-- Robust pre-deployment static checks (47 tests) and integration smoke test suites (23 tests) are passing completely.
+- Telemetry session metrics tracking, stuck execution timeouts (15 minutes default), and CJS server state-only recovery reset/marking endpoints are fully in place (Phase 10.8).
+- Embedded shop-based dynamic context resolution on backend routes, selective transient parameter URL scrubbing, and premium warning panels are verified and live (Phase 10.8.1).
+- Robust pre-deployment static checks (52 tests) and integration smoke test suites (25 tests) are passing completely.
 
 ### Completed Milestones
 - Phase 10.1 — AI Engine Interface and Catalog Agent POC
@@ -32,12 +34,16 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.5 — Agent Execution Audit Foundation
 - Phase 10.6 — Merchant Approvals & Mutation Tools Foundation (Containment Fix)
 - Phase 10.7 — Safe Approved Product Mutation Execution Foundation
+- Phase 10.8 — Approval Execution Operations & Recovery Foundation
+- Phase 10.8.1 — Embedded Admin Tenant Context Regression Fix
 
 ### Core Architectural Guardrails & Constraints
 - Softify strictly owns runtime execution, permissions, tenant isolation, and integrations.
 - AI engines are stateless providers pluggable through the `AiProvider` interface and never execute tools directly.
 - The SDK Tool Gateway is the ONLY execution path for tools and enforces final permission validation. All proposal-only mutation tools must be intercepted and converted into approval requests.
 - All product mutation execution goes through the secure executor service, using only the Shopify Admin GraphQL API. No direct writes, legacy REST writes, or variants/prices/media mutations are allowed.
+- Auto-execution on approval is strictly prohibited. Approved proposals must wait for explicit execution dispatches.
+- Recovery endpoints must remain state-only and are strictly forbidden from calling live Shopify APIs.
 
 ### Active Repository Context
 All project configurations, deployment architecture, and completed phases are documented under:
@@ -61,7 +67,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.8 — Real-time Webhook Synchronization & Extended Field Mutations. The goal is to set up a secure Shopify HMAC-validated webhook receiver to sync external product changes real-time, safely support clean HTML product descriptions, and add transient retry/backoff queue features.
+We are ready to initiate Phase 10.9 — Multi-Agent Product Workspace Foundation. The goal is to review and align on `/docs/phases/phase-10.9/IMPLEMENTATION_PLAN.md` detailing the workspace registry, runs tracking, recommendations inbox, proposed actions bridging, and index automation before writing any implementation code.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 
