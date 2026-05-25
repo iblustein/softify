@@ -7,7 +7,7 @@ All mutations are performed exclusively via the **Shopify Admin GraphQL API `pro
 
 This release has been heavily hardened to defend tenant boundaries, verify scopes defensively at all layers, and protect execution log sequences.
 
----
+-----
 
 ## Changes Implemented
 
