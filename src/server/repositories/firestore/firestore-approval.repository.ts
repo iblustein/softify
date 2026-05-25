@@ -37,6 +37,9 @@ function mapDocument(doc: FirebaseFirestore.DocumentSnapshot): ApprovalRequest |
     requestedAt: data.requestedAt,
     decidedAt: data.decidedAt,
     decidedBy: data.decidedBy,
+    executedAt: data.executedAt,
+    executedBy: data.executedBy,
+    failureReason: data.failureReason,
     status: data.status,
     riskLevel: data.riskLevel,
     targetType: data.targetType || 'PRODUCT_PROPOSAL',
@@ -111,4 +114,35 @@ export async function clearApprovals(): Promise<void> {
     batch.delete(doc.ref);
   });
   await batch.commit();
+}
+
+export async function claimApprovalForExecution(approvalId: string, organizationId: string): Promise<ApprovalRequest> {
+  const firestore = getFirestoreClient();
+  const docRef = getCollection().doc(approvalId);
+
+  await firestore.runTransaction(async (transaction) => {
+    const docSnap = await transaction.get(docRef);
+    if (!docSnap.exists) {
+      throw new Error("Approval request not found.");
+    }
+    const data = docSnap.data();
+    if (!data) {
+      throw new Error("Approval request data is empty.");
+    }
+    if (data.organizationId !== organizationId) {
+      throw new Error("Access denied. Approval request does not belong to this organization.");
+    }
+    if (data.status !== "APPROVED") {
+      throw new Error(`Concurrency block: expected status APPROVED, got ${data.status}`);
+    }
+
+    transaction.update(docRef, { status: "EXECUTING" });
+  });
+
+  const updatedDoc = await docRef.get();
+  const result = mapDocument(updatedDoc);
+  if (!result) {
+    throw new Error("Failed to map updated claimed document.");
+  }
+  return result;
 }

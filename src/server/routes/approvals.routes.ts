@@ -5,6 +5,7 @@ import { normalizeShopDomain } from "../services/shopify-oauth.service.js";
 import { isFirestoreConfigured } from "../config/firestore.config.js";
 import { AuditEventNames } from "../domain/types.js";
 import * as approvalService from "../services/approval.service.js";
+import * as executorService from "../services/approved-product-mutation-executor.service.js";
 
 const router = Router();
 
@@ -239,6 +240,99 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
     const isNotFound = error.message === "Approval request not found";
     const isBadReq = error.message === "Action is already finalized.";
     res.status(isNotFound ? 404 : isBadReq ? 400 : 500).json({ ok: false, error: error.message });
+  }
+});
+
+router.post("/approvals/:id/execute", async (req: any, res: any) => {
+  const { id } = req.params;
+  const organizationId = req.body.organizationId || req.query.organizationId;
+  const shop = req.body.shop || req.query.shop;
+  const storeConnectionId = req.body.storeConnectionId || req.query.storeConnectionId;
+  const performer = req.body.performer || "Shop Owner";
+
+  try {
+    if (!organizationId || typeof organizationId !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+    }
+
+    const repos = getRepositories();
+    let approvalItem = await repos.approvals.getApprovalById(id);
+
+    // Fallback search to legacy queue list if repository misses (backwards compatibility for mock seeds)
+    if (!approvalItem) {
+      const legacyItem = approvalService.getApprovals().find(a => a.id === id);
+      if (legacyItem) {
+        approvalItem = {
+          id: legacyItem.id,
+          organizationId: (legacyItem as any).organizationId || organizationId,
+          storeConnectionId: (legacyItem as any).storeConnectionId || "store-luminary",
+          agentInstallationId: (legacyItem as any).agentInstallationId || "inst-mock",
+          agentId: legacyItem.agentId,
+          toolName: "catalog.products.propose_update",
+          requestedBy: legacyItem.agentName,
+          requestedAt: legacyItem.timestamp,
+          status: legacyItem.status as any,
+          riskLevel: "Medium",
+          targetType: "PRODUCT_PROPOSAL",
+          targetId: legacyItem.targetId,
+          proposedChangesSummary: legacyItem.details.summary,
+          diffSummary: legacyItem.details.summary,
+          sanitizedPayload: legacyItem.details.fields || {},
+          allowedFields: ["title", "vendor", "productType", "status", "tags"]
+        };
+      }
+    }
+
+    if (!approvalItem) {
+      return res.status(404).json({ ok: false, error: "Approval request not found" });
+    }
+
+    // Strict tenant boundary validation
+    if (approvalItem.organizationId !== organizationId) {
+      return res.status(403).json({ ok: false, error: "Access denied. Approval request does not belong to this organization." });
+    }
+
+    // Strengthened store connection validations
+    if (storeConnectionId && typeof storeConnectionId === "string") {
+      if (storeConnectionId !== approvalItem.storeConnectionId) {
+        return res.status(400).json({ ok: false, error: "Provided storeConnectionId does not match the approval request." });
+      }
+    }
+
+    if (shop && typeof shop === "string") {
+      const cleanShop = normalizeShopDomain(shop);
+      const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+      if (!storeConnection || storeConnection.id !== approvalItem.storeConnectionId) {
+        return res.status(400).json({ ok: false, error: "Provided shop does not match the approval request." });
+      }
+    }
+
+    // Execute the approved mutation through the executor service
+    const executedApproval = await executorService.executeApprovedProductMutation(
+      id,
+      organizationId,
+      performer
+    );
+
+    // Update local memory legacy queue if applicable
+    const queueIdx = approvalService.approvalQueue.findIndex(a => a.id === id);
+    if (queueIdx !== -1) {
+      approvalService.approvalQueue[queueIdx].status = executedApproval.status as any;
+      (approvalService.approvalQueue[queueIdx] as any).executedAt = executedApproval.executedAt;
+    }
+
+    return res.json({
+      ok: true,
+      approval: buildLegacyApprovalShape(executedApproval)
+    });
+  } catch (error: any) {
+    const isNotFound = error.code === "APPROVAL_NOT_FOUND" || error.message === "Approval request not found";
+    const isTenantViolation = error.code === "TENANT_ISOLATION_VIOLATION" || error.message?.includes("Access denied");
+    const isBlocked = error.code === "EXECUTION_BLOCKED" || error.code === "INVALID_APPROVAL_STATE";
+    const isConflict = error.code === "CONCURRENCY_CONFLICT";
+
+    const statusCode = isNotFound ? 404 : (isTenantViolation ? 403 : (isBlocked || isConflict ? 400 : 500));
+    res.status(statusCode).json({ ok: false, error: error.message });
   }
 });
 

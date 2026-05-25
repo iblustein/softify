@@ -481,3 +481,195 @@ export async function readProducts(
     grantedScopes: scopes
   };
 }
+
+export interface UpdateProductFieldsArgs {
+  organizationId: string;
+  storeConnectionId: string;
+  productId: string;
+  fields: Partial<{
+    title?: string;
+    vendor?: string;
+    productType?: string;
+    status?: string;
+    tags?: string[];
+  }>;
+}
+
+export interface SanitizedProductMutationResult {
+  productId: string;
+  updatedFields: Record<string, any>;
+  shopifyUpdatedAt?: string;
+}
+
+export async function updateProductAllowedFields(
+  args: UpdateProductFieldsArgs
+): Promise<SanitizedProductMutationResult> {
+  const { organizationId, storeConnectionId, productId, fields } = args;
+
+  if (!organizationId) {
+    throw new ShopifyAdminApiError("SHOPIFY_STORE_NOT_CONNECTED", "organizationId is mandatory.");
+  }
+  if (!storeConnectionId) {
+    throw new ShopifyAdminApiError("SHOPIFY_STORE_NOT_CONNECTED", "storeConnectionId is mandatory.");
+  }
+
+  // Resolve store connection from database
+  const repos = getRepositories();
+  const connection = await repos.stores.getStoreConnectionById(storeConnectionId);
+  if (!connection) {
+    throw new ShopifyAdminApiError("SHOPIFY_STORE_NOT_CONNECTED", `Store connection '${storeConnectionId}' not found.`);
+  }
+
+  // Enforce strict tenant scoping
+  if (connection.organizationId !== organizationId) {
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_STORE_NOT_CONNECTED",
+      `Access denied. Store connection '${storeConnectionId}' does not belong to organization '${organizationId}'.`
+    );
+  }
+
+  // Normalize and validate GID format
+  let gid = productId.trim();
+  if (!gid.startsWith("gid://shopify/Product/")) {
+    if (/^\d+$/.test(gid)) {
+      gid = `gid://shopify/Product/${gid}`;
+    } else {
+      throw new ShopifyAdminApiError(
+        "SHOPIFY_INVALID_PRODUCT_GID",
+        `Invalid Product ID format: '${productId}'. Expected GID or numeric ID.`
+      );
+    }
+  }
+
+  const cleanShop = normalizeShopDomain(connection.storeUrl);
+  const isMockDomain = cleanShop.includes("glowthread-apparel") || 
+                       cleanShop.includes("luminary-essentials") ||
+                       cleanShop.includes("yambasurf-co-il");
+  const isConfigured = isShopifyOAuthConfigured();
+
+  // Mock domain handling (no real Shopify API, return sanitized mock result)
+  if (!isConfigured || isMockDomain) {
+    return {
+      productId: gid,
+      updatedFields: fields,
+      shopifyUpdatedAt: new Date().toISOString()
+    };
+  }
+
+  // Real OAuth configured connection handling
+  if (connection.status !== "CONNECTED") {
+    throw new ShopifyAdminApiError("SHOPIFY_STORE_NOT_CONNECTED", `Shopify store '${cleanShop}' is not connected.`);
+  }
+
+  const { accessTokenEncrypted } = connection;
+  if (!accessTokenEncrypted) {
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_STORE_NOT_CONNECTED",
+      `Shopify store '${cleanShop}' has no persisted access token credentials.`
+    );
+  }
+
+  let accessToken: string;
+  try {
+    accessToken = await decryptAccessToken(accessTokenEncrypted);
+  } catch (err: any) {
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_TOKEN_DECRYPT_FAILED",
+      `Failed to decrypt access token for shop '${cleanShop}'.`
+    );
+  }
+
+  const { apiVersion } = getShopifyAdminApiConfig();
+  const graphqlUrl = `https://${cleanShop}/admin/api/${apiVersion}/graphql.json`;
+
+  const mutation = `
+    mutation productUpdate($input: ProductInput!) {
+      productUpdate(input: $input) {
+        product {
+          id
+          updatedAt
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+
+  // Filter allowed fields only
+  const input: any = {
+    id: gid
+  };
+  if (fields.title !== undefined) input.title = fields.title;
+  if (fields.vendor !== undefined) input.vendor = fields.vendor;
+  if (fields.productType !== undefined) input.productType = fields.productType;
+  if (fields.status !== undefined) input.status = fields.status;
+  if (fields.tags !== undefined) input.tags = fields.tags;
+
+  let response: Response;
+  try {
+    response = await fetch(graphqlUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "X-Shopify-Access-Token": accessToken
+      },
+      body: JSON.stringify({
+        query: mutation,
+        variables: { input }
+      })
+    });
+  } catch (err: any) {
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_ADMIN_API_REQUEST_FAILED",
+      `Network request to Shopify Admin API failed: ${err.message}`
+    );
+  }
+
+  if (!response.ok) {
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_ADMIN_API_REQUEST_FAILED",
+      `Shopify Admin API returned HTTP status ${response.status}.`
+    );
+  }
+
+  let responseJson: any;
+  try {
+    responseJson = await response.json();
+  } catch (err: any) {
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_ADMIN_API_REQUEST_FAILED",
+      "Failed to parse Shopify Admin API JSON response."
+    );
+  }
+
+  if (responseJson.errors && responseJson.errors.length > 0) {
+    const errorMsg = responseJson.errors.map((e: any) => e.message).join(", ");
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_ADMIN_API_GRAPHQL_ERROR",
+      `Shopify Admin API GraphQL errors: ${errorMsg}`
+    );
+  }
+
+  const productUpdateResult = responseJson?.data?.productUpdate || {};
+  const userErrors = productUpdateResult.userErrors || [];
+  
+  if (userErrors.length > 0) {
+    const userErrorSummary = userErrors.map((ue: any) => `${ue.field?.join(".") || "product"}: ${ue.message}`).join("; ");
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_PRODUCT_UPDATE_USER_ERROR",
+      `Shopify userErrors: ${userErrorSummary}`,
+      { userErrors }
+    );
+  }
+
+  const updatedProduct = productUpdateResult.product || {};
+
+  return {
+    productId: updatedProduct.id || gid,
+    updatedFields: fields,
+    shopifyUpdatedAt: updatedProduct.updatedAt || new Date().toISOString()
+  };
+}

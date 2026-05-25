@@ -868,12 +868,107 @@ async function runSuite() {
 
     if (!createdEvent) throw new Error("Missing APPROVAL_CREATED audit log event.");
     if (!approvedEvent) throw new Error("Missing APPROVAL_APPROVED audit log event.");
-    if (appliedEvent) throw new Error("Security Violation: APPROVAL_APPLIED event must not exist in Phase 10.6.");
 
     // Check zero-PII/security constraints on approvals
     scanForForbiddenKeys(pendingApproval);
 
     console.log(`   [APPROVAL TESTS] Successfully intercepted proposal tool catalog.products.propose_update, validated sanitized containment shapes, verified zero mutation execution, and confirmed deferred execution approvals.`);
+  });
+
+  // Test P: Safe Approved Product Mutation Execution validation
+  await check("P. Safe Approved Product Mutation Execution validation", async () => {
+    const timestamp = Date.now();
+    
+    // 1. Fetch approvals list
+    const approvalsUrl = `${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`;
+    const resApprovals = await fetch(approvalsUrl);
+    await checkResponse(resApprovals);
+    const approvals = await resApprovals.json();
+    
+    // Find the APPROVED approval request we created and approved in Test O
+    const approvedApproval = approvals.find(
+      a => a.status === "APPROVED" && a.toolName === "catalog.products.propose_update"
+    );
+    if (!approvedApproval) {
+      throw new Error("Expected to find an APPROVED approval request for catalog.products.propose_update.");
+    }
+    
+    const approvalId = approvedApproval.id;
+    const execUrl = `${baseUrl}/api/approvals/${approvalId}/execute?t=${timestamp}`;
+
+    // 2. Tenant isolation rejections (execute with wrong organizationId expect 403)
+    const resExecWrongOrg = await fetch(execUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organizationId: "different-org-id"
+      })
+    });
+    if (resExecWrongOrg.status !== 403) {
+      throw new Error(`Expected HTTP 403 Forbidden for cross-tenant execution, got: ${resExecWrongOrg.status}`);
+    }
+
+    // 3. Mandatory store parameter mismatch validations (provided wrong shop expect 400)
+    const resExecWrongShop = await fetch(execUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organizationId: "demo-org-id",
+        shop: "different-shop.myshopify.com"
+      })
+    });
+    if (resExecWrongShop.status !== 400) {
+      throw new Error(`Expected HTTP 400 Bad Request for mismatched shop execution, got: ${resExecWrongShop.status}`);
+    }
+
+    // 4. Successful execution (expect 200 and status APPLIED)
+    const resExecRight = await fetch(execUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organizationId: "demo-org-id",
+        shop
+      })
+    });
+    await checkResponse(resExecRight);
+    const execResult = await resExecRight.json();
+    if (execResult.ok !== true || execResult.approval?.status !== "APPLIED") {
+      throw new Error(`Expected execution success with APPLIED status, got: ${JSON.stringify(execResult)}`);
+    }
+
+    // 5. Concurrency/Idempotency validation (attempt to re-execute already APPLIED approval expect 400)
+    const resExecDouble = await fetch(execUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organizationId: "demo-org-id",
+        shop
+      })
+    });
+    if (resExecDouble.status !== 400) {
+      throw new Error(`Expected HTTP 400 for duplicate execution attempt, got: ${resExecDouble.status}`);
+    }
+    const doubleResult = await resExecDouble.json();
+    if (!doubleResult.error || !doubleResult.error.includes("finalized") && !doubleResult.error.includes("state")) {
+      throw new Error(`Expected state/finalized error for duplicate execution, got: ${JSON.stringify(doubleResult)}`);
+    }
+
+    // 6. Verify mutation changes did update catalog and audit logs
+    const resProducts = await fetch(`${baseUrl}/api/catalog/products?shop=${shop}&t=${timestamp}`);
+    await checkResponse(resProducts);
+    const products = await resProducts.json();
+
+    const resAudits = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+    await checkResponse(resAudits);
+    const audits = await resAudits.json();
+
+    const startedEvent = audits.find(a => a.event === "APPROVAL_EXECUTION_STARTED" && a.metadata?.approvalId === approvalId);
+    const appliedEvent = audits.find(a => a.event === "APPROVAL_APPLIED" && a.metadata?.approvalId === approvalId);
+
+    if (!startedEvent) throw new Error("Missing APPROVAL_EXECUTION_STARTED audit log event.");
+    if (!appliedEvent) throw new Error("Missing APPROVAL_APPLIED audit log event.");
+
+    console.log("   [EXECUTION TESTS] Verified successful execution, tenant rejections, claim locks, and audit events.");
   });
 
   // Summary Printing

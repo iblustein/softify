@@ -45,3 +45,22 @@ export async function deleteApprovalRequest(id: string): Promise<boolean> {
 export async function clearApprovals(): Promise<void> {
   approvals = [];
 }
+
+export async function claimApprovalForExecution(approvalId: string, organizationId: string): Promise<ApprovalRequest> {
+  const idx = approvals.findIndex(a => a.id === approvalId);
+  if (idx === -1) {
+    throw new Error("Approval request not found.");
+  }
+  const approval = approvals[idx];
+  if (approval.organizationId !== organizationId) {
+    throw new Error("Access denied. Approval request does not belong to this organization.");
+  }
+  if (approval.status !== "APPROVED") {
+    throw new Error(`Concurrency block: expected status APPROVED, got ${approval.status}`);
+  }
+  approvals[idx] = {
+    ...approval,
+    status: "EXECUTING"
+  };
+  return approvals[idx];
+}

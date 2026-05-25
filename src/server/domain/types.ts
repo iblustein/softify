@@ -72,7 +72,7 @@ export interface ToolDefinition {
   riskLevel: 'Low' | 'Medium' | 'High';
 }
 
-export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "EXECUTING" | "APPLIED" | "FAILED";
 
 export type AllowedProductProposalField =
   | "title"
@@ -92,6 +92,9 @@ export interface ApprovalRequest {
   requestedAt: string;
   decidedAt?: string;
   decidedBy?: string;
+  executedAt?: string;
+  executedBy?: string;
+  failureReason?: string;
   status: ApprovalStatus;
   riskLevel: 'Low' | 'Medium' | 'High';
   targetType: 'PRODUCT_PROPOSAL';
@@ -118,9 +121,9 @@ export const AuditEventNames = {
   APPROVAL_DECISION: "APPROVAL_DECISION",
   APPROVAL_APPROVED: "APPROVAL_APPROVED",
   APPROVAL_REJECTED: "APPROVAL_REJECTED",
-  // RESERVED FOR FUTURE PHASES: Not active in Phase 10.6
+  APPROVAL_EXECUTION_STARTED: "APPROVAL_EXECUTION_STARTED",
+  APPROVAL_EXECUTION_BLOCKED: "APPROVAL_EXECUTION_BLOCKED",
   APPROVAL_APPLIED: "APPROVAL_APPLIED",
-  // RESERVED FOR FUTURE PHASES: Not active in Phase 10.6
   APPROVAL_FAILED: "APPROVAL_FAILED",
   AGENT_CHAT_REQUEST: "AGENT_CHAT_REQUEST",
   PROVIDER_FINAL_RESPONSE: "PROVIDER_FINAL_RESPONSE",

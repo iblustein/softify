@@ -4,26 +4,26 @@ This document outlines the goals and requirements for the next proposed developm
 
 ---
 
-## Next Milestone: Phase 10.7 — Shopify Write Integrations & Live Theme/Catalog Sync
+## Next Milestone: Phase 10.8 — Real-time Webhook Synchronization & Extended Field Mutations
 
 ### Goal
-Extend the Merchant Approvals queue by connecting approved state mutations directly to the live Shopify Admin REST/GraphQL APIs. Enable agents to push approved catalog updates and theme assets directly to live Shopify environments under secure tenant scopes.
+Extend the safe approved execution pipeline with real-time sync capabilities using Shopify Webhooks to capture external store changes, and expand allowed product fields (e.g. description updates) safely.
 
 ### Requirements & Scope
-1. **Live Shopify Mutation Client**:
-   - Implement authentic Shopify Admin API write integration for `catalog.products.update` and `theme.assets.patch` in `src/server/services/shopify-admin-client.service.ts`.
-   - Ensure all write operations utilize the decrypted access token resolved from `StoreRepository`.
+1. **Shopify Webhook Receiver**:
+   - Create a secure webhook receiver endpoint `POST /api/shopify/webhooks/product-update`.
+   - Validate Shopify webhook signatures (`X-Shopify-Hmac-SHA256`) to ensure authenticity.
+   - Parse incoming webhook payloads and update matching `product_snapshots` records in the database.
 
-2. **Decide & Commit Integrations**:
-   - Update the approvals decide route (POST `/api/approvals/:id/decide`) in Firestore mode so that an approved request triggers real live Shopify API calls instead of just mock product snapshots updates.
-   - Enforce secure transaction limits and retry logic.
+2. **Description & Safe Extended Catalog Fields**:
+   - Carefully extend the allowed fields collection to support `descriptionHtml` under strict sanitization policies (e.g. clean HTML tag parsing/stripping, strictly prohibiting `<script>` or event handlers).
+   - Ensure the new field propagates through the proposal, approval, and execution boundaries.
 
-3. **Incremental Catalog Sync Hook**:
-   - Upon successful live product mutation, immediately trigger an incremental database product snapshot sync to ensure catalog fresh synchronization.
+3. **Merchant Webhook/App UI Execution Log**:
+   - Provide visual audit trails and detailed execution state readouts (`EXECUTING`, `APPLIED`, `FAILED` with sanitized reason) in the merchant dashboard UI.
 
-4. **Safety & Fallbacks**:
-   - Provide a safe local fallback if Shopify Admin API returns a rate limit (HTTP 429) or connection error, transitioning the approval status cleanly to `FAILED` with details.
-   - Implement automatic webhook notifications or sync alerts.
+4. **Retry Mechanics for Transient Errors**:
+   - Introduce a basic retry policy for transient execution errors (like Shopify Admin API rate limits or HTTP 502/503 network drops) to safely defer and re-attempt execution.
 
 ---
 

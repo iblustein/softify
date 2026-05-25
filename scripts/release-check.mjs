@@ -895,6 +895,132 @@ async function runVerification() {
     }
   });
 
+  // Test 43: No REST Admin write path in codebase
+  await check("43. No REST Admin write path in codebase", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const clientPath = path.resolve(process.cwd(), "src/server/services/shopify-admin-client.service.ts");
+    const content = fs.readFileSync(clientPath, "utf8");
+    if (content.includes("admin/api") && content.includes(".json") && (content.includes("PUT") || content.includes("method: \"PUT\"") || content.includes("method: 'PUT'"))) {
+      throw new Error("REST API product update method detected inside shopify-admin-client.service.ts");
+    }
+  });
+
+  // Test 44: Token resolution and decryption inside shopify admin client service
+  await check("44. Token resolution and decryption inside shopify admin client service", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const clientPath = path.resolve(process.cwd(), "src/server/services/shopify-admin-client.service.ts");
+    const content = fs.readFileSync(clientPath, "utf8");
+    const match = content.match(/interface\s+UpdateProductFieldsArgs\s*\{([\s\S]+?)\}/);
+    if (!match) {
+      throw new Error("Could not find interface UpdateProductFieldsArgs in shopify-admin-client.service.ts");
+    }
+    const interfaceBody = match[1];
+    if (interfaceBody.includes("accessToken") || interfaceBody.includes("token:") || interfaceBody.match(/\btoken\b/)) {
+      throw new Error("Security Violation: updateProductAllowedFields accepts a raw access token in its signature.");
+    }
+  });
+
+  // Test 45: Strict execute endpoint tenant validations
+  await check("45. Strict execute endpoint tenant validations", async () => {
+    const { executeApprovedProductMutation } = await import("../src/server/services/approved-product-mutation-executor.service.ts");
+    const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+    const repos = getRepositories();
+    
+    // Clear and prepare
+    await repos.approvals.clearApprovals();
+    await repos.stores.clearStoreConnections();
+
+    // Create a connection
+    const conn = {
+      id: "conn-test-execute",
+      organizationId: "org-test-execute",
+      storeUrl: "glowthread-apparel.myshopify.com",
+      scopes: ["write_products"],
+      status: "CONNECTED",
+      plan: "Standard Plan",
+      currency: "USD"
+    };
+    await repos.stores.createStoreConnection(conn);
+
+    // Create an approval request
+    const approval = {
+      id: "APV-test-exec",
+      organizationId: "org-test-execute",
+      storeConnectionId: "conn-test-execute",
+      agentInstallationId: "inst-test-execute",
+      agentId: "agent_product_intelligence",
+      toolName: "catalog.products.propose_update",
+      requestedBy: "Content Agent",
+      status: "PENDING", // not APPROVED
+      riskLevel: "Medium",
+      targetType: "PRODUCT_PROPOSAL",
+      targetId: "gid://shopify/Product/123",
+      proposedChangesSummary: "Update title",
+      diffSummary: "Update title",
+      sanitizedPayload: { title: "New Title" },
+      allowedFields: ["title"]
+    };
+    await repos.approvals.createApprovalRequest(approval);
+
+    // 1. Mismatching tenant should reject
+    try {
+      await executeApprovedProductMutation("APV-test-exec", "mismatch-org", "Shop Owner");
+      throw new Error("Should have thrown tenant isolation violation.");
+    } catch (err) {
+      if (err.code !== "TENANT_ISOLATION_VIOLATION") {
+        throw new Error(`Expected TENANT_ISOLATION_VIOLATION, got ${err.code}`);
+      }
+    }
+
+    // 2. Non-approved state should reject
+    try {
+      await executeApprovedProductMutation("APV-test-exec", "org-test-execute", "Shop Owner");
+      throw new Error("Should have thrown invalid state rejection.");
+    } catch (err) {
+      if (err.code !== "INVALID_APPROVAL_STATE") {
+        throw new Error(`Expected INVALID_APPROVAL_STATE, got ${err.code}`);
+      }
+    }
+  });
+
+  // Test 46: Execution locks (atomic claim transitions)
+  await check("46. Concurrency claim locks and atomic transitions", async () => {
+    const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+    const repos = getRepositories();
+
+    // Reset approval request status to APPROVED
+    await repos.approvals.updateApprovalRequest("APV-test-exec", { status: "APPROVED" });
+
+    // Try claiming it first
+    const claimed = await repos.approvals.claimApprovalForExecution("APV-test-exec", "org-test-execute");
+    if (claimed.status !== "EXECUTING") {
+      throw new Error(`Expected claimed status to be EXECUTING, got ${claimed.status}`);
+    }
+
+    // Try claiming it again should fail due to state lock
+    try {
+      await repos.approvals.claimApprovalForExecution("APV-test-exec", "org-test-execute");
+      throw new Error("Should have blocked duplicate concurrency claim.");
+    } catch (err) {
+      if (!err.message.includes("Concurrency block")) {
+        throw new Error(`Expected concurrency block message, got: ${err.message}`);
+      }
+    }
+  });
+
+  // Test 47: No unauthorized themes, variants, price, media, inventory mutations in active client code or tools
+  await check("47. No unauthorized mutation capabilities in executor service", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const execPath = path.resolve(process.cwd(), "src/server/services/approved-product-mutation-executor.service.ts");
+    const content = fs.readFileSync(execPath, "utf8");
+    if (content.includes("price") || content.includes("inventory") || content.includes("variant") || content.includes("media") || content.includes("descriptionHtml")) {
+      throw new Error("Security Violation: Found forbidden mutation scopes (price, inventory, variant, media, or descriptionHtml) in executor service.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

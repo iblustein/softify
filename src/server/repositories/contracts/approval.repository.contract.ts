@@ -10,4 +10,5 @@ export interface ApprovalRepository {
   ): Promise<ApprovalRequest | null>;
   deleteApprovalRequest(id: string): Promise<boolean>;
   clearApprovals(): Promise<void>;
+  claimApprovalForExecution(approvalId: string, organizationId: string): Promise<ApprovalRequest>;
 }
