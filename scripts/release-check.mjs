@@ -1199,6 +1199,57 @@ async function runVerification() {
     }
   });
 
+  // Test 53: Phase 10.9 Multi-Agent Product Workspace static guardrails
+  await check("53. Phase 10.9 Multi-Agent Product Workspace static validation and guardrails", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    // 1. Verify available agents in agents.routes.ts
+    const agentsPath = path.resolve(process.cwd(), "src/server/routes/agents.routes.ts");
+    const agentsContent = fs.readFileSync(agentsPath, "utf8");
+    
+    const requiredAgents = [
+      "product_intelligence_agent",
+      "seo_aeo_agent",
+      "content_agent",
+      "design_review_agent"
+    ];
+    for (const agent of requiredAgents) {
+      if (!agentsContent.includes(agent)) {
+        throw new Error(`Static Check Violation: Required agent '${agent}' is missing from catalog definition.`);
+      }
+    }
+    
+    // 2. Strict theme write/read boundaries check
+    if (agentsContent.includes("\"read_themes\"") || agentsContent.includes("\"write_themes\"") || agentsContent.includes("'read_themes'") || agentsContent.includes("'write_themes'")) {
+      throw new Error("Security Violation: Theme read/write permissions cannot be exposed to Workspace Agents.");
+    }
+    
+    // 3. Strict forbidden product mutations check
+    const forbiddenKeywords = ["price", "inventory", "variants", "images", "descriptionHtml"];
+    const schemasPath = path.resolve(process.cwd(), "src/server/domain/types.ts");
+    const schemasContent = fs.readFileSync(schemasPath, "utf8");
+    const proposedActionSliceIdx = schemasContent.indexOf("export interface ProposedAction");
+    if (proposedActionSliceIdx === -1) {
+      throw new Error("Static Check Violation: ProposedAction interface is missing in types.ts.");
+    }
+    const proposedActionSlice = schemasContent.slice(proposedActionSliceIdx);
+    const changesBlockIdx = proposedActionSlice.indexOf("changes:");
+    const changesBlockEnd = proposedActionSlice.indexOf("}", changesBlockIdx);
+    const changesBlock = proposedActionSlice.slice(changesBlockIdx, changesBlockEnd);
+    
+    for (const keyword of forbiddenKeywords) {
+      if (changesBlock.includes(keyword)) {
+        throw new Error(`Security Violation: ProposedAction changes block contains forbidden property '${keyword}'.`);
+      }
+    }
+    
+    // 4. Proposed actions executionMode types validation
+    if (!proposedActionSlice.includes("'DRAFT_ONLY'") || !proposedActionSlice.includes("'APPROVAL_REQUIRED'") || !proposedActionSlice.includes("'NOT_EXECUTABLE'")) {
+      throw new Error("Static Check Violation: ProposedAction is missing required executionMode enum values.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

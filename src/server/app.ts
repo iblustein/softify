@@ -14,6 +14,8 @@ import catalogRoutes from "./routes/catalog.routes.js";
 import agentChatRoutes from "./routes/agent-chat.routes.js";
 import diagnosticsRoutes from "./routes/diagnostics.routes.js";
 import agentInstallationsRoutes from "./routes/agent-installations.routes.js";
+import recommendationsRoutes from "./routes/recommendations.routes.js";
+import proposedActionsRoutes from "./routes/proposed-actions.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -34,5 +36,7 @@ app.use("/api", auditRoutes);
 app.use("/api", dashboardRoutes);
 app.use("/api", orchestratorRoutes);
 app.use("/api", diagnosticsRoutes);
+app.use("/api", recommendationsRoutes);
+app.use("/api", proposedActionsRoutes);
 
 export { app };

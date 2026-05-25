@@ -6,6 +6,9 @@ import { ApprovalRepository } from "./contracts/approval.repository.contract.js"
 import { AuditRepository } from "./contracts/audit.repository.contract.js";
 import { ConversationRepository } from "./contracts/conversation.repository.contract.js";
 import { ProductRepository } from "./contracts/product.repository.contract.js";
+import { AgentRunRepository } from "./contracts/agent-run.repository.contract.js";
+import { RecommendationRepository } from "./contracts/recommendation.repository.contract.js";
+import { ProposedActionRepository } from "./contracts/proposed-action.repository.contract.js";
 
 import * as inMemoryUsers from "./in-memory/in-memory-user.repository.js";
 import * as inMemoryOrganizations from "./in-memory/in-memory-organization.repository.js";
@@ -15,6 +18,9 @@ import * as inMemoryApprovals from "./in-memory/in-memory-approval.repository.js
 import * as inMemoryAudits from "./in-memory/in-memory-audit.repository.js";
 import * as inMemoryConversations from "./in-memory/in-memory-conversation.repository.js";
 import * as inMemoryProducts from "./in-memory/in-memory-product.repository.js";
+import * as inMemoryAgentRuns from "./in-memory/in-memory-agent-run.repository.js";
+import * as inMemoryRecommendations from "./in-memory/in-memory-recommendation.repository.js";
+import * as inMemoryProposedActions from "./in-memory/in-memory-proposed-action.repository.js";
 
 import { isFirestoreConfigured, getFirestoreConfig } from "../config/firestore.config.js";
 import * as firestoreStores from "./firestore/firestore-store.repository.js";
@@ -22,6 +28,9 @@ import * as firestoreProducts from "./firestore/firestore-product.repository.js"
 import * as firestoreAgentInstallations from "./firestore/firestore-agent-installation.repository.js";
 import * as firestoreAudits from "./firestore/firestore-audit.repository.js";
 import * as firestoreApprovals from "./firestore/firestore-approval.repository.js";
+import * as firestoreAgentRuns from "./firestore/firestore-agent-run.repository.js";
+import * as firestoreRecommendations from "./firestore/firestore-recommendation.repository.js";
+import * as firestoreProposedActions from "./firestore/firestore-proposed-action.repository.js";
 
 export interface Repositories {
   users: UserRepository;
@@ -32,6 +41,9 @@ export interface Repositories {
   audit: AuditRepository;
   conversations: ConversationRepository;
   products: ProductRepository;
+  agentRuns: AgentRunRepository;
+  recommendations: RecommendationRepository;
+  proposedActions: ProposedActionRepository;
 }
 
 /**
@@ -57,6 +69,9 @@ export function getRepositories(): Repositories {
   const agentInstallationsRepo = isConfigured ? firestoreAgentInstallations : inMemoryAgentInstallations;
   const auditsRepo = isConfigured ? firestoreAudits : inMemoryAudits;
   const approvalsRepo = isConfigured ? firestoreApprovals : inMemoryApprovals;
+  const agentRunsRepo = isConfigured ? firestoreAgentRuns : inMemoryAgentRuns;
+  const recommendationsRepo = isConfigured ? firestoreRecommendations : inMemoryRecommendations;
+  const proposedActionsRepo = isConfigured ? firestoreProposedActions : inMemoryProposedActions;
 
   return {
     users: inMemoryUsers,
@@ -66,6 +81,10 @@ export function getRepositories(): Repositories {
     approvals: approvalsRepo,
     audit: auditsRepo,
     conversations: inMemoryConversations,
-    products: productsRepo
+    products: productsRepo,
+    agentRuns: agentRunsRepo,
+    recommendations: recommendationsRepo,
+    proposedActions: proposedActionsRepo
   };
 }
+

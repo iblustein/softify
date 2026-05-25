@@ -25,9 +25,10 @@ import SuperAgentUI from './components/SuperAgentUI';
 import ToolGateway from './components/ToolGateway';
 import ApprovalQueue from './components/ApprovalQueue';
 import AuditLogViewer from './components/AuditLogViewer';
+import AgentWorkspace from './components/AgentWorkspace';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agents' | 'orchestrator' | 'gateway' | 'approvals' | 'logs'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'agents' | 'orchestrator' | 'gateway' | 'approvals' | 'logs' | 'workspace'>('dashboard');
   
   // Data States
   const [store, setStore] = useState<ShopifyStore | null>(null);
@@ -485,6 +486,18 @@ export default function App() {
             </button>
 
             <button
+              onClick={() => setActiveTab('workspace')}
+              className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
+                activeTab === 'workspace' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="w-4 h-4 shrink-0 text-indigo-400 animate-pulse" />
+                <span>Agent Workspace</span>
+              </div>
+            </button>
+
+            <button
               onClick={() => setActiveTab('agents')}
               className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
                 activeTab === 'agents' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
@@ -633,6 +646,13 @@ export default function App() {
         {/* Active Route Wrapper */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
           <div className="max-w-6xl mx-auto h-full">
+            {activeTab === 'workspace' && (
+              <AgentWorkspace 
+                shopQuery={buildShopQuery()} 
+                onRefreshStats={fetchAllData}
+              />
+            )}
+
             {activeTab === 'dashboard' && (
               <DashboardOverview 
                 stats={stats} 

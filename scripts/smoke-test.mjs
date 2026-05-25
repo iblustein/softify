@@ -1440,6 +1440,159 @@ async function runSuite() {
     }
   });
 
+  // Test S: Phase 10.9 Multi-Agent Product Workspace integration
+  await check("S. Multi-Agent Product Workspace integration validation", async () => {
+    const timestamp = Date.now();
+
+    // 1. GET /api/agents/catalog returns 200
+    const catUrl = `${baseUrl}/api/agents/catalog?t=${timestamp}`;
+    const resCat = await fetch(catUrl);
+    await checkResponse(resCat);
+    const catalog = await resCat.json();
+    if (!Array.isArray(catalog) || catalog.length !== 4) {
+      throw new Error(`Expected catalog to be an array of 4 agents, got: ${JSON.stringify(catalog)}`);
+    }
+
+    // 2. Trigger run for seo_aeo_agent in RECOMMEND mode
+    const runUrl = `${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resRun = await fetch(runUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "seo_aeo_agent",
+        mode: "RECOMMEND",
+        scope: { type: "SHOP" }
+      })
+    });
+    await checkResponse(resRun);
+    const runResult = await resRun.json();
+    if (runResult.agentId !== "seo_aeo_agent" || runResult.status !== "COMPLETED") {
+      throw new Error(`Expected completed run for seo_aeo_agent, got: ${JSON.stringify(runResult)}`);
+    }
+
+    // 3. Trigger run for content_agent in DRAFT mode to produce proposed actions
+    const resRunDraft = await fetch(runUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "content_agent",
+        mode: "DRAFT",
+        scope: { type: "SHOP" }
+      })
+    });
+    await checkResponse(resRunDraft);
+    const runDraftResult = await resRunDraft.json();
+    if (runDraftResult.agentId !== "content_agent" || runDraftResult.status !== "COMPLETED") {
+      throw new Error(`Expected completed run for content_agent, got: ${JSON.stringify(runDraftResult)}`);
+    }
+
+    // 4. GET /api/agent-runs?shop=... should list runs
+    const getRunsUrl = `${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resGetRuns = await fetch(getRunsUrl);
+    await checkResponse(resGetRuns);
+    const runsList = await resGetRuns.json();
+    if (!Array.isArray(runsList) || runsList.length < 2) {
+      throw new Error("Expected at least 2 runs in list.");
+    }
+
+    // 5. GET /api/agent-runs/:id?shop=... should get single run
+    const getRunDetailUrl = `${baseUrl}/api/agent-runs/${runResult.id}?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resGetRunDetail = await fetch(getRunDetailUrl);
+    await checkResponse(resGetRunDetail);
+    const runDetail = await resGetRunDetail.json();
+    if (runDetail.id !== runResult.id) {
+      throw new Error("Expected correct agent run detail ID.");
+    }
+
+    // 6. GET /api/recommendations?shop=... should return recommendations
+    const getRecsUrl = `${baseUrl}/api/recommendations?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resGetRecs = await fetch(getRecsUrl);
+    await checkResponse(resGetRecs);
+    const recsList = await resGetRecs.json();
+    if (!Array.isArray(recsList)) {
+      throw new Error("Expected recommendations list to be an array.");
+    }
+
+    // 7. GET /api/recommendations/:id?shop=... and dismiss
+    const openRec = recsList.find(r => r.status === "OPEN");
+    if (openRec) {
+      const getRecDetailUrl = `${baseUrl}/api/recommendations/${openRec.id}?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+      const resGetRecDetail = await fetch(getRecDetailUrl);
+      await checkResponse(resGetRecDetail);
+      
+      const dismissUrl = `${baseUrl}/api/recommendations/${openRec.id}/dismiss?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+      const resDismiss = await fetch(dismissUrl, { method: "POST" });
+      await checkResponse(resDismiss);
+      const dismissedRec = await resDismiss.json();
+      if (dismissedRec.status !== "DISMISSED") {
+        throw new Error(`Expected dismissed recommendation, got: ${dismissedRec.status}`);
+      }
+    }
+
+    // 8. GET /api/proposed-actions?shop=... should return actions
+    const getActsUrl = `${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resGetActs = await fetch(getActsUrl);
+    await checkResponse(resGetActs);
+    const actsList = await resGetActs.json();
+    if (!Array.isArray(actsList)) {
+      throw new Error("Expected proposed actions list to be an array.");
+    }
+
+    // 9. GET /api/proposed-actions/:id?shop=... and request approval
+    const draftAct = actsList.find(a => a.status === "DRAFT" && a.executionMode === "APPROVAL_REQUIRED");
+    if (draftAct) {
+      const getActDetailUrl = `${baseUrl}/api/proposed-actions/${draftAct.id}?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+      const resGetActDetail = await fetch(getActDetailUrl);
+      await checkResponse(resGetActDetail);
+
+      const requestApprovalUrl = `${baseUrl}/api/proposed-actions/${draftAct.id}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+      const resRequest = await fetch(requestApprovalUrl, { method: "POST" });
+      await checkResponse(resRequest);
+      const requestedAct = await resRequest.json();
+      if (requestedAct.status !== "APPROVAL_REQUESTED" || !requestedAct.approvalRequestId) {
+        throw new Error(`Expected action to change status to APPROVAL_REQUESTED, got: ${JSON.stringify(requestedAct)}`);
+      }
+
+      // Check bridged PENDING approval request exists in queue
+      const approvalsListUrl = `${baseUrl}/api/approvals?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+      const resApprovals = await fetch(approvalsListUrl);
+      await checkResponse(resApprovals);
+      const queueList = await resApprovals.json();
+      const bridgedItem = queueList.find(a => a.id === requestedAct.approvalRequestId);
+      if (!bridgedItem || bridgedItem.status !== "PENDING") {
+        throw new Error("Bridged PENDING approval item was not found in approvals queue.");
+      }
+    }
+
+    // 10. Negative tests: missing shop or wrong organizationId
+    const resRunEmpty = await fetch(`${baseUrl}/api/agent-runs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "seo_aeo_agent",
+        mode: "RECOMMEND",
+        scope: { type: "SHOP" }
+      })
+    });
+    if (resRunEmpty.status !== 400) {
+      throw new Error(`Expected HTTP 400 for missing context, got: ${resRunEmpty.status}`);
+    }
+
+    const runMismatchUrl = `${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&organizationId=mismatch-org-999&t=${timestamp}`;
+    const resRunMismatch = await fetch(runMismatchUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "seo_aeo_agent",
+        mode: "RECOMMEND",
+        scope: { type: "SHOP" }
+      })
+    });
+    if (resRunMismatch.status !== 403) {
+      throw new Error(`Expected HTTP 403 for mismatched tenant connection, got: ${resRunMismatch.status}`);
+    }
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

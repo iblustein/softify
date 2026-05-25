@@ -147,6 +147,14 @@ export const AuditEventNames = {
   APPROVAL_RECOVERY_RESET: "APPROVAL_RECOVERY_RESET",
   APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED: "APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED",
   APPROVAL_RECOVERY_BLOCKED: "APPROVAL_RECOVERY_BLOCKED",
+  AGENT_RUN_STARTED: "AGENT_RUN_STARTED",
+  AGENT_RUN_COMPLETED: "AGENT_RUN_COMPLETED",
+  AGENT_RUN_FAILED: "AGENT_RUN_FAILED",
+  RECOMMENDATION_CREATED: "RECOMMENDATION_CREATED",
+  RECOMMENDATION_DISMISSED: "RECOMMENDATION_DISMISSED",
+  PROPOSED_ACTION_CREATED: "PROPOSED_ACTION_CREATED",
+  PROPOSED_ACTION_DISMISSED: "PROPOSED_ACTION_DISMISSED",
+  PROPOSED_ACTION_APPROVAL_REQUESTED: "PROPOSED_ACTION_APPROVAL_REQUESTED",
 } as const;
 
 export type AuditEventType = keyof typeof AuditEventNames;
@@ -214,4 +222,84 @@ export interface ProductSnapshot {
   updatedAt: string;
   syncedAt: string;
 }
+
+export interface AgentRun {
+  id: string;
+  organizationId: string;
+  storeConnectionId: string;
+  agentId: string;
+  agentVersion: string;
+  status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'BLOCKED';
+  scope: {
+    type: 'SHOP' | 'PRODUCT' | 'COLLECTION' | 'PAGE' | 'TRAFFIC_PERIOD';
+    resourceId?: string;
+    filters?: Record<string, unknown>;
+  };
+  mode: 'RECOMMEND' | 'DRAFT';
+  requestedBy: string;
+  startedAt: string;
+  finishedAt?: string;
+  summary?: string;
+  errorCode?: string;
+  errorMessage?: string;
+  recommendationCount: number;
+  proposedActionCount: number;
+  auditCorrelationId: string;
+}
+
+export interface Recommendation {
+  id: string;
+  organizationId: string;
+  storeConnectionId: string;
+  agentRunId: string;
+  agentId: string;
+  resourceType: string;
+  resourceId: string;
+  recommendationType: string;
+  title: string;
+  summary: string;
+  reasoningSummary: string;
+  impactLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  confidence: number;
+  status: 'OPEN' | 'DISMISSED' | 'CONVERTED_TO_ACTION' | 'SUPERSEDED';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProposedAction {
+  id: string;
+  organizationId: string;
+  storeConnectionId: string;
+  agentRunId: string;
+  agentId: string;
+  recommendationId: string;
+  targetType: 'PRODUCT';
+  targetId: string;
+  title: string;
+  description: string;
+  actionType: string;
+  riskLevel: 'LOW' | 'MEDIUM' | 'HIGH';
+  executionMode: 'DRAFT_ONLY' | 'APPROVAL_REQUIRED' | 'NOT_EXECUTABLE';
+  changes: {
+    title?: string;
+    vendor?: string;
+    productType?: string;
+    status?: string;
+    tags?: string[];
+  };
+  approvalRequestId?: string;
+  status:
+    | 'DRAFT'
+    | 'APPROVAL_ELIGIBLE'
+    | 'APPROVAL_REQUESTED'
+    | 'APPROVED'
+    | 'REJECTED'
+    | 'EXECUTED'
+    | 'DISMISSED'
+    | 'BLOCKED';
+  createdAt: string;
+  updatedAt: string;
+}
+
 

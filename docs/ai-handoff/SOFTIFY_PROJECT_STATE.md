@@ -22,6 +22,9 @@ This document provides a highly durable and centralized technical reference for 
     - `agent_audit_logs`: Authoritative, sanitized security and execution trails
     - `merchant_approvals`: Durable merchant-approved update proposals tracking state transitions (`PENDING`, `APPROVED`, `REJECTED`, `EXECUTING`, `APPLIED`, `FAILED`) and execution timelines (`executedAt`, `executedBy`, `failureReason`)
     - `product_snapshot_catalogs`: Catalog snapshots matching database states
+    - `agent_runs`: Scoped agent diagnostic execution runs registry
+    - `recommendations`: Scoped agent diagnostic recommendations inbox
+    - `proposed_actions`: Scoped agent-suggested draft action proposals queue
 
 ## Current Capabilities
 - **Shopify OAuth**: Working connection flow, callback handling, and scope detection.
@@ -38,7 +41,8 @@ This document provides a highly durable and centralized technical reference for 
 - **Safe Product Mutation Execution Pipeline**: An explicitly approved request can be securely executed via the `POST /api/approvals/:id/execute` endpoint. Integrates a secure Shopify Admin GraphQL `productUpdate` write mutator, fully private token resolution, strict payload length-capping and tag-deduplication, transactional concurrency state claim locks (`APPROVED` -> `EXECUTING`), incremental sync refreshes on success, and graceful failure transitions.
 - **Approval Execution Operations & Recovery**: Telemetry session tracking metrics, `APPROVAL_EXECUTION_STARTED` race-safe audits, stuck execution timeout configurations, state-only reset recovery API (`POST /api/approvals/:id/reset-failed`), and operator stuck-marked failed API (`POST /api/approvals/:id/mark-execution-failed`) under strict trimmed actor limits.
 - **Embedded Admin Tenant Context Regression Fix**: Seamless backend shop-based dynamic context resolution for audit, approvals list, and approvals decide API endpoints. Frontend shop context persistence across url-redirection cleanups (preserving shop context and discarding only transient signatures), and premium visual sync warning recovery cards preventing infinite loaders.
-- **CI/CD & Production Smoke Tests**: All static release checks (52 tests) and live local/deployed smoke tests (25 tests) pass cleanly.
+- **Multi-Agent Product Workspace Foundation**: A centralized agent catalog (`GET /api/agents/catalog`) exposing available agents. Scoped domain models (`AgentRun`, `Recommendation`, `ProposedAction`) in in-memory and GCP Firestore repository layers. REST routes with strict tenantcontext resolution and audit integrations, proposed action approval bridge with titlecase risk mapping, and a glassmorphic dashboard component `AgentWorkspace.tsx` integrated in the merchant app.
+- **CI/CD & Production Smoke Tests**: All static release checks (53 tests) and live local/deployed smoke tests (26 tests) pass cleanly.
 
 ## Current Non-Goals
 - **No Theme Patching / Theme Tools**: Theme layout/CSS patching is entirely out-of-scope and disabled. No theme tools or read/write theme scopes may be used.

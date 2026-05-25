@@ -34,7 +34,11 @@ const SAFE_METADATA_ALLOWLIST = new Set([
   "uniqueVendorsCount",
   "uniqueProductTypesCount",
   "staleSnapshotsCount",
-  "argsCount"
+  "argsCount",
+  "agentRunId",
+  "recommendationId",
+  "proposedActionId",
+  "actionType"
 ]);
 
 /**
