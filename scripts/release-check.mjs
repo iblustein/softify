@@ -872,8 +872,8 @@ async function runVerification() {
     
     const gatewayPath = path.resolve(process.cwd(), "src/server/tools/tool-gateway.ts");
     const gatewayContent = fs.readFileSync(gatewayPath, "utf8");
-    if (gatewayContent.includes("case \"shopify.prepareProductUpdate\":")) {
-      throw new Error("Security Violation: shopify.prepareProductUpdate case handler exists in gateway.");
+    if (gatewayContent.includes("shopify.prepareProductUpdate")) {
+      throw new Error("Security Violation: shopify.prepareProductUpdate is referenced in gateway code.");
     }
   });
 

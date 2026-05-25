@@ -39,11 +39,6 @@ export function isToolExecutionContext(obj: any): obj is ToolExecutionContext {
  *  6. TODO: billing / plan enforcement
  */
 export function validateToolExecutionContext(toolName: string, context: ToolExecutionContext): ValidationResult {
-  let effectiveToolName = toolName;
-  if (toolName === "shopify.prepareProductUpdate") {
-    effectiveToolName = "catalog.products.propose_update";
-  }
-
   // 1. Agent installation disabled check
   if (!context.agentInstallation.enabled) {
     return {
@@ -63,23 +58,17 @@ export function validateToolExecutionContext(toolName: string, context: ToolExec
   }
 
   // 3. Tool not registered in enabledTools check
-  const isEnabled = context.enabledTools.some(t => t.name === effectiveToolName);
+  const isEnabled = context.enabledTools.some(t => t.name === toolName);
   if (!isEnabled) {
     return {
       isValid: false,
-      error: `Tool ${effectiveToolName} is not enabled on this platform`,
+      error: `Tool ${toolName} is not enabled on this platform`,
       reason: "tool_not_enabled"
     };
   }
 
   // 4. Tool not allowed by agentDefinition.allowedTools check
-  const isAllowedByAgent = (
-    context.agentDefinition.allowedTools && (
-      context.agentDefinition.allowedTools.includes(effectiveToolName) ||
-      context.agentDefinition.allowedTools.includes(toolName)
-    )
-  );
-  if (!isAllowedByAgent) {
+  if (!context.agentDefinition.allowedTools || !context.agentDefinition.allowedTools.includes(toolName)) {
     return {
       isValid: false,
       error: "Tool not allowed for this agent",
@@ -88,16 +77,10 @@ export function validateToolExecutionContext(toolName: string, context: ToolExec
   }
 
   // 4.5. Tool not allowed by agentInstallation.allowedTools check
-  const isAllowedByInstallation = (
-    context.agentInstallation.allowedTools && (
-      context.agentInstallation.allowedTools.includes(effectiveToolName) ||
-      context.agentInstallation.allowedTools.includes(toolName)
-    )
-  );
-  if (!isAllowedByInstallation) {
+  if (!context.agentInstallation.allowedTools || !context.agentInstallation.allowedTools.includes(toolName)) {
     return {
       isValid: false,
-      error: `Tool ${effectiveToolName} is not allowed by agent installation`,
+      error: `Tool ${toolName} is not allowed by agent installation`,
       reason: "tool_not_allowed_by_installation"
     };
   }
@@ -171,20 +154,7 @@ export async function executeToolWithContext(
   context: ToolExecutionContext,
   customApprovalDetails?: { title: string; summary: string; before?: string }
 ): Promise<ExecuteToolResult> {
-  let effectiveToolName = toolName;
-  let effectiveArgs = args;
-
-  if (toolName === "shopify.prepareProductUpdate") {
-    effectiveToolName = "catalog.products.propose_update";
-    const cleanArgs = args || {};
-    effectiveArgs = {
-      productId: String(cleanArgs.productId || ""),
-      fields: cleanArgs.fields || {},
-      summary: cleanArgs.summary || customApprovalDetails?.summary || "Legacy prepareProductUpdate proposal redirect."
-    };
-  }
-
-  const result = await executeToolWithContextRaw(effectiveToolName, effectiveArgs, context, customApprovalDetails);
+  const result = await executeToolWithContextRaw(toolName, args, context, customApprovalDetails);
   
   const status = result.status === "failed" ? "failed" : "completed";
   const decision = result.status === "failed" ? "failed" : "completed";
@@ -195,10 +165,10 @@ export async function executeToolWithContext(
     agentInstallationId: context.agentInstallation.id,
     agentId: context.agentDefinition.id,
     agentDefinitionId: context.agentDefinition.id,
-    toolName: effectiveToolName,
+    toolName,
     initiator: context.agentDefinition.name,
     event: AuditEventNames.GATEWAY_TOOL_EXECUTION,
-    description: `Tool \`${effectiveToolName}\` execution status: ${status}`,
+    description: `Tool \`${toolName}\` execution status: ${status}`,
     decision,
     reason: result.status === "failed" ? "tool_execution_failed" : undefined,
     metadata: {
@@ -206,10 +176,10 @@ export async function executeToolWithContext(
       storeConnectionId: context.storeConnection.id,
       agentInstallationId: context.agentInstallation.id,
       agentId: context.agentDefinition.id,
-      toolName: effectiveToolName,
+      toolName,
       decision,
       status,
-      argsCount: Object.keys(effectiveArgs || {}).length
+      argsCount: Object.keys(args || {}).length
     }
   });
 

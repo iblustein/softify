@@ -46,9 +46,9 @@ We have successfully implemented the strictly-confined **Phase 10.6: Merchant Ap
 - **`firestore.indexes.json`**:
   - Configured composite query descriptors for `merchant_approvals` to safely enable chronological sorting and organization filters.
 
-### 6. Final Legacy Tools Cleanup & Backward Compatibility Redirects
+### 6. Final Legacy Tools Cleanup
 - **Registry & Definitions Cleanup**: Completely removed `shopify.prepareThemePatch` and `shopify.prepareProductUpdate` from `ENABLED_TOOLS` in definitions, agent registry allowed lists, and platform contexts.
-- **Dynamic Gateway Redirect**: Added dynamic mapping inside the Tool Gateway execution path (`executeToolWithContext`). Legacy calls to `shopify.prepareProductUpdate` are automatically redirected to `catalog.products.propose_update`, resolving under sanitized `merchant_approvals` storage paths to guarantee bulletproof backward compatibility without violating containment.
+- **Legacy Redirect Removal**: Removed the compatibility redirect for `shopify.prepareProductUpdate` inside the Tool Gateway execution path (`executeToolWithContext`). The legacy tool name is now fully disabled and completely unreachable in the system.
 - **Theme Asset Write Refusal**: Theme layout adjustments proposed by theme/design agents are immediately refused and blocked, operating in a secure read-only audit state.
-- **Pre-Deployment Checks Expansion**: Enhanced release checks (Tests 40-42) to fail if theme assets patch exists, prepareThemePatch exists in gateway execution/definitions, or direct/legacy writes are reachable from decide endpoints.
+- **Pre-Deployment Checks Expansion**: Enhanced release checks (Tests 40-42) to fail if theme assets patch or prepareThemePatch/prepareProductUpdate references exist in gateway execution or definitions, or if direct/legacy writes are reachable from decide endpoints.
 - **100% Verification**: Fully verified via compilation, linting, release verification checks, and Express integration smoke testing, passing 100% of checks.
