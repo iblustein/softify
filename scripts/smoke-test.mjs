@@ -4,6 +4,8 @@ const baseUrl = process.env.SOFTIFY_BASE_URL || "https://softify-595151907767.eu
 const shop = process.env.SOFTIFY_TEST_SHOP || "yambasurf-co-il.myshopify.com";
 const defaultLimit = process.env.SMOKE_PRODUCTS_LIMIT ? parseInt(process.env.SMOKE_PRODUCTS_LIMIT, 10) : 5;
 
+let isInMemory = false;
+
 const isLocalBaseUrl =
   baseUrl.includes("localhost") ||
   baseUrl.includes("127.0.0.1");
@@ -86,6 +88,8 @@ async function runSuite() {
       agentDevBypassAllowed,
       agentDevBypassSecretConfigured
     } = data.diagnostics;
+
+    isInMemory = (repositoryBackend === "memory");
 
     console.log(`   [DIAGNOSTICS] shopifyOAuthConfigured         : ${shopifyOAuthConfigured}`);
     console.log(`   [DIAGNOSTICS] repositoryBackend              : ${repositoryBackend}`);
@@ -878,6 +882,8 @@ async function runSuite() {
   // Test P: Safe Approved Product Mutation Execution validation
   await check("P. Safe Approved Product Mutation Execution validation", async () => {
     const timestamp = Date.now();
+    const enableLiveWriteSmoke = process.env.SOFTIFY_ENABLE_LIVE_WRITE_SMOKE === "true";
+    const expectAppliedSuccess = isInMemory || enableLiveWriteSmoke;
     
     // 1. Fetch approvals list
     const approvalsUrl = `${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`;
@@ -921,154 +927,204 @@ async function runSuite() {
       throw new Error(`Expected HTTP 400 Bad Request for mismatched shop execution, got: ${resExecWrongShop.status}`);
     }
 
-    // 4. Successful execution (expect 200 and status APPLIED)
-    const resExecRight = await fetch(execUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        organizationId: "demo-org-id",
-        shop
-      })
-    });
-    await checkResponse(resExecRight);
-    const execResult = await resExecRight.json();
-    if (execResult.ok !== true || execResult.approval?.status !== "APPLIED") {
-      throw new Error(`Expected execution success with APPLIED status, got: ${JSON.stringify(execResult)}`);
+    if (expectAppliedSuccess) {
+      // 4. Successful execution (expect 200 and status APPLIED)
+      const resExecRight = await fetch(execUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: "demo-org-id",
+          shop
+        })
+      });
+      await checkResponse(resExecRight);
+      const execResult = await resExecRight.json();
+      if (execResult.ok !== true || execResult.approval?.status !== "APPLIED") {
+        throw new Error(`Expected execution success with APPLIED status, got: ${JSON.stringify(execResult)}`);
+      }
+
+      // 5. Concurrency/Idempotency validation (attempt to re-execute already APPLIED approval expect 400)
+      const resExecDouble = await fetch(execUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: "demo-org-id",
+          shop
+        })
+      });
+      if (resExecDouble.status !== 400) {
+        throw new Error(`Expected HTTP 400 for duplicate execution attempt, got: ${resExecDouble.status}`);
+      }
+      const doubleResult = await resExecDouble.json();
+      if (!doubleResult.error || !doubleResult.error.includes("finalized") && !doubleResult.error.includes("state")) {
+        throw new Error(`Expected state/finalized error for duplicate execution, got: ${JSON.stringify(doubleResult)}`);
+      }
+
+      // 6. Verify mutation changes did update catalog and audit logs
+      const resAudits = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resAudits);
+      const audits = await resAudits.json();
+
+      const startedEvent = audits.find(a => a.event === "APPROVAL_EXECUTION_STARTED" && a.metadata?.approvalId === approvalId);
+      const appliedEvent = audits.find(a => a.event === "APPROVAL_APPLIED" && a.metadata?.approvalId === approvalId);
+
+      if (!startedEvent) throw new Error("Missing APPROVAL_EXECUTION_STARTED audit log event.");
+      if (!appliedEvent) throw new Error("Missing APPROVAL_APPLIED audit log event.");
+      
+      console.log("   [EXECUTION TESTS] Verified successful execution, tenant rejections, claim locks, and audit events.");
+    } else {
+      // Deployed default: safe read-only behavior (the store connection is missing write_products)
+      // 4. Call execute and expect HTTP 400 (safe block due to missing write_products)
+      const resExecRight = await fetch(execUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: "demo-org-id",
+          shop
+        })
+      });
+      if (resExecRight.status !== 400) {
+        throw new Error(`Expected HTTP 400 Bad Request for execution with missing write scope in deployed env, got: ${resExecRight.status}`);
+      }
+      const execResult = await resExecRight.json();
+      if (!execResult.error || !execResult.error.toLowerCase().includes("write_products")) {
+        throw new Error(`Expected write_products scope rejection error, got: ${JSON.stringify(execResult)}`);
+      }
+
+      // 5. Verify approval request remains APPROVED (non-destructive status preservation)
+      const resApprovalsAfter = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resApprovalsAfter);
+      const approvalsAfter = await resApprovalsAfter.json();
+      const checkedApproval = approvalsAfter.find(a => a.id === approvalId);
+      if (!checkedApproval || checkedApproval.status !== "APPROVED") {
+        throw new Error(`Expected approval status to remain APPROVED in read-only environment, got: ${checkedApproval?.status}`);
+      }
+
+      // 6. Verify APPROVAL_EXECUTION_BLOCKED audit event exists and no APPLIED state is reached
+      const resAudits = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resAudits);
+      const audits = await resAudits.json();
+
+      const blockedEvent = audits.find(
+        a => a.event === "APPROVAL_EXECUTION_BLOCKED" && a.metadata?.approvalId === approvalId && a.metadata?.reason === "missing_write_products_scope"
+      );
+      const appliedEvent = audits.find(
+        a => a.event === "APPROVAL_APPLIED" && a.metadata?.approvalId === approvalId
+      );
+
+      if (!blockedEvent) {
+        throw new Error("Missing APPROVAL_EXECUTION_BLOCKED audit log event.");
+      }
+      if (appliedEvent) {
+        throw new Error("Security Violation: APPROVAL_APPLIED audit event exists for write-blocked connection.");
+      }
+
+      console.log("   [EXECUTION TESTS] Verified safe read-only execution block, non-destructive APPROVED status preservation, and audit logging in deployed env.");
     }
 
-    // 5. Concurrency/Idempotency validation (attempt to re-execute already APPLIED approval expect 400)
-    const resExecDouble = await fetch(execUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        organizationId: "demo-org-id",
-        shop
-      })
-    });
-    if (resExecDouble.status !== 400) {
-      throw new Error(`Expected HTTP 400 for duplicate execution attempt, got: ${resExecDouble.status}`);
+    // 7. Verify missing write_products hardening checks dynamically inside local/in-memory environment
+    if (isInMemory) {
+      const mismatchShop = "scope-mismatch.myshopify.com";
+      
+      // Install agent on scope-mismatch connection
+      const resInstallMismatch = await fetch(`${baseUrl}/api/agents/install`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Softify-Dev-Bypass": bypassSecret
+        },
+        body: JSON.stringify({
+          shop: mismatchShop,
+          agentId: "agent_product_intelligence"
+        })
+      });
+      await checkResponse(resInstallMismatch);
+
+      // Trigger proposal creation on scope-mismatch
+      const resChatMismatch = await fetch(`${baseUrl}/api/agents/chat?t=${timestamp}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Softify-Dev-Bypass": bypassSecret
+        },
+        body: JSON.stringify({
+          shop: mismatchShop,
+          agentId: "agent_product_intelligence",
+          message: "simulate tool catalog.products.propose_update"
+        })
+      });
+      await checkResponse(resChatMismatch);
+
+      // Fetch approvals and find mismatch approval
+      const resApprovalsMismatch = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resApprovalsMismatch);
+      const approvalsMismatch = await resApprovalsMismatch.json();
+      const pendingMismatch = approvalsMismatch.find(
+        a => a.status === "PENDING" && a.toolName === "catalog.products.propose_update" && a.storeConnectionId === "store-scope-mismatch"
+      );
+      if (!pendingMismatch) {
+        throw new Error("Expected to find a PENDING approval request for scope-mismatch connection.");
+      }
+      const mismatchApprovalId = pendingMismatch.id;
+
+      // Approve the request
+      const resDecideMismatch = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/decide?t=${timestamp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision: "APPROVE",
+          organizationId: "demo-org-id"
+        })
+      });
+      await checkResponse(resDecideMismatch);
+
+      // Attempt execution (expect failure due to missing write_products scope)
+      const resExecMismatch = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/execute?t=${timestamp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: "demo-org-id",
+          shop: mismatchShop
+        })
+      });
+      if (resExecMismatch.status !== 400) {
+        throw new Error(`Expected HTTP 400 Bad Request for missing write scope execution, got: ${resExecMismatch.status}`);
+      }
+      const mismatchExecData = await resExecMismatch.json();
+      if (!mismatchExecData.error || !mismatchExecData.error.toLowerCase().includes("write_products")) {
+        throw new Error(`Expected write_products error message, got: ${JSON.stringify(mismatchExecData)}`);
+      }
+
+      // Verify approval request remains APPROVED
+      const resApprovalsMismatchAfter = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resApprovalsMismatchAfter);
+      const approvalsMismatchAfter = await resApprovalsMismatchAfter.json();
+      const checkedMismatch = approvalsMismatchAfter.find(a => a.id === mismatchApprovalId);
+      if (!checkedMismatch || checkedMismatch.status !== "APPROVED") {
+        throw new Error(`Expected approval status to remain APPROVED, got: ${checkedMismatch?.status}`);
+      }
+
+      // Verify APPROVAL_EXECUTION_BLOCKED audit event exists
+      const resAuditsMismatch = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resAuditsMismatch);
+      const auditsMismatch = await resAuditsMismatch.json();
+      const blockedEvent = auditsMismatch.find(
+        a => a.event === "APPROVAL_EXECUTION_BLOCKED" && a.metadata?.approvalId === mismatchApprovalId && a.metadata?.reason === "missing_write_products_scope"
+      );
+      if (!blockedEvent) {
+        throw new Error("Expected to find APPROVAL_EXECUTION_BLOCKED audit log event with reason missing_write_products_scope.");
+      }
+
+      // Verify no APPLIED state is reached for this request
+      const appliedEventMismatch = auditsMismatch.find(
+        a => a.event === "APPROVAL_APPLIED" && a.metadata?.approvalId === mismatchApprovalId
+      );
+      if (appliedEventMismatch) {
+        throw new Error("Security Violation: APPROVAL_APPLIED audit event exists for scope-mismatch connection.");
+      }
+
+      console.log("   [EXECUTION TESTS] Verified local scope-mismatch rejections and safe APPROVED preservation.");
     }
-    const doubleResult = await resExecDouble.json();
-    if (!doubleResult.error || !doubleResult.error.includes("finalized") && !doubleResult.error.includes("state")) {
-      throw new Error(`Expected state/finalized error for duplicate execution, got: ${JSON.stringify(doubleResult)}`);
-    }
-
-    // 6. Verify mutation changes did update catalog and audit logs
-    const resProducts = await fetch(`${baseUrl}/api/catalog/products?shop=${shop}&t=${timestamp}`);
-    await checkResponse(resProducts);
-    const products = await resProducts.json();
-
-    const resAudits = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
-    await checkResponse(resAudits);
-    const audits = await resAudits.json();
-
-    const startedEvent = audits.find(a => a.event === "APPROVAL_EXECUTION_STARTED" && a.metadata?.approvalId === approvalId);
-    const appliedEvent = audits.find(a => a.event === "APPROVAL_APPLIED" && a.metadata?.approvalId === approvalId);
-
-    if (!startedEvent) throw new Error("Missing APPROVAL_EXECUTION_STARTED audit log event.");
-    if (!appliedEvent) throw new Error("Missing APPROVAL_APPLIED audit log event.");
-
-    // 7. Verify missing write_products hardening checks dynamically
-    const mismatchShop = "scope-mismatch.myshopify.com";
-    
-    // Install agent on scope-mismatch connection
-    const resInstallMismatch = await fetch(`${baseUrl}/api/agents/install`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Softify-Dev-Bypass": bypassSecret
-      },
-      body: JSON.stringify({
-        shop: mismatchShop,
-        agentId: "agent_product_intelligence"
-      })
-    });
-    await checkResponse(resInstallMismatch);
-
-    // Trigger proposal creation on scope-mismatch
-    const resChatMismatch = await fetch(`${baseUrl}/api/agents/chat?t=${timestamp}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Softify-Dev-Bypass": bypassSecret
-      },
-      body: JSON.stringify({
-        shop: mismatchShop,
-        agentId: "agent_product_intelligence",
-        message: "simulate tool catalog.products.propose_update"
-      })
-    });
-    await checkResponse(resChatMismatch);
-
-    // Fetch approvals and find mismatch approval
-    const resApprovalsMismatch = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
-    await checkResponse(resApprovalsMismatch);
-    const approvalsMismatch = await resApprovalsMismatch.json();
-    const pendingMismatch = approvalsMismatch.find(
-      a => a.status === "PENDING" && a.toolName === "catalog.products.propose_update" && a.storeConnectionId === "store-scope-mismatch"
-    );
-    if (!pendingMismatch) {
-      throw new Error("Expected to find a PENDING approval request for scope-mismatch connection.");
-    }
-    const mismatchApprovalId = pendingMismatch.id;
-
-    // Approve the request
-    const resDecideMismatch = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/decide?t=${timestamp}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        decision: "APPROVE",
-        organizationId: "demo-org-id"
-      })
-    });
-    await checkResponse(resDecideMismatch);
-
-    // Attempt execution (expect failure due to missing write_products scope)
-    const resExecMismatch = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/execute?t=${timestamp}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        organizationId: "demo-org-id",
-        shop: mismatchShop
-      })
-    });
-    if (resExecMismatch.status !== 400) {
-      throw new Error(`Expected HTTP 400 Bad Request for missing write scope execution, got: ${resExecMismatch.status}`);
-    }
-    const mismatchExecData = await resExecMismatch.json();
-    if (!mismatchExecData.error || !mismatchExecData.error.toLowerCase().includes("write_products")) {
-      throw new Error(`Expected write_products error message, got: ${JSON.stringify(mismatchExecData)}`);
-    }
-
-    // Verify approval request remains APPROVED
-    const resApprovalsMismatchAfter = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
-    await checkResponse(resApprovalsMismatchAfter);
-    const approvalsMismatchAfter = await resApprovalsMismatchAfter.json();
-    const checkedMismatch = approvalsMismatchAfter.find(a => a.id === mismatchApprovalId);
-    if (!checkedMismatch || checkedMismatch.status !== "APPROVED") {
-      throw new Error(`Expected approval status to remain APPROVED, got: ${checkedMismatch?.status}`);
-    }
-
-    // Verify APPROVAL_EXECUTION_BLOCKED audit event exists
-    const resAuditsMismatch = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
-    await checkResponse(resAuditsMismatch);
-    const auditsMismatch = await resAuditsMismatch.json();
-    const blockedEvent = auditsMismatch.find(
-      a => a.event === "APPROVAL_EXECUTION_BLOCKED" && a.metadata?.approvalId === mismatchApprovalId && a.metadata?.reason === "missing_write_products_scope"
-    );
-    if (!blockedEvent) {
-      throw new Error("Expected to find APPROVAL_EXECUTION_BLOCKED audit log event with reason missing_write_products_scope.");
-    }
-
-    // Verify no APPLIED state is reached for this request
-    const appliedEventMismatch = auditsMismatch.find(
-      a => a.event === "APPROVAL_APPLIED" && a.metadata?.approvalId === mismatchApprovalId
-    );
-    if (appliedEventMismatch) {
-      throw new Error("Security Violation: APPROVAL_APPLIED audit event exists for scope-mismatch connection.");
-    }
-
-    console.log("   [EXECUTION TESTS] Verified successful execution, tenant rejections, claim locks, missing scope rejections, and audit events.");
   });
 
   // Summary Printing
