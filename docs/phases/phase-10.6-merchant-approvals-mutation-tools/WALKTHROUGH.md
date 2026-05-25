@@ -1,58 +1,47 @@
-# Walkthrough — Phase 10.6: Merchant Approvals & Mutation Tools Foundation
+# Walkthrough — Phase 10.6: Merchant Approvals & Mutation Tools Foundation (Containment Fix)
 
-We have successfully implemented and verified **Phase 10.6: Merchant Approvals & Mutation Tools Foundation**. This phase introduces write/mutation capabilities for catalog and theme optimization, completely isolated and protected by a robust merchant-in-the-loop approvals gateway.
+We have successfully implemented the strictly-confined **Phase 10.6: Merchant Approvals & Mutation Tools Foundation** based on the containment criteria. All direct and mock mutation execution code paths are blocked and deferred, and theme patching has been completely removed.
 
 ---
 
 ## Changes Implemented
 
-### 1. Domain Models & Audits
+### 1. Proposal-Only Domain & Strict Persistence Types
 - **`src/server/domain/types.ts`**:
-  - Expanded `ApprovalStatus` union type: `"PENDING" | "APPROVED" | "REJECTED" | "APPLIED" | "FAILED"`.
-  - Re-architected `ApprovalRequest` to support detailed, structured metadata (`riskLevel`, chronological sorting, nested action structures, etc.) while preserving backward-compatible types for legacy route consumers.
-  - Centralized new approval auditing events in `AuditEventNames` (`APPROVAL_CREATED`, `APPROVAL_APPROVED`, `APPROVAL_REJECTED`, `APPROVAL_APPLIED`, `APPROVAL_FAILED`).
+  - Redesigned `ApprovalRequest` to store only strictly-sanitized proposal parameters in Firestore.
+  - Eliminated raw/unrestricted persistence fields (`beforeState`, `afterState`, `diff`, `details.before`, `details.after`, `details.fields`).
+  - Added a strict `AllowedProductProposalField` union list limit: `"title" | "vendor" | "productType" | "status" | "tags"`.
+  - Restricted `ApprovalStatus` union strictly to `"PENDING" | "APPROVED" | "REJECTED"`.
+  - Updated centralized names `AuditEventNames` to audit `APPROVAL_CREATED`, `APPROVAL_APPROVED`, and `APPROVAL_REJECTED` only.
 
-### 2. Firestore Collections & Wireup
-- **`src/server/repositories/firestore/firestore-approval.repository.ts`**:
-  - Implemented Firestore-backed `ApprovalRepository` contract targeting the `merchant_approvals` collection.
-  - Enforced chronological sorting by `requestedAt` descending.
-  - Hardened database-level safety to prevent `clearApprovals()` operations when `NODE_ENV === "production"`.
-- **`src/server/repositories/repository-provider.ts`**:
-  - Wire database persistence dynamically inside `repository-provider.ts` so `repos.approvals` routes to Firestore when configured, with clean local fallback behavior.
-
-### 3. Registry & Interception Boundary
+### 2. Proposal Registry & Scope Reduction
 - **`src/server/tools/tool-definitions.ts`**:
-  - Registered two mutation tools in `ENABLED_TOOLS`: `catalog.products.update` (Medium risk) and `theme.assets.patch` (High risk).
+  - Completely removed the `theme.assets.patch` layout/CSS write tool.
+  - Replaced `catalog.products.update` with proposal-only tool `catalog.products.propose_update`.
+  - Downgraded scope requirement to low-privilege `read_products` (do not require `write_products` in Phase 10.6).
+- **`src/server/agents/agent-definitions.ts` & `src/server/ai/mock-ai.provider.ts`**:
+  - Re-registered allowed tools for the Product Intelligence Agent to `"catalog.products.propose_update"`.
+
+### 3. Gateway Proposal Interceptor & Dynamic Telemetry Scrubbing
 - **`src/server/tools/tool-gateway.ts`**:
-  - Refactored execution layer (`executeToolWithContextRaw`) to intercept both mutation tools immediately.
-  - Replaces execution with a pending approval record created in the database and returns a standardized block response containing `requires_approval: true` and the new approval request ID.
-  - Dispatches an asynchronous `writeAuditEvent` under event `APPROVAL_CREATED` to secure durable audit logs.
+  - Removed `theme.assets.patch` interception pathway.
+  - Programmed interceptor logic to evaluate incoming `catalog.products.propose_update` calls:
+    - Filters and sanitizes the requested parameters block, copying only the allowed fields list strictly.
+    - Saves the pending `merchant_approvals` proposal record in Firestore.
+    - Dispatches async `APPROVAL_CREATED` audit events.
+    - Masks raw arguments inside returned results, providing only a summary metrics record (`argsCount`, `targetId`, `allowedFields`).
 
-### 4. Tenant-Safe Approvals API Router
+### 4. REST Router Dynamic Mappings & Deferred Decision contract
 - **`src/server/routes/approvals.routes.ts`**:
-  - Enforced mandatory `organizationId` matching and query validations across GET `/api/approvals`.
-  - Enforced strict connection checks under `StoreRepository` when shop lookup is requested to prevent tenant leakage.
-  - Re-architected POST `/api/approvals/:id/decide` to securely process merchant approvals:
-    - Verifies store ownership strictly using `organizationId` matching.
-    - Transitions requests from `PENDING` -> `APPROVED` -> `APPLIED` (or `FAILED` if execution fails).
-    - Commits mock mutations directly to `getMockProducts()` in-memory arrays and Firestore product snapshots concurrently.
-    - Audits every transition securely using `writeAuditEvent`.
+  - **Dynamic Legacy Mapping**: Added route-level mapping functions that dynamically construct and project legacy UI fields (`details`, `diff`, `actionType`, `beforeState`, `afterState`) on-the-fly, utilizing only safe sanitized metadata. No raw fields ever touch the database collections.
+  - Enforced strict tenant-scoped GET `/api/approvals` lookups.
+  - Simplified POST `/api/approvals/:id/decide` transitions:
+    - Moves request status strictly to `APPROVED` or `REJECTED`, auditing corresponding outcomes.
+    - Completely bypassed `setMockProducts`, `setActiveThemeCode`, `upsertProductSnapshot`, or `APPLIED` / `FAILED` state pipelines.
+    - Returns `{ ok: true, status: "APPROVED", executionDeferred: true }` upon approved merchant reviews.
 
----
-
-## Verifications Performed
-
-1. **Compilation & Static Checks**:
-   - `npm run lint` checked cleanly with zero compilation warnings or type mismatches.
-   - `npm run build` completed successfully, producing production bundles.
-   - `npm run verify:release` executed successfully, passing all 39 pre-deployment release checks (including new assertions for approvals repos and registered tools).
-
-2. **Integration & Flow Verification**:
-   - Local test server started in `memory` backend mode.
-   - Ran `npm run smoke:prod` with full integration suite:
-     - **Test O** executed and passed completely.
-     - Verified interception of AI-triggered `catalog.products.update` calls, blocking the provider and returning `requires_approval: true`.
-     - Verified `merchant_approvals` item creation and chronological listing.
-     - Proved cross-tenant lookup protection and decision API security.
-     - Proved successful merchant approval committing mock catalog changes to both local memory snapshots.
-     - Proved flawless audit logging trace with all chronological transitions.
+### 5. Repositories & Database Index Schemas
+- **`src/server/repositories/firestore/firestore-approval.repository.ts`**:
+  - Redesigned document mappers to load and serialize proposal-scoped fields only.
+- **`firestore.indexes.json`**:
+  - Configured composite query descriptors for `merchant_approvals` to safely enable chronological sorting and organization filters.

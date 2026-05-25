@@ -19,7 +19,8 @@ function getCollection() {
 }
 
 /**
- * Maps a Firestore document snapshot to the ApprovalRequest domain model.
+ * Maps a Firestore document snapshot to the redesigned ApprovalRequest domain model,
+ * strictly excluding any raw/legacy fields from Firestore persistence.
  */
 function mapDocument(doc: FirebaseFirestore.DocumentSnapshot): ApprovalRequest | null {
   const data = doc.data();
@@ -31,21 +32,19 @@ function mapDocument(doc: FirebaseFirestore.DocumentSnapshot): ApprovalRequest |
     storeConnectionId: data.storeConnectionId,
     agentInstallationId: data.agentInstallationId,
     agentId: data.agentId,
-    toolName: data.toolName,
+    toolName: data.toolName as "catalog.products.propose_update",
     requestedBy: data.requestedBy,
     requestedAt: data.requestedAt,
     decidedAt: data.decidedAt,
     decidedBy: data.decidedBy,
     status: data.status,
     riskLevel: data.riskLevel,
-    summary: data.summary,
-    beforeState: data.beforeState,
-    afterState: data.afterState,
-    diff: data.diff,
-    // Legacy fields
-    actionType: data.actionType || 'PRODUCT_UPDATE',
+    targetType: data.targetType || 'PRODUCT_PROPOSAL',
     targetId: data.targetId,
-    details: data.details
+    proposedChangesSummary: data.proposedChangesSummary || '',
+    diffSummary: data.diffSummary || '',
+    sanitizedPayload: data.sanitizedPayload || {},
+    allowedFields: data.allowedFields || []
   };
 }
 

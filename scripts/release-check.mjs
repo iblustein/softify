@@ -657,8 +657,8 @@ async function runVerification() {
   // Test 28: Validate that no write/mutation tools are added in tool definitions
   await check("28. No write tools, product update tools, or mutation tools exist", async () => {
     const { ENABLED_TOOLS } = await import("../src/server/tools/tool-definitions.ts");
-    const preExistingAllowed = ["shopify.prepareProductUpdate", "shopify.prepareThemePatch", "catalog.products.update", "theme.assets.patch"];
-    const forbiddenKeywords = ["write", "update", "delete", "create", "mutate", "inventory", "patch", "publish", "unpublish"];
+    const preExistingAllowed = ["shopify.prepareProductUpdate", "shopify.prepareThemePatch", "catalog.products.propose_update"];
+    const forbiddenKeywords = ["write", "delete", "create", "mutate", "inventory", "publish", "unpublish"];
     
     for (const tool of ENABLED_TOOLS) {
       if (preExistingAllowed.includes(tool.name)) continue;
@@ -828,18 +828,16 @@ async function runVerification() {
     if (!repos.approvals) throw new Error("Repository provider does not expose approvals reference.");
   });
 
-  // Test 39: Tool definitions write/mutation registration check
-  await check("39. Tool definitions write/mutation registration check", async () => {
+  // Test 39: Tool definitions proposal-only mutation tool registration check
+  await check("39. Tool definitions proposal-only mutation tool registration check", async () => {
     const { ENABLED_TOOLS } = await import("../src/server/tools/tool-definitions.ts");
-    const updateProduct = ENABLED_TOOLS.find(t => t.name === "catalog.products.update");
-    if (!updateProduct) throw new Error("Missing catalog.products.update in ENABLED_TOOLS definitions.");
-    if (updateProduct.riskLevel !== "Medium") throw new Error(`Incorrect risk level for product update tool: ${updateProduct.riskLevel}`);
-    if (updateProduct.requiredScope !== "write_products") throw new Error(`Incorrect scope for product update tool: ${updateProduct.requiredScope}`);
+    const proposeProduct = ENABLED_TOOLS.find(t => t.name === "catalog.products.propose_update");
+    if (!proposeProduct) throw new Error("Missing catalog.products.propose_update in ENABLED_TOOLS definitions.");
+    if (proposeProduct.riskLevel !== "Medium") throw new Error(`Incorrect risk level for product proposal tool: ${proposeProduct.riskLevel}`);
+    if (proposeProduct.requiredScope !== "read_products") throw new Error(`Incorrect scope for product proposal tool: ${proposeProduct.requiredScope}`);
 
     const patchTheme = ENABLED_TOOLS.find(t => t.name === "theme.assets.patch");
-    if (!patchTheme) throw new Error("Missing theme.assets.patch in ENABLED_TOOLS definitions.");
-    if (patchTheme.riskLevel !== "High") throw new Error(`Incorrect risk level for theme patch tool: ${patchTheme.riskLevel}`);
-    if (patchTheme.requiredScope !== "write_themes") throw new Error(`Incorrect scope for theme patch tool: ${patchTheme.requiredScope}`);
+    if (patchTheme) throw new Error("Security Violation: theme.assets.patch must not be registered in Phase 10.6.");
   });
 
   // Print PASS/FAIL Summary

@@ -20,7 +20,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Store-level agent installations are live, allowing custom provisioning of allowed tools per shop.
 - The Product Intelligence Agent v2 is fully operational, providing read-only capped catalog insights (health scores, missing images, top vendors list, etc.) with safe fallbacks and constants.
 - Durable, sanitized, tenant-safe Firestore audit logging is established (Phase 10.5) to track all agent executions and gateway decisions.
-- A secure merchant-in-the-loop approvals queue, write tool gateway interception, REST approvals router, and mock snapshot commits are fully implemented (Phase 10.6).
+- A secure merchant-in-the-loop approvals queue, proposal tool gateway interception, dynamically mapped REST approvals router, and deferred execution contract are fully implemented (Phase 10.6).
 - Robust pre-deployment static checks (39 tests) and integration smoke test suites (22 tests) are passing completely.
 
 ### Completed Milestones
@@ -29,13 +29,13 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.3 — Agent Installations and Permission Policy Foundation
 - Phase 10.4 — Product Intelligence Agent v2 — Read-Only Catalog Insights
 - Phase 10.5 — Agent Execution Audit Foundation
-- Phase 10.6 — Merchant Approvals & Mutation Tools Foundation
+- Phase 10.6 — Merchant Approvals & Mutation Tools Foundation (Containment Fix)
 
 ### Core Architectural Guardrails & Constraints
 - Softify strictly owns runtime execution, permissions, tenant isolation, and integrations.
 - AI engines are stateless providers pluggable through the `AiProvider` interface and never execute tools directly.
-- The SDK Tool Gateway is the ONLY execution path for tools and enforces final permission validation. All mutation/write tools must be intercepted and converted into approval requests.
-- No direct live Shopify mutations should be triggered by the agent runtime without explicit, authenticated merchant approval.
+- The SDK Tool Gateway is the ONLY execution path for tools and enforces final permission validation. All proposal-only mutation tools must be intercepted and converted into approval requests.
+- No direct live Shopify mutations or local/in-memory snapshot mutations should be executed upon approval in this phase (actual execution is deferred).
 
 ### Active Repository Context
 All project configurations, deployment architecture, and completed phases are documented under:
@@ -59,7 +59,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.7 — Shopify Write Integrations & Live Theme/Catalog Sync. The goal is to connect resolved merchant approvals directly to live Shopify REST/GraphQL APIs, executing changes under authenticated tenant access credentials and triggering post-mutation index refreshes.
+We are ready to initiate Phase 10.7 — Shopify Write Integrations & Live Theme/Catalog Sync. The goal is to implement write scopes and connect the newly approved proposals strictly to live Shopify REST/GraphQL API mutations, resolving changes under authenticated tenant access credentials and triggering post-mutation index refreshes.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

@@ -7,10 +7,10 @@ export class MockAiProvider implements AiProvider {
     const msg = (input.message || "").toLowerCase();
 
     // Simulation path for testing approvals and gateway write block
-    if (msg.includes("simulate tool catalog.products.update")) {
+    if (msg.includes("simulate tool catalog.products.propose_update")) {
       return {
         type: "tool_call",
-        toolName: "catalog.products.update",
+        toolName: "catalog.products.propose_update",
         arguments: {
           productId: "101",
           fields: { title: "Super Polished Tee" },

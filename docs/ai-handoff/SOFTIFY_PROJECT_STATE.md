@@ -20,7 +20,7 @@ This document provides a highly durable and centralized technical reference for 
     - `product_snapshots`: Synced merchant product metadata
     - `agent_installations`: Store-level agent installation statuses and tool authorizations
     - `agent_audit_logs`: Authoritative, sanitized security and execution trails
-    - `merchant_approvals`: Blocked write tool mutations awaiting merchant review
+    - `merchant_approvals`: Blocked proposal-only mutation proposals awaiting merchant review
     - `product_snapshot_catalogs`: Catalog snapshots matching database states
 
 ## Current Capabilities
@@ -29,16 +29,18 @@ This document provides a highly durable and centralized technical reference for 
 - **Firestore Persistence**: Durable, tenant-isolated data storage for connections, snapshots, installations, audits, and merchant approvals.
 - **Product Snapshots Sync**: manual and incremental product syncing from live Shopify REST/Admin API into Firestore.
 - **AI Provider Abstraction**: Pluggable provider system with active Gemini AI and deterministic Mock AI provider configurations.
-- **Tool Gateway**: A centralized SDK boundary that authoritatively checks definitions, tenant restrictions, dynamic permission subsets, recursively sanitizes sensitive fields, and intercepts mutation tools to convert them to pending approvals.
+- **Tool Gateway**: A centralized SDK boundary that authoritatively checks definitions, tenant restrictions, dynamic permission subsets, recursively sanitizes sensitive fields, and intercepts proposal tools to convert them to pending approvals.
 - **Platform Context Resolver**: Security resolver that checks dev-bypass credentials, Normalizes shops, verifies connected stores, and validates installed agents.
 - **Agent Installations**: System to install/enable specific agents per store and provision subsets of `allowedTools`.
 - **Read-Only Catalog Insights**: Structured calculations for catalog health scores (via clear comment deductions), missing images, missing vendors, missing types, and sync freshness.
 - **Agent Execution Audit**: Durable, sanitized, tenant-safe Firestore audit logging (collection `agent_audit_logs`) tracking agent chat requests, tool invocations, and Gateway decisions (`allowed`, `blocked`, `completed`, `failed`) using centralized constants. Includes a recursive, allowlist-first sanitizer and strict cross-tenant endpoint query protection.
-- **Merchant Approvals Pipeline**: Secure merchant-in-the-loop approvals gateway intercepting mutation tools (`catalog.products.update` and `theme.assets.patch`), registering them in `merchant_approvals`, enforcing strict tenant-scoping, committing mock updates to Firestore & local caches on approved decisions, and dispatching async transition audit records (`APPROVAL_CREATED`, `APPROVAL_APPROVED`, `APPROVAL_APPLIED`, `APPROVAL_REJECTED`).
+- **Merchant Approvals Pipeline**: Secure merchant-in-the-loop approvals gateway intercepting proposal tools (`catalog.products.propose_update`), registering strictly-sanitized proposal shapes in `merchant_approvals`, enforcing strict tenant-scoping, dynamically mapping legacy UI parameters on-the-fly in router responses, and dispatching async transition audit records (`APPROVAL_CREATED`, `APPROVAL_APPROVED`, `APPROVAL_REJECTED`).
 - **CI/CD & Production Smoke Tests**: All static release checks (39 tests) and live local/deployed smoke tests (22 tests) pass cleanly.
 
 ## Current Non-Goals
-- **No Direct Mutation Execution**: AI provider runtime may never invoke write tools directly on live stores without explicit merchant-in-the-loop review.
+- **No Mutation Execution in Phase 10.6**: Absolutely no write operations, database product snapshot updates, mock sets, or theme modifications are executed upon approval in this phase (actual execution is deferred).
+- **No Theme Patching**: Theme layout/CSS patching is entirely out-of-scope and disabled.
+- **No Direct Mutation Execution**: AI provider runtime may never invoke write tools directly on live stores.
 - **No Agent Management UI**: Front-end visual dashboard for installing agents is deferred.
 - **No Agent Frameworks**: Avoid importing third-party frameworks like LangChain, CrewAI, or LangGraph.
 - **No Cross-Store Bulk Approvals**: Multi-store/bulk approval decision lists are deferred.

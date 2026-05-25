@@ -1,23 +1,18 @@
-# Review Notes — Phase 10.6: Merchant Approvals & Mutation Tools Foundation
+# Review Notes — Phase 10.6: Merchant Approvals & Mutation Tools Foundation (Containment Fix)
 
-We have reviewed the architectural implementations and safety boundaries configured for **Phase 10.6: Merchant Approvals & Mutation Tools Foundation**.
+We have reviewed the technical layout and security safety parameters configured for **Phase 10.6: Merchant Approvals & Mutation Tools Foundation** to ensure complete containment.
 
 ---
 
 ## Architectural Review Items
 
-### 1. Interception Strategy
-- **Isolation**: AI engines remain stateless and are strictly forbidden from directly updating Shopify data. By implementing mutation interception inside `executeToolWithContextRaw`, we guarantee that no code path can trigger `shopify.products.update` or `theme.assets.patch` without routing through approvals.
-- **Payload Sanitization**: The gateway ensures no access tokens, bypass secrets, or sensitive credentials leak into the `details` payload of the approval requests, preserving zero-PII leak safety parameters.
+### 1. Proposal-Only Scope Enforcement
+- **Gateway Boundary**: The Tool Gateway intercepts `"catalog.products.propose_update"` strictly. Any attempt by the agent runtime to execute theme mutations or direct catalog writes fails authorization since these capabilities are absent from definitions.
+- **Zero Mutative Code execution**: The POST decide router does not execute, commit, or sync any Shopify metadata or local state changes. Decisions strictly record merchant consensus and transition status flags inside the proposals catalog.
 
-### 2. Double-Commit State Sync
-- When an approval is accepted, the router commits mock catalog updates to the local mock products cache and simultaneously pushes to the Firestore `product_snapshots` collection (if database mode is configured). This ensures a consistent view across in-memory runs and persistent database clients alike.
+### 2. Dynamic Route Projection (Client Layer Separation)
+- The legacy attributes (`details.title`, `details.fields`, `details.before`, etc.) are constructed entirely inside Express router responses on-the-fly. They are completely absent from Firestore collections. This effectively isolates the backend repository databases from storing raw developer prompt arguments, secrets, tokens, or PII metadata, while providing 100% backward compatibility for visual client layouts.
 
-### 3. Tenant Boundary Verification
-- The GET `/api/approvals` and POST `/api/approvals/:id/decide` endpoints have been hardened to reject cross-tenant operations:
-  - If a merchant attempts to query a shop belonging to a different organization, a `403 Forbidden` status is returned.
-  - If a decide payload contains an `organizationId` different from the approval's parent tenant, the operation is blocked.
-
-### 4. Telemetry and Audits
-- Chronological approval actions (`APPROVAL_CREATED`, `APPROVAL_APPROVED`, `APPROVAL_APPLIED`, `APPROVAL_REJECTED`) are strictly audited via the async `writeAuditEvent` framework.
-- The `agent_audit_logs` record the exact sequence of transitions, ensuring complete transparency and compliance.
+### 3. Dynamic Telemetry Scrubbing
+- Gateways filter incoming properties strictly against an allowlist (`title`, `vendor`, `productType`, `status`, `tags`). Unpermitted arguments are discarded immediately at execution entry.
+- Raw tool arguments are filtered out from the outcome response payloads, returning a summarized shape instead (`argsCount`, `targetId`, `allowedFields`).

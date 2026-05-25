@@ -72,7 +72,14 @@ export interface ToolDefinition {
   riskLevel: 'Low' | 'Medium' | 'High';
 }
 
-export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED" | "APPLIED" | "FAILED";
+export type ApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export type AllowedProductProposalField =
+  | "title"
+  | "vendor"
+  | "productType"
+  | "status"
+  | "tags";
 
 export interface ApprovalRequest {
   id: string;
@@ -80,30 +87,25 @@ export interface ApprovalRequest {
   storeConnectionId: string;
   agentInstallationId: string;
   agentId: string;
-  toolName: string;
+  toolName: "catalog.products.propose_update";
   requestedBy: string; // Agent name
   requestedAt: string;
   decidedAt?: string;
   decidedBy?: string;
   status: ApprovalStatus;
   riskLevel: 'Low' | 'Medium' | 'High';
-  summary: string;
-  beforeState: string;
-  afterState: string;
-  diff?: string;
-  // Keep backward-compatible properties for legacy routes
-  actionType: 'PRODUCT_UPDATE' | 'THEME_PATCH';
+  targetType: 'PRODUCT_PROPOSAL';
   targetId: string;
-  details: {
-    title: string;
-    before: string;
-    after: string;
-    summary: string;
-    productId?: number;
-    themeId?: string;
-    fields?: any;
-    patch?: string;
+  proposedChangesSummary: string;
+  diffSummary: string;
+  sanitizedPayload: {
+    title?: string;
+    vendor?: string;
+    productType?: string;
+    status?: string;
+    tags?: string[];
   };
+  allowedFields: AllowedProductProposalField[];
 }
 
 export type AuditDecision = "allowed" | "blocked" | "completed" | "failed";

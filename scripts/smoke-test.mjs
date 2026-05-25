@@ -766,7 +766,7 @@ async function runSuite() {
       body: JSON.stringify({
         shop,
         agentId: "agent_product_intelligence",
-        message: "simulate tool catalog.products.update"
+        message: "simulate tool catalog.products.propose_update"
       })
     });
 
@@ -786,12 +786,12 @@ async function runSuite() {
       throw new Error(`Expected approvals to be an array, got: ${typeof approvals}`);
     }
 
-    // Find the newly created PENDING approval request for catalog.products.update
+    // Find the newly created PENDING approval request for catalog.products.propose_update
     const pendingApproval = approvals.find(
-      a => a.status === "PENDING" && a.toolName === "catalog.products.update"
+      a => a.status === "PENDING" && a.toolName === "catalog.products.propose_update"
     );
     if (!pendingApproval) {
-      throw new Error("Expected to find a PENDING approval request for catalog.products.update.");
+      throw new Error("Expected to find a PENDING approval request for catalog.products.propose_update.");
     }
 
     if (pendingApproval.riskLevel !== "Medium") {
@@ -827,7 +827,7 @@ async function runSuite() {
       throw new Error(`Expected HTTP 403 Forbidden for cross-tenant POST decide, got: ${resDecideWrong.status}`);
     }
 
-    // 5. Approve the request (expect 200 and state APPLIED)
+    // 5. Approve the request (expect 200 and state APPROVED only, execution deferred)
     const resDecideRight = await fetch(decideUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -838,11 +838,14 @@ async function runSuite() {
     });
     await checkResponse(resDecideRight);
     const decideResult = await resDecideRight.json();
-    if (decideResult.status !== "APPLIED" && decideResult.status !== "APPROVED") {
-      throw new Error(`Expected decision status to be APPROVED or APPLIED, got: ${decideResult.status}`);
+    if (decideResult.status !== "APPROVED") {
+      throw new Error(`Expected decision status to be APPROVED, got: ${decideResult.status}`);
+    }
+    if (decideResult.executionDeferred !== true) {
+      throw new Error("Expected executionDeferred flag to be true in Phase 10.6.");
     }
 
-    // 6. Verify that mock catalog changes were committed successfully
+    // 6. Verify that no mock catalog changes were committed (mutation containment)
     const resProducts = await fetch(`${baseUrl}/api/catalog/products?shop=${shop}&t=${timestamp}`);
     await checkResponse(resProducts);
     const products = await resProducts.json();
@@ -850,11 +853,11 @@ async function runSuite() {
     if (!targetProduct) {
       throw new Error("Expected to find product 101 in catalog.");
     }
-    if (targetProduct.title !== "Super Polished Tee") {
-      throw new Error(`Expected product 101 title to be updated to 'Super Polished Tee', got: ${targetProduct.title}`);
+    if (targetProduct.title === "Super Polished Tee") {
+      throw new Error("Security Violation: catalog mutation must not execute or change state in Phase 10.6.");
     }
 
-    // 7. Verify audit logs trail for APPROVAL_CREATED, APPROVAL_APPROVED, and APPROVAL_APPLIED
+    // 7. Verify audit logs trail for APPROVAL_CREATED and APPROVAL_APPROVED
     const resAudits = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
     await checkResponse(resAudits);
     const audits = await resAudits.json();
@@ -865,12 +868,12 @@ async function runSuite() {
 
     if (!createdEvent) throw new Error("Missing APPROVAL_CREATED audit log event.");
     if (!approvedEvent) throw new Error("Missing APPROVAL_APPROVED audit log event.");
-    if (!appliedEvent) throw new Error("Missing APPROVAL_APPLIED audit log event.");
+    if (appliedEvent) throw new Error("Security Violation: APPROVAL_APPLIED event must not exist in Phase 10.6.");
 
     // Check zero-PII/security constraints on approvals
     scanForForbiddenKeys(pendingApproval);
 
-    console.log(`   [APPROVAL TESTS] Successfully intercepted tool catalog.products.update, created approval request, rejected unauthorized access, committed mock catalog changes, and verified chronological audit trails.`);
+    console.log(`   [APPROVAL TESTS] Successfully intercepted proposal tool catalog.products.propose_update, validated sanitized containment shapes, verified zero mutation execution, and confirmed deferred execution approvals.`);
   });
 
   // Summary Printing

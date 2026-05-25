@@ -135,17 +135,10 @@ export const ENABLED_TOOLS: ToolDefinition[] = [
     riskLevel: "Low"
   },
   {
-    name: "catalog.products.update",
-    description: "Update product snapshot attributes, pricing, or status in the catalog index (requires merchant approval).",
+    name: "catalog.products.propose_update",
+    description: "Propose catalog product snapshot attribute changes (requires merchant approval).",
     parameters: '{"productId": "string", "fields": "object", "summary": "string"}',
-    requiredScope: "write_products",
+    requiredScope: "read_products",
     riskLevel: "Medium"
-  },
-  {
-    name: "theme.assets.patch",
-    description: "Patch theme layout or CSS styles in the active theme (requires merchant approval).",
-    parameters: '{"themeId": "string", "patch": "string", "summary": "string"}',
-    requiredScope: "write_themes",
-    riskLevel: "High"
   }
 ];

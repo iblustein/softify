@@ -1,14 +1,44 @@
 import { Router } from "express";
 import { getRepositories } from "../repositories/repository-provider.js";
 import { writeAuditEvent } from "../services/audit-log.service.js";
-import { getMockProducts, setMockProducts } from "../data/mock-products.js";
-import { getActiveThemeCode, setActiveThemeCode } from "../data/mock-theme.js";
 import { normalizeShopDomain } from "../services/shopify-oauth.service.js";
 import { isFirestoreConfigured } from "../config/firestore.config.js";
 import { AuditEventNames } from "../domain/types.js";
 import * as approvalService from "../services/approval.service.js";
 
 const router = Router();
+
+/**
+ * Dynamically computes legacy compatible fields for backward compatibility with the frontend/clients
+ * without persisting any raw details, raw patches, or arbitrary payload states in Firestore.
+ */
+function buildLegacyApprovalShape(a: any): any {
+  if (!a) return a;
+
+  const targetId = a.targetId || "101";
+  const proposedChangesSummary = a.proposedChangesSummary || "";
+  const sanitizedPayload = a.sanitizedPayload || {};
+
+  const detailsTitle = proposedChangesSummary 
+    ? `Proposed changes: ${proposedChangesSummary}`
+    : (a.details?.title || `Proposed product update: ${targetId}`);
+
+  return {
+    ...a,
+    actionType: "PRODUCT_UPDATE",
+    beforeState: "Status: Sync product snapshot properties",
+    afterState: JSON.stringify(sanitizedPayload),
+    diff: a.diffSummary || "",
+    details: {
+      title: detailsTitle,
+      before: "Status: Sync product snapshot properties",
+      after: JSON.stringify(sanitizedPayload),
+      summary: proposedChangesSummary,
+      productId: Number(targetId),
+      fields: sanitizedPayload
+    }
+  };
+}
 
 router.get("/approvals", async (req: any, res: any) => {
   try {
@@ -56,7 +86,8 @@ router.get("/approvals", async (req: any, res: any) => {
     // Prefer database records if Firestore is configured (never fall back to in-memory), otherwise use filtered cache
     const finalApprovals = isFirestore ? filteredApprovals : (filteredApprovals.length > 0 ? filteredApprovals : legacyQueue);
 
-    res.json(finalApprovals);
+    // Map through legacy compat builder on-the-fly
+    res.json(finalApprovals.map(buildLegacyApprovalShape));
   } catch (error: any) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -90,17 +121,17 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
           storeConnectionId: (legacyItem as any).storeConnectionId || "store-luminary",
           agentInstallationId: (legacyItem as any).agentInstallationId || "inst-mock",
           agentId: legacyItem.agentId,
-          toolName: "shopify.prepareProductUpdate",
+          toolName: "catalog.products.propose_update",
           requestedBy: legacyItem.agentName,
           requestedAt: legacyItem.timestamp,
           status: legacyItem.status as any,
           riskLevel: "Medium",
-          summary: legacyItem.details.summary,
-          beforeState: legacyItem.details.before,
-          afterState: legacyItem.details.after,
-          actionType: legacyItem.actionType,
+          targetType: "PRODUCT_PROPOSAL",
           targetId: legacyItem.targetId,
-          details: legacyItem.details
+          proposedChangesSummary: legacyItem.details.summary,
+          diffSummary: legacyItem.details.summary,
+          sanitizedPayload: legacyItem.details.fields || {},
+          allowedFields: ["title", "vendor", "productType", "status", "tags"]
         };
       }
     }
@@ -121,7 +152,7 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
     const now = new Date().toISOString();
 
     if (decision === "REJECT") {
-      // A. Update repository status
+      // Update repository status
       const updated = await repos.approvals.updateApprovalRequest(id, {
         status: "REJECTED",
         decidedAt: now,
@@ -135,7 +166,9 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
         approvalService.approvalQueue[queueIdx].decidedAt = now;
       }
 
-      // B. Audit decision using writeAuditEvent
+      const legacyCompatItem = buildLegacyApprovalShape(approvalItem);
+
+      // Audit decision using writeAuditEvent
       await writeAuditEvent({
         organizationId: approvalItem.organizationId,
         storeConnectionId: approvalItem.storeConnectionId,
@@ -144,7 +177,7 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
         toolName: approvalItem.toolName,
         initiator: "Shop Owner",
         event: AuditEventNames.APPROVAL_REJECTED,
-        description: `Rejected modification proposed by ${approvalItem.requestedBy}: '${approvalItem.details.title}'`,
+        description: `Rejected modification proposed by ${approvalItem.requestedBy}: '${legacyCompatItem.details.title}'`,
         decision: "blocked",
         reason: "merchant_rejected",
         metadata: {
@@ -156,11 +189,11 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
         }
       });
 
-      return res.json(updated || approvalItem);
+      return res.json(buildLegacyApprovalShape(updated || approvalItem));
     } else {
       // decision === "APPROVE"
-      // A. Mark as APPROVED
-      await repos.approvals.updateApprovalRequest(id, {
+      // Mark as APPROVED in database
+      const updated = await repos.approvals.updateApprovalRequest(id, {
         status: "APPROVED",
         decidedAt: now,
         decidedBy: "Shop Owner"
@@ -173,6 +206,8 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
         approvalService.approvalQueue[queueIdx].decidedAt = now;
       }
 
+      const legacyCompatItem = buildLegacyApprovalShape(approvalItem);
+
       // Audit approval decision
       await writeAuditEvent({
         organizationId: approvalItem.organizationId,
@@ -182,7 +217,7 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
         toolName: approvalItem.toolName,
         initiator: "Shop Owner",
         event: AuditEventNames.APPROVAL_APPROVED,
-        description: `Approved changes for '${approvalItem.details.title}' proposed by ${approvalItem.requestedBy}`,
+        description: `Approved changes for '${legacyCompatItem.details.title}' proposed by ${approvalItem.requestedBy}`,
         decision: "allowed",
         metadata: {
           organizationId: approvalItem.organizationId,
@@ -192,99 +227,13 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
         }
       });
 
-      try {
-        // Execute/apply the write tool outcome!
-        if (approvalItem.actionType === "PRODUCT_UPDATE") {
-          const productId = approvalItem.details.productId;
-          const fieldsToApply = approvalItem.details.fields;
-
-          // Update local in-memory mock products
-          const products = getMockProducts();
-          const prodIdx = products.findIndex(p => p.id === productId);
-          if (prodIdx !== -1) {
-            products[prodIdx] = {
-              ...products[prodIdx],
-              ...fieldsToApply
-            };
-            setMockProducts(products);
-          }
-
-          // Update Firestore product snapshots if configured
-          const storeConn = await repos.stores.getStoreConnectionById(approvalItem.storeConnectionId);
-          if (storeConn) {
-            const cleanShop = storeConn.storeUrl;
-            const snapshots = await repos.products.listProductSnapshotsByShop(cleanShop);
-            const targetSnap = snapshots.find(s => s.shopifyProductId === String(productId));
-            if (targetSnap) {
-              const updatedSnap = {
-                ...targetSnap,
-                ...fieldsToApply,
-                updatedAt: now
-              };
-              await repos.products.upsertProductSnapshot(updatedSnap);
-            }
-          }
-        } else if (approvalItem.actionType === "THEME_PATCH") {
-          if (approvalItem.details.patch) {
-            const currentThemeCode = getActiveThemeCode();
-            setActiveThemeCode(currentThemeCode + "\n" + approvalItem.details.patch);
-          }
-        }
-
-        // Update state to APPLIED
-        const updated = await repos.approvals.updateApprovalRequest(id, {
-          status: "APPLIED"
-        });
-
-        // Audit execution success using writeAuditEvent
-        await writeAuditEvent({
-          organizationId: approvalItem.organizationId,
-          storeConnectionId: approvalItem.storeConnectionId,
-          agentInstallationId: approvalItem.agentInstallationId,
-          agentId: approvalItem.agentId,
-          toolName: approvalItem.toolName,
-          initiator: "system",
-          event: AuditEventNames.APPROVAL_APPLIED,
-          description: `Successfully applied approved modifications for approval request: ${id}`,
-          decision: "completed",
-          metadata: {
-            organizationId: approvalItem.organizationId,
-            storeConnectionId: approvalItem.storeConnectionId,
-            approvalId: id,
-            decision: "completed"
-          }
-        });
-
-        return res.json(updated || approvalItem);
-      } catch (applyErr: any) {
-        // Update state to FAILED
-        await repos.approvals.updateApprovalRequest(id, {
-          status: "FAILED"
-        });
-
-        // Audit execution failure using writeAuditEvent
-        await writeAuditEvent({
-          organizationId: approvalItem.organizationId,
-          storeConnectionId: approvalItem.storeConnectionId,
-          agentInstallationId: approvalItem.agentInstallationId,
-          agentId: approvalItem.agentId,
-          toolName: approvalItem.toolName,
-          initiator: "system",
-          event: AuditEventNames.APPROVAL_FAILED,
-          description: `Failed to apply approved modifications for approval request: ${id}. Error: ${applyErr.message}`,
-          decision: "failed",
-          reason: "apply_execution_failed",
-          metadata: {
-            organizationId: approvalItem.organizationId,
-            storeConnectionId: approvalItem.storeConnectionId,
-            approvalId: id,
-            decision: "failed",
-            reason: "apply_execution_failed"
-          }
-        });
-
-        return res.status(500).json({ ok: false, error: `Failed to apply approval modifications: ${applyErr.message}` });
-      }
+      // Return a containment response indicating deferred execution without invoking mutations
+      return res.json({
+        ok: true,
+        status: "APPROVED",
+        executionDeferred: true,
+        approval: buildLegacyApprovalShape(updated || approvalItem)
+      });
     }
   } catch (error: any) {
     const isNotFound = error.message === "Approval request not found";

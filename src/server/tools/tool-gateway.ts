@@ -7,7 +7,7 @@ import { ToolExecutionContext } from "../services/tool-execution-context.service
 import { readShopInfo, readProducts, ShopifyAdminApiError } from "../services/shopify-admin-client.service.js";
 import { getRepositories } from "../repositories/repository-provider.js";
 import * as insightsService from "../services/catalog-insights.service.js";
-import { AuditEventNames } from "../domain/types.js";
+import { AuditEventNames, AllowedProductProposalField } from "../domain/types.js";
 
 export interface ExecuteToolResult {
   toolName: string;
@@ -236,28 +236,40 @@ async function executeToolWithContextRaw(
     };
   }
 
-  // Intercept write/mutation tools and convert them into approvals!
-  if (toolName === "catalog.products.update" || toolName === "theme.assets.patch") {
+  // Intercept write/proposal tools and convert them into approvals!
+  if (toolName === "catalog.products.propose_update") {
     const repos = getRepositories();
-    const isProduct = toolName === "catalog.products.update";
-    const riskLevel = isProduct ? "Medium" : "High";
-    const actionType = isProduct ? "PRODUCT_UPDATE" : "THEME_PATCH";
-    const targetId = isProduct ? String(cleanArgs.productId || "") : String(cleanArgs.themeId || "");
-    const title = isProduct 
-      ? `Update catalog product snapshot: '${targetId}'`
-      : `Apply custom style/layout patch to active theme: '${targetId}'`;
+    const riskLevel = "Medium";
+    const targetId = String(cleanArgs.productId || "");
+    const summary = cleanArgs.summary || "AI-suggested catalog attributes/fields description optimization.";
     
-    const summary = cleanArgs.summary || (isProduct 
-      ? "AI-suggested catalog attributes/fields description optimization."
-      : "AI-suggested theme layout rules patch.");
+    // Strict union types and allowedFields definition
+    const allowedFieldsList: AllowedProductProposalField[] = ["title", "vendor", "productType", "status", "tags"];
     
-    const beforeState = isProduct
-      ? "Standard synced catalog metadata."
-      : "Active CSS/HTML theme layout code rules.";
+    // Sanitize payload strictly: title, vendor, productType, status, tags
+    const incomingFields = cleanArgs.fields || {};
+    const sanitizedPayload: {
+      title?: string;
+      vendor?: string;
+      productType?: string;
+      status?: string;
+      tags?: string[];
+    } = {};
+
+    if (typeof incomingFields.title === "string") sanitizedPayload.title = incomingFields.title;
+    if (typeof incomingFields.vendor === "string") sanitizedPayload.vendor = incomingFields.vendor;
+    if (typeof incomingFields.productType === "string") sanitizedPayload.productType = incomingFields.productType;
+    if (typeof incomingFields.status === "string") sanitizedPayload.status = incomingFields.status;
+    if (Array.isArray(incomingFields.tags)) {
+      sanitizedPayload.tags = incomingFields.tags.map((t: any) => String(t));
+    }
+
+    const proposedChangesSummary = summary;
     
-    const afterState = isProduct
-      ? JSON.stringify(cleanArgs.fields || {})
-      : String(cleanArgs.patch || "");
+    // Diff summary
+    const diffSummary = Object.keys(sanitizedPayload)
+      .map(k => `${k}: proposed change`)
+      .join(", ") || "No allowed changes proposed";
 
     const approvalId = `APV-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -271,22 +283,12 @@ async function executeToolWithContextRaw(
       requestedBy: context.agentDefinition.name,
       status: "PENDING",
       riskLevel,
-      summary,
-      beforeState,
-      afterState,
-      diff: "",
-      actionType,
+      targetType: "PRODUCT_PROPOSAL",
       targetId,
-      details: {
-        title,
-        before: beforeState,
-        after: afterState,
-        summary,
-        productId: isProduct ? Number(targetId) : undefined,
-        themeId: !isProduct ? targetId : undefined,
-        fields: isProduct ? cleanArgs.fields : undefined,
-        patch: !isProduct ? cleanArgs.patch : undefined
-      }
+      proposedChangesSummary,
+      diffSummary,
+      sanitizedPayload,
+      allowedFields: allowedFieldsList
     });
 
     // Audit approval creation using writeAuditEvent
@@ -314,9 +316,16 @@ async function executeToolWithContextRaw(
       }
     });
 
+    // Return sanitized arguments summary only: argsCount, targetId, allowedFields
+    const sanitizedArgsSummary = {
+      argsCount: Object.keys(cleanArgs).length,
+      targetId,
+      allowedFields: allowedFieldsList
+    };
+
     return {
       toolName,
-      args: cleanArgs,
+      args: sanitizedArgsSummary,
       status: "failed", // Blocked waiting for approval
       result: {
         requires_approval: true,
