@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { getRepositories } from "../repositories/repository-provider.js";
-import { writeAuditEvent } from "../services/audit-log.service.js";
+import { writeAuditEvent, getAuditLogs } from "../services/audit-log.service.js";
 import { normalizeShopDomain } from "../services/shopify-oauth.service.js";
 import { isFirestoreConfigured } from "../config/firestore.config.js";
 import { AuditEventNames } from "../domain/types.js";
@@ -43,10 +43,17 @@ function buildLegacyApprovalShape(a: any): any {
 
 router.get("/approvals", async (req: any, res: any) => {
   try {
-    const { organizationId, shop } = req.query;
+    const { organizationId, shop, status } = req.query;
 
     if (!organizationId || typeof organizationId !== "string") {
       return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+    }
+
+    if (status && typeof status === "string") {
+      const validStatuses = ["PENDING", "APPROVED", "REJECTED", "EXECUTING", "APPLIED", "FAILED"];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ ok: false, error: "Invalid status parameter." });
+      }
     }
 
     const repos = getRepositories();
@@ -85,10 +92,15 @@ router.get("/approvals", async (req: any, res: any) => {
     })).filter(a => a.organizationId === organizationId);
     
     // Prefer database records if Firestore is configured (never fall back to in-memory), otherwise use filtered cache
-    const finalApprovals = isFirestore ? filteredApprovals : (filteredApprovals.length > 0 ? filteredApprovals : legacyQueue);
+    const finalApprovals: any[] = isFirestore ? filteredApprovals : (filteredApprovals.length > 0 ? filteredApprovals : legacyQueue);
+
+    let matchedApprovals: any[] = finalApprovals;
+    if (status && typeof status === "string") {
+      matchedApprovals = finalApprovals.filter(a => a.status === status);
+    }
 
     // Map through legacy compat builder on-the-fly
-    res.json(finalApprovals.map(buildLegacyApprovalShape));
+    res.json(matchedApprovals.map(buildLegacyApprovalShape));
   } catch (error: any) {
     res.status(500).json({ ok: false, error: error.message });
   }
@@ -333,6 +345,480 @@ router.post("/approvals/:id/execute", async (req: any, res: any) => {
 
     const statusCode = isNotFound ? 404 : (isTenantViolation ? 403 : (isBlocked || isConflict ? 400 : 500));
     res.status(statusCode).json({ ok: false, error: error.message });
+  }
+});
+
+router.get("/approvals/:id", async (req: any, res: any) => {
+  const { id } = req.params;
+  const organizationId = req.query.organizationId || req.body.organizationId;
+  const shop = req.query.shop || req.body.shop;
+
+  try {
+    if (!organizationId || typeof organizationId !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+    }
+
+    const repos = getRepositories();
+    let approvalItem = await repos.approvals.getApprovalById(id);
+
+    if (!approvalItem) {
+      const legacyItem = approvalService.getApprovals().find(a => a.id === id);
+      if (legacyItem) {
+        approvalItem = {
+          id: legacyItem.id,
+          organizationId: (legacyItem as any).organizationId || organizationId,
+          storeConnectionId: (legacyItem as any).storeConnectionId || "store-luminary",
+          agentInstallationId: (legacyItem as any).agentInstallationId || "inst-mock",
+          agentId: legacyItem.agentId,
+          toolName: "catalog.products.propose_update",
+          requestedBy: legacyItem.agentName,
+          requestedAt: legacyItem.timestamp,
+          status: legacyItem.status as any,
+          riskLevel: "Medium",
+          targetType: "PRODUCT_PROPOSAL",
+          targetId: legacyItem.targetId,
+          proposedChangesSummary: legacyItem.details.summary,
+          diffSummary: legacyItem.details.summary,
+          sanitizedPayload: legacyItem.details.fields || {},
+          allowedFields: ["title", "vendor", "productType", "status", "tags"]
+        };
+      }
+    }
+
+    if (!approvalItem) {
+      return res.status(404).json({ ok: false, error: "Approval request not found" });
+    }
+
+    if (approvalItem.organizationId !== organizationId) {
+      return res.status(403).json({ ok: false, error: "Access denied. Approval request does not belong to this organization." });
+    }
+
+    if (shop && typeof shop === "string") {
+      const cleanShop = normalizeShopDomain(shop);
+      const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+      if (!storeConnection || storeConnection.id !== approvalItem.storeConnectionId) {
+        return res.status(400).json({ ok: false, error: "Provided shop does not match the approval request." });
+      }
+    }
+
+    // Log APPROVAL_VIEWED audit trail
+    await writeAuditEvent({
+      organizationId,
+      storeConnectionId: approvalItem.storeConnectionId,
+      agentInstallationId: approvalItem.agentInstallationId,
+      agentId: approvalItem.agentId,
+      toolName: approvalItem.toolName,
+      initiator: "system",
+      event: AuditEventNames.APPROVAL_VIEWED,
+      description: `Viewed operational details of approval request '${id}'`,
+      decision: "allowed",
+      metadata: {
+        approvalId: id,
+        decision: "allowed"
+      }
+    });
+
+    // Sanitized Operational Response Shape (Strict: no legacy adaptor)
+    return res.json({
+      ok: true,
+      approval: {
+        id: approvalItem.id,
+        organizationId: approvalItem.organizationId,
+        storeConnectionId: approvalItem.storeConnectionId,
+        agentInstallationId: approvalItem.agentInstallationId,
+        agentId: approvalItem.agentId,
+        toolName: approvalItem.toolName,
+        requestedBy: approvalItem.requestedBy,
+        requestedAt: approvalItem.requestedAt,
+        decidedAt: approvalItem.decidedAt,
+        decidedBy: approvalItem.decidedBy,
+        executedAt: approvalItem.executedAt,
+        executedBy: approvalItem.executedBy,
+        failureReason: approvalItem.failureReason,
+        status: approvalItem.status,
+        riskLevel: approvalItem.riskLevel,
+        targetType: approvalItem.targetType,
+        targetId: approvalItem.targetId,
+        proposedChangesSummary: approvalItem.proposedChangesSummary,
+        diffSummary: approvalItem.diffSummary,
+        allowedFields: approvalItem.allowedFields,
+        executionStartedAt: approvalItem.executionStartedAt,
+        executionFinishedAt: approvalItem.executionFinishedAt,
+        executionAttemptCount: approvalItem.executionAttemptCount,
+        lastExecutionStatus: approvalItem.lastExecutionStatus,
+        lastFailureReason: approvalItem.lastFailureReason,
+        lastFailureCode: approvalItem.lastFailureCode,
+        lastBlockedReason: approvalItem.lastBlockedReason,
+        lastExecutedBy: approvalItem.lastExecutedBy,
+        lastExecutionCorrelationId: approvalItem.lastExecutionCorrelationId
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.get("/approvals/:id/audit", async (req: any, res: any) => {
+  const { id } = req.params;
+  const organizationId = req.query.organizationId || req.body.organizationId;
+
+  try {
+    if (!organizationId || typeof organizationId !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+    }
+
+    const repos = getRepositories();
+    const approvalItem = await repos.approvals.getApprovalById(id);
+
+    if (!approvalItem) {
+      return res.status(404).json({ ok: false, error: "Approval request not found" });
+    }
+
+    if (approvalItem.organizationId !== organizationId) {
+      return res.status(403).json({ ok: false, error: "Access denied. Approval request does not belong to this organization." });
+    }
+
+    // Retrieve via repository
+    const dbEvents = await repos.audit.getAuditEventsByOrganizationId(organizationId);
+    
+    // In-memory cache fallback strictly filtered by organizationId
+    const cachedLogs = getAuditLogs(organizationId, approvalItem.storeConnectionId);
+    
+    const finalLogs = (isFirestoreConfigured() ? dbEvents : (dbEvents.length > 0 ? dbEvents : cachedLogs)) as any[];
+
+    // Primary filter matching e.metadata?.approvalId === id, secondary context matching lastExecutionCorrelationId
+    const filteredEvents = finalLogs.filter(e => 
+      (e.metadata?.approvalId === id) || 
+      (e.correlationId && e.correlationId === id) ||
+      (approvalItem.lastExecutionCorrelationId && e.correlationId === approvalItem.lastExecutionCorrelationId)
+    );
+
+    // Log APPROVAL_AUDIT_VIEWED audit trail
+    await writeAuditEvent({
+      organizationId,
+      storeConnectionId: approvalItem.storeConnectionId,
+      agentInstallationId: approvalItem.agentInstallationId,
+      agentId: approvalItem.agentId,
+      toolName: approvalItem.toolName,
+      initiator: "system",
+      event: AuditEventNames.APPROVAL_AUDIT_VIEWED,
+      description: `Viewed audit trail logs of approval request '${id}'`,
+      decision: "allowed",
+      metadata: {
+        approvalId: id,
+        decision: "allowed"
+      }
+    });
+
+    return res.json(filteredEvents);
+  } catch (error: any) {
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.post("/approvals/:id/reset-failed", async (req: any, res: any) => {
+  const { id } = req.params;
+  const organizationId = req.body.organizationId || req.query.organizationId;
+  const performedBy = req.body.performedBy || req.query.performedBy || req.body.actor || req.query.actor;
+  const shop = req.body.shop || req.query.shop;
+  const storeConnectionIdInput = req.body.storeConnectionId || req.query.storeConnectionId;
+
+  try {
+    if (!organizationId || typeof organizationId !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+    }
+
+    if (!performedBy || typeof performedBy !== "string") {
+      return res.status(400).json({ ok: false, error: "performedBy or actor parameter is required. \"system\" is reserved and not allowed for API calls." });
+    }
+
+    if (performedBy === "system") {
+      return res.status(400).json({ ok: false, error: "\"system\" actor is reserved for internal processes only and cannot be passed in public API calls." });
+    }
+
+    const repos = getRepositories();
+    const approvalItem = await repos.approvals.getApprovalById(id);
+
+    if (!approvalItem) {
+      return res.status(404).json({ ok: false, error: "Approval request not found" });
+    }
+
+    // Strict tenant scoping check
+    if (approvalItem.organizationId !== organizationId) {
+      await writeAuditEvent({
+        organizationId: approvalItem.organizationId,
+        storeConnectionId: approvalItem.storeConnectionId,
+        agentInstallationId: approvalItem.agentInstallationId,
+        agentId: approvalItem.agentId,
+        toolName: approvalItem.toolName,
+        initiator: performedBy,
+        event: AuditEventNames.APPROVAL_RECOVERY_BLOCKED,
+        description: `Reset recovery blocked for approval '${id}': Access denied.`,
+        decision: "blocked",
+        reason: "tenant_isolation_violation",
+        metadata: {
+          approvalId: id,
+          performedBy,
+          reason: "tenant_isolation_violation",
+          decision: "blocked"
+        }
+      });
+      return res.status(403).json({ ok: false, error: "Access denied. Approval request does not belong to this organization." });
+    }
+
+    // Determine target store connection
+    let validatedStoreConnId = storeConnectionIdInput;
+    if (shop && typeof shop === "string") {
+      const cleanShop = normalizeShopDomain(shop);
+      const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+      if (!storeConnection) {
+        return res.status(404).json({ ok: false, error: "Store connection not found." });
+      }
+      validatedStoreConnId = storeConnection.id;
+    }
+
+    // Recovery mismatch check
+    if (validatedStoreConnId && validatedStoreConnId !== approvalItem.storeConnectionId) {
+      await writeAuditEvent({
+        organizationId,
+        storeConnectionId: approvalItem.storeConnectionId,
+        agentInstallationId: approvalItem.agentInstallationId,
+        agentId: approvalItem.agentId,
+        toolName: approvalItem.toolName,
+        initiator: performedBy,
+        event: AuditEventNames.APPROVAL_RECOVERY_BLOCKED,
+        description: `Reset recovery blocked for approval '${id}': Store connection mismatch.`,
+        decision: "blocked",
+        reason: "store_connection_mismatch",
+        metadata: {
+          approvalId: id,
+          performedBy,
+          reason: "store_connection_mismatch",
+          decision: "blocked"
+        }
+      });
+      return res.status(400).json({ ok: false, error: "Store connection mismatch." });
+    }
+
+    if (approvalItem.status !== "FAILED") {
+      await writeAuditEvent({
+        organizationId,
+        storeConnectionId: approvalItem.storeConnectionId,
+        agentInstallationId: approvalItem.agentInstallationId,
+        agentId: approvalItem.agentId,
+        toolName: approvalItem.toolName,
+        initiator: performedBy,
+        event: AuditEventNames.APPROVAL_RECOVERY_BLOCKED,
+        description: `Reset recovery blocked for approval '${id}': expected status FAILED, got ${approvalItem.status}.`,
+        decision: "blocked",
+        reason: "invalid_lifecycle_state",
+        metadata: {
+          approvalId: id,
+          performedBy,
+          reason: "invalid_lifecycle_state",
+          decision: "blocked"
+        }
+      });
+      return res.status(400).json({ ok: false, error: `Invalid status: expected FAILED state, got ${approvalItem.status}.` });
+    }
+
+    const updated = await repos.approvals.resetFailedApproval({
+      approvalId: id,
+      organizationId,
+      storeConnectionId: approvalItem.storeConnectionId,
+      performedBy
+    });
+
+    // Log APPROVAL_RECOVERY_RESET audit trail
+    await writeAuditEvent({
+      organizationId: approvalItem.organizationId,
+      storeConnectionId: approvalItem.storeConnectionId,
+      agentInstallationId: approvalItem.agentInstallationId,
+      agentId: approvalItem.agentId,
+      toolName: approvalItem.toolName,
+      initiator: performedBy,
+      event: AuditEventNames.APPROVAL_RECOVERY_RESET,
+      description: `Reset failed approval request '${id}' back to APPROVED status by ${performedBy}`,
+      decision: "allowed",
+      metadata: {
+        approvalId: id,
+        performedBy,
+        decision: "allowed"
+      }
+    });
+
+    return res.json({
+      ok: true,
+      approval: buildLegacyApprovalShape(updated)
+    });
+  } catch (error: any) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
+
+router.post("/approvals/:id/mark-execution-failed", async (req: any, res: any) => {
+  const { id } = req.params;
+  const organizationId = req.body.organizationId || req.query.organizationId;
+  const performedBy = req.body.performedBy || req.query.performedBy || req.body.actor || req.query.actor;
+  const reasonInput = req.body.reason || "execution_timeout";
+  const shop = req.body.shop || req.query.shop;
+  const storeConnectionIdInput = req.body.storeConnectionId || req.query.storeConnectionId;
+
+  try {
+    if (!organizationId || typeof organizationId !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+    }
+
+    if (!performedBy || typeof performedBy !== "string") {
+      return res.status(400).json({ ok: false, error: "performedBy or actor parameter is required. \"system\" is reserved and not allowed for API calls." });
+    }
+
+    if (performedBy === "system") {
+      return res.status(400).json({ ok: false, error: "\"system\" actor is reserved for internal processes only and cannot be passed in public API calls." });
+    }
+
+    const allowlist = ["execution_timeout", "operator_marked_stuck", "manual_recovery"];
+    if (!allowlist.includes(reasonInput)) {
+      return res.status(400).json({ ok: false, error: `Invalid recovery reason. Accepted reasons: ${allowlist.join(", ")}` });
+    }
+
+    const repos = getRepositories();
+    const approvalItem = await repos.approvals.getApprovalById(id);
+
+    if (!approvalItem) {
+      return res.status(404).json({ ok: false, error: "Approval request not found" });
+    }
+
+    // Strict tenant scoping check
+    if (approvalItem.organizationId !== organizationId) {
+      await writeAuditEvent({
+        organizationId: approvalItem.organizationId,
+        storeConnectionId: approvalItem.storeConnectionId,
+        agentInstallationId: approvalItem.agentInstallationId,
+        agentId: approvalItem.agentId,
+        toolName: approvalItem.toolName,
+        initiator: performedBy,
+        event: AuditEventNames.APPROVAL_RECOVERY_BLOCKED,
+        description: `Stuck timeout recovery blocked for approval '${id}': Access denied.`,
+        decision: "blocked",
+        reason: "tenant_isolation_violation",
+        metadata: {
+          approvalId: id,
+          performedBy,
+          reason: "tenant_isolation_violation",
+          decision: "blocked"
+        }
+      });
+      return res.status(403).json({ ok: false, error: "Access denied. Approval request does not belong to this organization." });
+    }
+
+    // Determine target store connection
+    let validatedStoreConnId = storeConnectionIdInput;
+    if (shop && typeof shop === "string") {
+      const cleanShop = normalizeShopDomain(shop);
+      const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+      if (!storeConnection) {
+        return res.status(404).json({ ok: false, error: "Store connection not found." });
+      }
+      validatedStoreConnId = storeConnection.id;
+    }
+
+    // Recovery mismatch check
+    if (validatedStoreConnId && validatedStoreConnId !== approvalItem.storeConnectionId) {
+      await writeAuditEvent({
+        organizationId,
+        storeConnectionId: approvalItem.storeConnectionId,
+        agentInstallationId: approvalItem.agentInstallationId,
+        agentId: approvalItem.agentId,
+        toolName: approvalItem.toolName,
+        initiator: performedBy,
+        event: AuditEventNames.APPROVAL_RECOVERY_BLOCKED,
+        description: `Stuck timeout recovery blocked for approval '${id}': Store connection mismatch.`,
+        decision: "blocked",
+        reason: "store_connection_mismatch",
+        metadata: {
+          approvalId: id,
+          performedBy,
+          reason: "store_connection_mismatch",
+          decision: "blocked"
+        }
+      });
+      return res.status(400).json({ ok: false, error: "Store connection mismatch." });
+    }
+
+    if (approvalItem.status !== "EXECUTING") {
+      await writeAuditEvent({
+        organizationId,
+        storeConnectionId: approvalItem.storeConnectionId,
+        agentInstallationId: approvalItem.agentInstallationId,
+        agentId: approvalItem.agentId,
+        toolName: approvalItem.toolName,
+        initiator: performedBy,
+        event: AuditEventNames.APPROVAL_RECOVERY_BLOCKED,
+        description: `Stuck timeout recovery blocked for approval '${id}': expected status EXECUTING, got ${approvalItem.status}.`,
+        decision: "blocked",
+        reason: "invalid_lifecycle_state",
+        metadata: {
+          approvalId: id,
+          performedBy,
+          reason: "invalid_lifecycle_state",
+          decision: "blocked"
+        }
+      });
+      return res.status(400).json({ ok: false, error: `Invalid status: expected EXECUTING state, got ${approvalItem.status}.` });
+    }
+
+    // Configure timeout safe threshold bounds (strictly default back to 15m/900k on 0/negative env values)
+    const envStuckMs = Number(process.env.APPROVAL_EXECUTION_STUCK_TIMEOUT_MS);
+    const APPROVAL_EXECUTION_STUCK_TIMEOUT_MS = (!isNaN(envStuckMs) && envStuckMs > 0) ? envStuckMs : 900000;
+
+    const updated = await repos.approvals.markStuckExecutingAsFailed({
+      approvalId: id,
+      organizationId,
+      storeConnectionId: approvalItem.storeConnectionId,
+      timeoutMs: APPROVAL_EXECUTION_STUCK_TIMEOUT_MS,
+      performedBy,
+      reason: reasonInput as any
+    });
+
+    // Log APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED audit trail
+    await writeAuditEvent({
+      organizationId: approvalItem.organizationId,
+      storeConnectionId: approvalItem.storeConnectionId,
+      agentInstallationId: approvalItem.agentInstallationId,
+      agentId: approvalItem.agentId,
+      toolName: approvalItem.toolName,
+      initiator: performedBy,
+      event: AuditEventNames.APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED,
+      description: `Marked stuck execution approval request '${id}' as FAILED status by ${performedBy} due to ${reasonInput}`,
+      decision: "allowed",
+      metadata: {
+        approvalId: id,
+        performedBy,
+        decision: "allowed"
+      }
+    });
+
+    return res.json({
+      ok: true,
+      approval: buildLegacyApprovalShape(updated)
+    });
+  } catch (error: any) {
+    await writeAuditEvent({
+      organizationId,
+      event: AuditEventNames.APPROVAL_RECOVERY_BLOCKED,
+      initiator: performedBy || "system",
+      description: `Stuck timeout recovery blocked for approval '${id}': ${error.message}`,
+      decision: "blocked",
+      reason: "recovery_failed",
+      metadata: {
+        approvalId: id,
+        performedBy: performedBy || "system",
+        reason: "recovery_failed",
+        decision: "blocked"
+      }
+    });
+    res.status(400).json({ ok: false, error: error.message });
   }
 });
 

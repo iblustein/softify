@@ -1054,6 +1054,79 @@ async function runVerification() {
     }
   });
 
+  // Test 48: Static hard guardrails and config assertions
+  await check("48. Stuck execution timeout and allowlisted reason safety validation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const routesPath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    const routesContent = fs.readFileSync(routesPath, "utf8");
+
+    // 1. Stuck execution timeout check (must have APPROVAL_EXECUTION_STUCK_TIMEOUT_MS and fallback default)
+    if (!routesContent.includes("APPROVAL_EXECUTION_STUCK_TIMEOUT_MS")) {
+      throw new Error("Hardening Violation: Stuck execution timeout configuration is missing.");
+    }
+    if (!routesContent.includes("900000")) {
+      throw new Error("Hardening Violation: Default 15 minutes timeout (900000 ms) fallback is missing.");
+    }
+
+    // 2. Allowlisted recovery reasons check
+    if (!routesContent.includes("execution_timeout") || !routesContent.includes("operator_marked_stuck") || !routesContent.includes("manual_recovery")) {
+      throw new Error("Hardening Violation: Recovery reason allowlist is missing or incomplete in routes.");
+    }
+  });
+
+  // Test 49: Recovery endpoints state isolation assertions
+  await check("49. Recovery endpoints state isolation and Shopify containment check", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const routesPath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    const routesContent = fs.readFileSync(routesPath, "utf8");
+
+    // Get the indices of the recovery endpoints definitions
+    const resetIdx = routesContent.indexOf("reset-failed");
+    const markIdx = routesContent.indexOf("mark-execution-failed");
+    
+    if (resetIdx === -1 || markIdx === -1) {
+      throw new Error("Hardening Violation: Recovery endpoints (reset-failed or mark-execution-failed) are missing.");
+    }
+
+    // Slice the route blocks
+    const resetBlock = routesContent.slice(resetIdx, markIdx);
+    const markBlock = routesContent.slice(markIdx);
+
+    // Verify neither reset-failed nor mark-execution-failed call updateProductAllowedFields or syncProductsForShop
+    if (resetBlock.includes("updateProductAllowedFields") || resetBlock.includes("syncProductsForShop")) {
+      throw new Error("Hardening Violation: reset-failed endpoint calls mutation execution or product sync.");
+    }
+    if (markBlock.includes("updateProductAllowedFields") || markBlock.includes("syncProductsForShop")) {
+      throw new Error("Hardening Violation: mark-execution-failed endpoint calls mutation execution or product sync.");
+    }
+  });
+
+  // Test 50: Detail shape and parameter scoping sanity checks
+  await check("50. Operational details sanitization and actor verification check", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const routesPath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    const routesContent = fs.readFileSync(routesPath, "utf8");
+
+    // 1. Details endpoint must not call buildLegacyApprovalShape
+    const detailsIdx = routesContent.indexOf("router.get(\"/approvals/:id\"");
+    const auditIdx = routesContent.indexOf("router.get(\"/approvals/:id/audit\"");
+    if (detailsIdx === -1) {
+      throw new Error("Hardening Violation: Details endpoint GET /api/approvals/:id is missing.");
+    }
+    const detailsBlock = routesContent.slice(detailsIdx, auditIdx);
+    if (detailsBlock.includes("buildLegacyApprovalShape")) {
+      throw new Error("Hardening Violation: GET /api/approvals/:id returns a legacy adaptored detail response shape.");
+    }
+
+    // 2. Recovery endpoints require performedBy/actor and reject system
+    if (!routesContent.includes("performedBy === \"system\"")) {
+      throw new Error("Hardening Violation: Recovery endpoints do not validate and reject the 'system' actor input.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

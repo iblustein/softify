@@ -11,4 +11,18 @@ export interface ApprovalRepository {
   deleteApprovalRequest(id: string): Promise<boolean>;
   clearApprovals(): Promise<void>;
   claimApprovalForExecution(approvalId: string, organizationId: string): Promise<ApprovalRequest>;
+  resetFailedApproval(params: {
+    approvalId: string;
+    organizationId: string;
+    storeConnectionId?: string;
+    performedBy: string;
+  }): Promise<ApprovalRequest>;
+  markStuckExecutingAsFailed(params: {
+    approvalId: string;
+    organizationId: string;
+    storeConnectionId?: string;
+    timeoutMs: number;
+    performedBy: string;
+    reason: "execution_timeout" | "operator_marked_stuck" | "manual_recovery";
+  }): Promise<ApprovalRequest>;
 }

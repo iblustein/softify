@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { getRepositories } from "../repositories/repository-provider.js";
 import { updateProductAllowedFields } from "./shopify-admin-client.service.js";
 import { syncProductsForShop } from "./shopify-product-sync.service.js";
@@ -88,6 +89,12 @@ export async function executeApprovedProductMutation(
   if (storeConn.status !== "CONNECTED" || !hasWriteScope) {
     const reason = storeConn.status !== "CONNECTED" ? "store_disconnected" : "missing_write_products_scope";
     
+    // Update blocked metrics:
+    await repos.approvals.updateApprovalRequest(approvalId, {
+      lastBlockedReason: reason,
+      lastExecutionStatus: "APPROVED"
+    });
+
     // Log validation block (degrades to BLOCKED, status kept as APPROVED)
     await writeAuditEvent({
       organizationId,
@@ -117,6 +124,17 @@ export async function executeApprovedProductMutation(
   let claimedApproval: ApprovalRequest;
   try {
     claimedApproval = await repos.approvals.claimApprovalForExecution(approvalId, organizationId);
+
+    // Assign session details and starting metrics
+    const correlationId = "exec-" + crypto.randomUUID();
+    const attemptCount = (claimedApproval.executionAttemptCount || 0) + 1;
+    claimedApproval = (await repos.approvals.updateApprovalRequest(approvalId, {
+      executionStartedAt: new Date().toISOString(),
+      executionAttemptCount: attemptCount,
+      lastExecutionStatus: "EXECUTING",
+      lastExecutedBy: performer,
+      lastExecutionCorrelationId: correlationId
+    })) || claimedApproval;
   } catch (err: any) {
     // Audit execution blocked due to concurrency conflict
     await writeAuditEvent({
@@ -166,13 +184,13 @@ export async function executeApprovedProductMutation(
   const incomingKeys = Object.keys(fields);
   
   if (incomingKeys.length === 0) {
-    await markAsFailed(approvalId, organizationId, performer, "No fields provided in payload.", claimedApproval);
+    await markAsFailed(approvalId, organizationId, performer, "No fields provided in payload.", claimedApproval, "FIELD_VALIDATION_FAILED");
     throw new ApprovedProductMutationExecutorError("FIELD_VALIDATION_FAILED", "No fields provided in proposal payload.");
   }
   
   const hasUnsupported = incomingKeys.some(k => !allowedKeys.includes(k));
   if (hasUnsupported) {
-    await markAsFailed(approvalId, organizationId, performer, "Unsupported fields in payload.", claimedApproval);
+    await markAsFailed(approvalId, organizationId, performer, "Unsupported fields in payload.", claimedApproval, "FIELD_VALIDATION_FAILED");
     throw new ApprovedProductMutationExecutorError("FIELD_VALIDATION_FAILED", "Unsupported fields detected in proposal payload.");
   }
 
@@ -229,7 +247,7 @@ export async function executeApprovedProductMutation(
       sanitizedFields.tags = normalizedTags;
     }
   } catch (valErr: any) {
-    await markAsFailed(approvalId, organizationId, performer, `Field validation error: ${valErr.message}`, claimedApproval);
+    await markAsFailed(approvalId, organizationId, performer, `Field validation error: ${valErr.message}`, claimedApproval, "FIELD_VALIDATION_FAILED");
     throw new ApprovedProductMutationExecutorError("FIELD_VALIDATION_FAILED", valErr.message);
   }
 
@@ -248,7 +266,9 @@ export async function executeApprovedProductMutation(
     const finalApproval = await repos.approvals.updateApprovalRequest(approvalId, {
       status: "APPLIED",
       executedAt: now,
-      executedBy: performer
+      executedBy: performer,
+      executionFinishedAt: now,
+      lastExecutionStatus: "APPLIED"
     });
 
     // Audit success
@@ -283,7 +303,7 @@ export async function executeApprovedProductMutation(
     const errorMessage = err.message || "Unknown error during Shopify execution.";
     const sanitizedError = errorMessage.replace(/X-Shopify-Access-Token:[^ \t\r\n]+/gi, "[REDACTED_HEADER]");
     
-    await markAsFailed(approvalId, organizationId, performer, sanitizedError, claimedApproval);
+    await markAsFailed(approvalId, organizationId, performer, sanitizedError, claimedApproval, "SHOPIFY_API_EXECUTION_FAILED");
     throw new ApprovedProductMutationExecutorError("SHOPIFY_API_EXECUTION_FAILED", sanitizedError);
   }
 }
@@ -293,7 +313,8 @@ async function markAsFailed(
   organizationId: string,
   performer: string,
   reason: string,
-  claimed: ApprovalRequest
+  claimed: ApprovalRequest,
+  code: string = "SHOPIFY_API_EXECUTION_FAILED"
 ): Promise<void> {
   try {
     const repos = getRepositories();
@@ -303,7 +324,12 @@ async function markAsFailed(
       status: "FAILED",
       executedAt: now,
       executedBy: performer,
-      failureReason: reason
+      failureReason: reason,
+      executionFinishedAt: now,
+      lastExecutionStatus: "FAILED",
+      lastFailureReason: reason,
+      lastFailureCode: code,
+      lastExecutedBy: performer
     });
 
     await writeAuditEvent({

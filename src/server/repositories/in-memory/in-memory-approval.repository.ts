@@ -64,3 +64,80 @@ export async function claimApprovalForExecution(approvalId: string, organization
   };
   return approvals[idx];
 }
+
+export async function resetFailedApproval(params: {
+  approvalId: string;
+  organizationId: string;
+  storeConnectionId?: string;
+  performedBy: string;
+}): Promise<ApprovalRequest> {
+  const { approvalId, organizationId, storeConnectionId, performedBy } = params;
+  const idx = approvals.findIndex(a => a.id === approvalId);
+  if (idx === -1) {
+    throw new Error("Approval request not found.");
+  }
+  const approval = approvals[idx];
+  if (approval.organizationId !== organizationId) {
+    throw new Error("Access denied. Approval request does not belong to this organization.");
+  }
+  if (storeConnectionId && approval.storeConnectionId !== storeConnectionId) {
+    throw new Error("Access denied. Store connection mismatch.");
+  }
+  if (approval.status !== "FAILED") {
+    throw new Error(`Invalid status: expected FAILED state, got ${approval.status}.`);
+  }
+  approvals[idx] = {
+    ...approval,
+    status: "APPROVED",
+    lastExecutionStatus: "FAILED",
+    lastExecutedBy: performedBy
+  };
+  return approvals[idx];
+}
+
+export async function markStuckExecutingAsFailed(params: {
+  approvalId: string;
+  organizationId: string;
+  storeConnectionId?: string;
+  timeoutMs: number;
+  performedBy: string;
+  reason: "execution_timeout" | "operator_marked_stuck" | "manual_recovery";
+}): Promise<ApprovalRequest> {
+  const { approvalId, organizationId, storeConnectionId, timeoutMs, performedBy, reason } = params;
+  const allowlist = ["execution_timeout", "operator_marked_stuck", "manual_recovery"];
+  if (!allowlist.includes(reason)) {
+    throw new Error(`Invalid recovery reason: ${reason}`);
+  }
+  const idx = approvals.findIndex(a => a.id === approvalId);
+  if (idx === -1) {
+    throw new Error("Approval request not found.");
+  }
+  const approval = approvals[idx];
+  if (approval.organizationId !== organizationId) {
+    throw new Error("Access denied. Approval request does not belong to this organization.");
+  }
+  if (storeConnectionId && approval.storeConnectionId !== storeConnectionId) {
+    throw new Error("Access denied. Store connection mismatch.");
+  }
+  if (approval.status !== "EXECUTING") {
+    throw new Error(`Invalid status: expected EXECUTING state, got ${approval.status}.`);
+  }
+  if (!approval.executionStartedAt) {
+    throw new Error("Execution started timestamp is missing.");
+  }
+  const elapsed = Date.now() - Date.parse(approval.executionStartedAt);
+  if (elapsed < timeoutMs) {
+    throw new Error(`Execution is not stuck: only ${Math.round(elapsed / 1000)}s elapsed.`);
+  }
+
+  approvals[idx] = {
+    ...approval,
+    status: "FAILED",
+    lastExecutionStatus: "EXECUTING",
+    lastFailureReason: reason,
+    lastFailureCode: "EXECUTION_TIMEOUT",
+    executionFinishedAt: new Date().toISOString(),
+    lastExecutedBy: performedBy
+  };
+  return approvals[idx];
+}

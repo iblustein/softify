@@ -109,6 +109,15 @@ export interface ApprovalRequest {
     tags?: string[];
   };
   allowedFields: AllowedProductProposalField[];
+  executionStartedAt?: string;
+  executionFinishedAt?: string;
+  executionAttemptCount?: number;
+  lastExecutionStatus?: ApprovalStatus;
+  lastFailureReason?: string;
+  lastFailureCode?: string;
+  lastBlockedReason?: string;
+  lastExecutedBy?: string;
+  lastExecutionCorrelationId?: string;
 }
 
 export type AuditDecision = "allowed" | "blocked" | "completed" | "failed";
@@ -133,6 +142,11 @@ export const AuditEventNames = {
   GATEWAY_VALIDATION_BLOCKED: "GATEWAY_VALIDATION_BLOCKED",
   GATEWAY_VALIDATION_ALLOWED: "GATEWAY_VALIDATION_ALLOWED",
   NESTED_TOOL_CALL_BLOCKED: "NESTED_TOOL_CALL_BLOCKED",
+  APPROVAL_VIEWED: "APPROVAL_VIEWED",
+  APPROVAL_AUDIT_VIEWED: "APPROVAL_AUDIT_VIEWED",
+  APPROVAL_RECOVERY_RESET: "APPROVAL_RECOVERY_RESET",
+  APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED: "APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED",
+  APPROVAL_RECOVERY_BLOCKED: "APPROVAL_RECOVERY_BLOCKED",
 } as const;
 
 export type AuditEventType = keyof typeof AuditEventNames;

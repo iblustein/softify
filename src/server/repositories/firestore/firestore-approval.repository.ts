@@ -47,7 +47,16 @@ function mapDocument(doc: FirebaseFirestore.DocumentSnapshot): ApprovalRequest |
     proposedChangesSummary: data.proposedChangesSummary || '',
     diffSummary: data.diffSummary || '',
     sanitizedPayload: data.sanitizedPayload || {},
-    allowedFields: data.allowedFields || []
+    allowedFields: data.allowedFields || [],
+    executionStartedAt: data.executionStartedAt,
+    executionFinishedAt: data.executionFinishedAt,
+    executionAttemptCount: data.executionAttemptCount,
+    lastExecutionStatus: data.lastExecutionStatus,
+    lastFailureReason: data.lastFailureReason,
+    lastFailureCode: data.lastFailureCode,
+    lastBlockedReason: data.lastBlockedReason,
+    lastExecutedBy: data.lastExecutedBy,
+    lastExecutionCorrelationId: data.lastExecutionCorrelationId
   };
 }
 
@@ -143,6 +152,111 @@ export async function claimApprovalForExecution(approvalId: string, organization
   const result = mapDocument(updatedDoc);
   if (!result) {
     throw new Error("Failed to map updated claimed document.");
+  }
+  return result;
+}
+
+export async function resetFailedApproval(params: {
+  approvalId: string;
+  organizationId: string;
+  storeConnectionId?: string;
+  performedBy: string;
+}): Promise<ApprovalRequest> {
+  const { approvalId, organizationId, storeConnectionId, performedBy } = params;
+  const firestore = getFirestoreClient();
+  const docRef = getCollection().doc(approvalId);
+
+  await firestore.runTransaction(async (transaction) => {
+    const docSnap = await transaction.get(docRef);
+    if (!docSnap.exists) {
+      throw new Error("Approval request not found.");
+    }
+    const data = docSnap.data();
+    if (!data) {
+      throw new Error("Approval request data is empty.");
+    }
+    if (data.organizationId !== organizationId) {
+      throw new Error("Access denied. Approval request does not belong to this organization.");
+    }
+    if (storeConnectionId && data.storeConnectionId !== storeConnectionId) {
+      throw new Error("Access denied. Store connection mismatch.");
+    }
+    if (data.status !== "FAILED") {
+      throw new Error(`Invalid status: expected FAILED state, got ${data.status}.`);
+    }
+
+    transaction.update(docRef, {
+      status: "APPROVED",
+      lastExecutionStatus: "FAILED",
+      lastExecutedBy: performedBy
+    });
+  });
+
+  const updatedDoc = await docRef.get();
+  const result = mapDocument(updatedDoc);
+  if (!result) {
+    throw new Error("Failed to map updated reset document.");
+  }
+  return result;
+}
+
+export async function markStuckExecutingAsFailed(params: {
+  approvalId: string;
+  organizationId: string;
+  storeConnectionId?: string;
+  timeoutMs: number;
+  performedBy: string;
+  reason: "execution_timeout" | "operator_marked_stuck" | "manual_recovery";
+}): Promise<ApprovalRequest> {
+  const { approvalId, organizationId, storeConnectionId, timeoutMs, performedBy, reason } = params;
+  const allowlist = ["execution_timeout", "operator_marked_stuck", "manual_recovery"];
+  if (!allowlist.includes(reason)) {
+    throw new Error(`Invalid recovery reason: ${reason}`);
+  }
+
+  const firestore = getFirestoreClient();
+  const docRef = getCollection().doc(approvalId);
+
+  await firestore.runTransaction(async (transaction) => {
+    const docSnap = await transaction.get(docRef);
+    if (!docSnap.exists) {
+      throw new Error("Approval request not found.");
+    }
+    const data = docSnap.data();
+    if (!data) {
+      throw new Error("Approval request data is empty.");
+    }
+    if (data.organizationId !== organizationId) {
+      throw new Error("Access denied. Approval request does not belong to this organization.");
+    }
+    if (storeConnectionId && data.storeConnectionId !== storeConnectionId) {
+      throw new Error("Access denied. Store connection mismatch.");
+    }
+    if (data.status !== "EXECUTING") {
+      throw new Error(`Invalid status: expected EXECUTING state, got ${data.status}.`);
+    }
+    if (!data.executionStartedAt) {
+      throw new Error("Execution started timestamp is missing.");
+    }
+    const elapsed = Date.now() - Date.parse(data.executionStartedAt);
+    if (elapsed < timeoutMs) {
+      throw new Error(`Execution is not stuck: only ${Math.round(elapsed / 1000)}s elapsed.`);
+    }
+
+    transaction.update(docRef, {
+      status: "FAILED",
+      lastExecutionStatus: "EXECUTING",
+      lastFailureReason: reason,
+      lastFailureCode: "EXECUTION_TIMEOUT",
+      executionFinishedAt: new Date().toISOString(),
+      lastExecutedBy: performedBy
+    });
+  });
+
+  const updatedDoc = await docRef.get();
+  const result = mapDocument(updatedDoc);
+  if (!result) {
+    throw new Error("Failed to map updated stuck-execution-failed document.");
   }
   return result;
 }

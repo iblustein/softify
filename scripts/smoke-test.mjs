@@ -1127,6 +1127,195 @@ async function runSuite() {
     }
   });
 
+  // Test Q: Approval Execution Operations & Recovery validation
+  await check("Q. Approval Execution Operations & Recovery validation", async () => {
+    const timestamp = Date.now();
+
+    // 1. Filter approvals list by status (expect PENDING only or APPROVED only)
+    const listPendingUrl = `${baseUrl}/api/approvals?organizationId=demo-org-id&status=PENDING&t=${timestamp}`;
+    const resListPending = await fetch(listPendingUrl);
+    await checkResponse(resListPending);
+    const pendingList = await resListPending.json();
+    for (const a of pendingList) {
+      if (a.status !== "PENDING") {
+        throw new Error(`Expected only PENDING approvals, got status: ${a.status}`);
+      }
+    }
+
+    // Negative filter check (invalid status parameter returns HTTP 400)
+    const listInvalidUrl = `${baseUrl}/api/approvals?organizationId=demo-org-id&status=INVALID_STATUS&t=${timestamp}`;
+    const resListInvalid = await fetch(listInvalidUrl);
+    if (resListInvalid.status !== 400) {
+      throw new Error(`Expected HTTP 400 for invalid status filter, got: ${resListInvalid.status}`);
+    }
+
+    // 2. Fetch specific approval detail via GET /api/approvals/:id
+    // First, let's find the APPROVED approval request we have
+    const approvalsUrl = `${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`;
+    const resApprovals = await fetch(approvalsUrl);
+    await checkResponse(resApprovals);
+    const approvals = await resApprovals.json();
+    const approvedApproval = approvals.find(a => a.status === "APPROVED");
+    if (!approvedApproval) {
+      throw new Error("Expected to find an APPROVED approval request for testing detail endpoint.");
+    }
+    const approvalId = approvedApproval.id;
+
+    const detailUrl = `${baseUrl}/api/approvals/${approvalId}?organizationId=demo-org-id&t=${timestamp}`;
+    const resDetail = await fetch(detailUrl);
+    await checkResponse(resDetail);
+    const detail = await resDetail.json();
+    
+    if (detail.ok !== true || !detail.approval) {
+      throw new Error(`Expected detailed operational response format, got: ${JSON.stringify(detail)}`);
+    }
+    
+    // Check that legacy fields are NOT returned
+    const legacyKeys = ["actionType", "beforeState", "afterState", "diff", "details"];
+    for (const key of legacyKeys) {
+      if (key in detail.approval) {
+        throw new Error(`Security/Legacy Violation: Found forbidden legacy key "${key}" in operational details.`);
+      }
+    }
+
+    // Check tenant boundary for details (wrong organizationId expect 403)
+    const detailWrongOrgUrl = `${baseUrl}/api/approvals/${approvalId}?organizationId=different-org-id&t=${timestamp}`;
+    const resDetailWrong = await fetch(detailWrongOrgUrl);
+    if (resDetailWrong.status !== 403) {
+      throw new Error(`Expected HTTP 403 for cross-tenant details, got: ${resDetailWrong.status}`);
+    }
+
+    // 3. GET /api/approvals/:id/audit (verify audit log filtering and logging)
+    const auditUrl = `${baseUrl}/api/approvals/${approvalId}/audit?organizationId=demo-org-id&t=${timestamp}`;
+    const resAudit = await fetch(auditUrl);
+    await checkResponse(resAudit);
+    const auditEvents = await resAudit.json();
+    if (!Array.isArray(auditEvents)) {
+      throw new Error("Expected audit events to be an array.");
+    }
+    for (const event of auditEvents) {
+      if (event.metadata?.approvalId !== approvalId) {
+        throw new Error(`Audit correlation failure: event does not belong to approval ${approvalId}. Metadata: ${JSON.stringify(event.metadata)}`);
+      }
+    }
+
+    // Check tenant boundary for audit (wrong organizationId expect 403)
+    const auditWrongOrgUrl = `${baseUrl}/api/approvals/${approvalId}/audit?organizationId=different-org-id&t=${timestamp}`;
+    const resAuditWrong = await fetch(auditWrongOrgUrl);
+    if (resAuditWrong.status !== 403) {
+      throw new Error(`Expected HTTP 403 for cross-tenant audit, got: ${resAuditWrong.status}`);
+    }
+
+    // 4. POST /api/approvals/:id/reset-failed
+    // First, let's create a FAILED approval to test resetting.
+    // When isInMemory is true, we can test stuck timeout and recovery reset.
+    if (isInMemory) {
+      // stuck-executing-approval is pre-seeded with status "EXECUTING" and 30m old executionStartedAt
+      const stuckId = "stuck-executing-approval";
+
+      // Rejects recovery if performedBy/actor is missing
+      const resStuckNoActor = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id" })
+      });
+      if (resStuckNoActor.status !== 400) {
+        throw new Error(`Expected HTTP 400 for missing recovery performer, got: ${resStuckNoActor.status}`);
+      }
+
+      // Rejects recovery if actor is "system"
+      const resStuckSystemActor = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "system" })
+      });
+      if (resStuckSystemActor.status !== 400) {
+        throw new Error(`Expected HTTP 400 for system performer, got: ${resStuckSystemActor.status}`);
+      }
+
+      // Rejects stuck recovery on non-stuck approval
+      const activeId = "active-executing-approval";
+      const resActiveStuck = await fetch(`${baseUrl}/api/approvals/${activeId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "Shop Owner" })
+      });
+      if (resActiveStuck.status !== 400) {
+        throw new Error(`Expected HTTP 400 for non-stuck execution marking, got: ${resActiveStuck.status}`);
+      }
+
+      // Rejects stuck recovery on cross-tenant storeConnectionId mismatch
+      const resStuckMismatch = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "Shop Owner", storeConnectionId: "store-mismatch" })
+      });
+      if (resStuckMismatch.status !== 400) {
+        throw new Error(`Expected HTTP 400 for storeConnectionId mismatch, got: ${resStuckMismatch.status}`);
+      }
+
+      // Recovers stuck execution to FAILED status
+      const resStuckSuccess = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "Shop Owner", reason: "execution_timeout" })
+      });
+      await checkResponse(resStuckSuccess);
+      const stuckRes = await resStuckSuccess.json();
+      if (stuckRes.approval?.status !== "FAILED" || stuckRes.approval?.lastFailureCode !== "EXECUTION_TIMEOUT") {
+        throw new Error(`Expected transition to FAILED due to timeout, got: ${JSON.stringify(stuckRes)}`);
+      }
+
+      // Verify APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED audit exists
+      const resStuckAudit = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resStuckAudit);
+      const stuckAudits = await resStuckAudit.json();
+      const timeoutEvent = stuckAudits.find(
+        a => a.event === "APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED" && a.metadata?.approvalId === stuckId
+      );
+      if (!timeoutEvent) {
+        console.log("DEBUG stuckAudits length:", stuckAudits.length);
+        console.log("DEBUG MATCHED EVENTS:", JSON.stringify(stuckAudits.filter(a => a.event === "APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED"), null, 2));
+        throw new Error("Missing APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED audit log event.");
+      }
+
+      // Rejects reset-failed on non-FAILED approval (e.g. APPROVED request)
+      const resResetApproved = await fetch(`${baseUrl}/api/approvals/${approvalId}/reset-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "Shop Owner" })
+      });
+      if (resResetApproved.status !== 400) {
+        throw new Error(`Expected HTTP 400 for resetting non-failed request, got: ${resResetApproved.status}`);
+      }
+
+      // Resets FAILED approval to APPROVED
+      const resResetSuccess = await fetch(`${baseUrl}/api/approvals/${stuckId}/reset-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "Shop Owner" })
+      });
+      await checkResponse(resResetSuccess);
+      const resetRes = await resResetSuccess.json();
+      if (resetRes.approval?.status !== "APPROVED" || resetRes.approval?.lastExecutionStatus !== "FAILED") {
+        throw new Error(`Expected transition to APPROVED state, got: ${JSON.stringify(resetRes)}`);
+      }
+
+      // Verify APPROVAL_RECOVERY_RESET audit exists
+      const resResetAudit = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resResetAudit);
+      const resetAudits = await resResetAudit.json();
+      const resetEvent = resetAudits.find(
+        a => a.event === "APPROVAL_RECOVERY_RESET" && a.metadata?.approvalId === stuckId
+      );
+      if (!resetEvent) {
+        throw new Error("Missing APPROVAL_RECOVERY_RESET audit log event.");
+      }
+
+      console.log("   [RECOVERY TESTS] Successfully verified status filters, details/audit tenant scoping, performer constraints, timeout recoveries, and state reset bounds.");
+    }
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

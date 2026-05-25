@@ -72,8 +72,56 @@ async function seedInMemoryDb() {
         plan: "Standard Plan",
         currency: "USD"
       });
+
+      // Seed stuck executing approval request (stuck beyond 15 min threshold)
+      await repos.approvals.createApprovalRequest({
+        id: "stuck-executing-approval",
+        organizationId: "demo-org-id",
+        storeConnectionId: "store-luminary",
+        agentInstallationId: "inst-mock",
+        agentId: "agent_product_intelligence",
+        toolName: "catalog.products.propose_update",
+        requestedBy: "Product Intelligence Agent",
+        status: "EXECUTING",
+        riskLevel: "Medium",
+        targetType: "PRODUCT_PROPOSAL",
+        targetId: "101",
+        proposedChangesSummary: "Stuck update title",
+        diffSummary: "Stuck update title",
+        sanitizedPayload: { title: "Stuck Update Title" },
+        allowedFields: ["title", "vendor", "productType", "status", "tags"],
+        executionStartedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+        executionAttemptCount: 1,
+        lastExecutionStatus: "EXECUTING",
+        lastExecutedBy: "Shop Owner",
+        lastExecutionCorrelationId: "exec-stuck-uuid"
+      });
+
+      // Seed active executing approval request (non-stuck)
+      await repos.approvals.createApprovalRequest({
+        id: "active-executing-approval",
+        organizationId: "demo-org-id",
+        storeConnectionId: "store-luminary",
+        agentInstallationId: "inst-mock",
+        agentId: "agent_product_intelligence",
+        toolName: "catalog.products.propose_update",
+        requestedBy: "Product Intelligence Agent",
+        status: "EXECUTING",
+        riskLevel: "Medium",
+        targetType: "PRODUCT_PROPOSAL",
+        targetId: "101",
+        proposedChangesSummary: "Active update title",
+        diffSummary: "Active update title",
+        sanitizedPayload: { title: "Active Update Title" },
+        allowedFields: ["title", "vendor", "productType", "status", "tags"],
+        executionStartedAt: new Date().toISOString(),
+        executionAttemptCount: 1,
+        lastExecutionStatus: "EXECUTING",
+        lastExecutedBy: "Shop Owner",
+        lastExecutionCorrelationId: "exec-active-uuid"
+      });
       
-      console.log("[DATABASE SEED] Seeded mock store connections in-memory.");
+      console.log("[DATABASE SEED] Seeded mock store connections and recovery approvals in-memory.");
     }
   } catch (error) {
     console.error("[DATABASE SEED] Seeding failed:", error);
