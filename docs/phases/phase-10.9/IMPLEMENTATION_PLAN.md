@@ -57,8 +57,12 @@ Defines the structure and queries for tracking agent invocation sessions.
     agentId: string;
     agentVersion: string;
     status: 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED' | 'BLOCKED';
-    scope: string[];
-    mode: 'DIAGNOSTIC' | 'EXECUTION';
+    scope: {
+      type: 'SHOP' | 'PRODUCT' | 'COLLECTION' | 'PAGE' | 'TRAFFIC_PERIOD';
+      resourceId?: string;
+      filters?: Record<string, unknown>;
+    };
+    mode: 'RECOMMEND' | 'DRAFT';
     requestedBy: string;
     startedAt: string;
     finishedAt?: string;
@@ -70,6 +74,9 @@ Defines the structure and queries for tracking agent invocation sessions.
     auditCorrelationId: string;
   }
   ```
+
+  > [!NOTE]
+  > Agent run `scope` must be thoroughly sanitized before persistence and must under no circumstances contain raw prompts, raw Shopify responses, raw tool args, tokens, secrets, or PII.
 
 #### [NEW] [recommendation.repository.contract.ts](src/server/repositories/contracts/recommendation.repository.contract.ts)
 Defines rules for merchant-facing diagnostic warnings.
@@ -245,5 +252,5 @@ Extend the smoke tests with Test S:
 
 ### Manual Verification
 - Run local server CJS bundle and review that the Workspace navigation tab displays the agent catalog grid cleanly.
-- Trigger diagnostic runs and confirm that the recommendations are dismissed immediately.
+- Trigger diagnostic runs and confirm that recommendations can be dismissed explicitly by user action and that their status changes to DISMISSED.
 - Confirm draft proposals correctly populate the approvals queue.
