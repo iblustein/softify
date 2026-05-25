@@ -41,6 +41,46 @@ function buildLegacyApprovalShape(a: any): any {
   };
 }
 
+/**
+ * Dynamically constructs a clean, sanitized operational response shape for Phase 10.8 endpoints,
+ * strictly excluding any legacy compatibility fields, raw payloads, raw tool arguments, raw Shopify responses,
+ * prompts, tokens, secrets, or PII.
+ */
+function buildOperationalApprovalShape(a: any): any {
+  if (!a) return a;
+  return {
+    id: a.id,
+    organizationId: a.organizationId,
+    storeConnectionId: a.storeConnectionId,
+    agentInstallationId: a.agentInstallationId,
+    agentId: a.agentId,
+    toolName: a.toolName,
+    requestedBy: a.requestedBy,
+    requestedAt: a.requestedAt,
+    decidedAt: a.decidedAt,
+    decidedBy: a.decidedBy,
+    executedAt: a.executedAt,
+    executedBy: a.executedBy,
+    failureReason: a.failureReason,
+    status: a.status,
+    riskLevel: a.riskLevel,
+    targetType: a.targetType,
+    targetId: a.targetId,
+    proposedChangesSummary: a.proposedChangesSummary,
+    diffSummary: a.diffSummary,
+    allowedFields: a.allowedFields,
+    executionStartedAt: a.executionStartedAt,
+    executionFinishedAt: a.executionFinishedAt,
+    executionAttemptCount: a.executionAttemptCount,
+    lastExecutionStatus: a.lastExecutionStatus,
+    lastFailureReason: a.lastFailureReason,
+    lastFailureCode: a.lastFailureCode,
+    lastBlockedReason: a.lastBlockedReason,
+    lastExecutedBy: a.lastExecutedBy,
+    lastExecutionCorrelationId: a.lastExecutionCorrelationId
+  };
+}
+
 router.get("/approvals", async (req: any, res: any) => {
   try {
     const { organizationId, shop, status } = req.query;
@@ -421,37 +461,7 @@ router.get("/approvals/:id", async (req: any, res: any) => {
     // Sanitized Operational Response Shape (Strict: no legacy adaptor)
     return res.json({
       ok: true,
-      approval: {
-        id: approvalItem.id,
-        organizationId: approvalItem.organizationId,
-        storeConnectionId: approvalItem.storeConnectionId,
-        agentInstallationId: approvalItem.agentInstallationId,
-        agentId: approvalItem.agentId,
-        toolName: approvalItem.toolName,
-        requestedBy: approvalItem.requestedBy,
-        requestedAt: approvalItem.requestedAt,
-        decidedAt: approvalItem.decidedAt,
-        decidedBy: approvalItem.decidedBy,
-        executedAt: approvalItem.executedAt,
-        executedBy: approvalItem.executedBy,
-        failureReason: approvalItem.failureReason,
-        status: approvalItem.status,
-        riskLevel: approvalItem.riskLevel,
-        targetType: approvalItem.targetType,
-        targetId: approvalItem.targetId,
-        proposedChangesSummary: approvalItem.proposedChangesSummary,
-        diffSummary: approvalItem.diffSummary,
-        allowedFields: approvalItem.allowedFields,
-        executionStartedAt: approvalItem.executionStartedAt,
-        executionFinishedAt: approvalItem.executionFinishedAt,
-        executionAttemptCount: approvalItem.executionAttemptCount,
-        lastExecutionStatus: approvalItem.lastExecutionStatus,
-        lastFailureReason: approvalItem.lastFailureReason,
-        lastFailureCode: approvalItem.lastFailureCode,
-        lastBlockedReason: approvalItem.lastBlockedReason,
-        lastExecutedBy: approvalItem.lastExecutedBy,
-        lastExecutionCorrelationId: approvalItem.lastExecutionCorrelationId
-      }
+      approval: buildOperationalApprovalShape(approvalItem)
     });
   } catch (error: any) {
     res.status(500).json({ ok: false, error: error.message });
@@ -478,22 +488,7 @@ router.get("/approvals/:id/audit", async (req: any, res: any) => {
       return res.status(403).json({ ok: false, error: "Access denied. Approval request does not belong to this organization." });
     }
 
-    // Retrieve via repository
-    const dbEvents = await repos.audit.getAuditEventsByOrganizationId(organizationId);
-    
-    // In-memory cache fallback strictly filtered by organizationId
-    const cachedLogs = getAuditLogs(organizationId, approvalItem.storeConnectionId);
-    
-    const finalLogs = (isFirestoreConfigured() ? dbEvents : (dbEvents.length > 0 ? dbEvents : cachedLogs)) as any[];
-
-    // Primary filter matching e.metadata?.approvalId === id, secondary context matching lastExecutionCorrelationId
-    const filteredEvents = finalLogs.filter(e => 
-      (e.metadata?.approvalId === id) || 
-      (e.correlationId && e.correlationId === id) ||
-      (approvalItem.lastExecutionCorrelationId && e.correlationId === approvalItem.lastExecutionCorrelationId)
-    );
-
-    // Log APPROVAL_AUDIT_VIEWED audit trail
+    // Log APPROVAL_AUDIT_VIEWED audit trail before fetching to ensure the current read sees this event
     await writeAuditEvent({
       organizationId,
       storeConnectionId: approvalItem.storeConnectionId,
@@ -510,6 +505,21 @@ router.get("/approvals/:id/audit", async (req: any, res: any) => {
       }
     });
 
+    // Retrieve via repository
+    const dbEvents = await repos.audit.getAuditEventsByOrganizationId(organizationId);
+    
+    // In-memory cache fallback strictly filtered by organizationId
+    const cachedLogs = getAuditLogs(organizationId, approvalItem.storeConnectionId);
+    
+    const finalLogs = (isFirestoreConfigured() ? dbEvents : (dbEvents.length > 0 ? dbEvents : cachedLogs)) as any[];
+
+    // Primary filter matching e.metadata?.approvalId === id, secondary context matching lastExecutionCorrelationId
+    const filteredEvents = finalLogs.filter(e => 
+      (e.metadata?.approvalId === id) || 
+      (e.correlationId && e.correlationId === id) ||
+      (approvalItem.lastExecutionCorrelationId && e.correlationId === approvalItem.lastExecutionCorrelationId)
+    );
+
     return res.json(filteredEvents);
   } catch (error: any) {
     res.status(500).json({ ok: false, error: error.message });
@@ -519,7 +529,7 @@ router.get("/approvals/:id/audit", async (req: any, res: any) => {
 router.post("/approvals/:id/reset-failed", async (req: any, res: any) => {
   const { id } = req.params;
   const organizationId = req.body.organizationId || req.query.organizationId;
-  const performedBy = req.body.performedBy || req.query.performedBy || req.body.actor || req.query.actor;
+  const performedByRaw = req.body.performedBy || req.query.performedBy || req.body.actor || req.query.actor;
   const shop = req.body.shop || req.query.shop;
   const storeConnectionIdInput = req.body.storeConnectionId || req.query.storeConnectionId;
 
@@ -528,13 +538,24 @@ router.post("/approvals/:id/reset-failed", async (req: any, res: any) => {
       return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
     }
 
-    if (!performedBy || typeof performedBy !== "string") {
-      return res.status(400).json({ ok: false, error: "performedBy or actor parameter is required. \"system\" is reserved and not allowed for API calls." });
+    if (typeof performedByRaw !== "string") {
+      return res.status(400).json({ ok: false, error: "performedBy or actor parameter must be a string." });
     }
 
-    if (performedBy === "system") {
+    const trimmedActor = performedByRaw.trim();
+    if (trimmedActor.length === 0) {
+      return res.status(400).json({ ok: false, error: "performedBy or actor parameter cannot be empty after trimming." });
+    }
+
+    if (trimmedActor.toLowerCase() === "system") {
       return res.status(400).json({ ok: false, error: "\"system\" actor is reserved for internal processes only and cannot be passed in public API calls." });
     }
+
+    if (trimmedActor.length > 100) {
+      return res.status(400).json({ ok: false, error: "performedBy or actor parameter exceeds the maximum allowed length of 100 characters." });
+    }
+
+    const performedBy = trimmedActor;
 
     const repos = getRepositories();
     const approvalItem = await repos.approvals.getApprovalById(id);
@@ -649,7 +670,7 @@ router.post("/approvals/:id/reset-failed", async (req: any, res: any) => {
 
     return res.json({
       ok: true,
-      approval: buildLegacyApprovalShape(updated)
+      approval: buildOperationalApprovalShape(updated)
     });
   } catch (error: any) {
     res.status(400).json({ ok: false, error: error.message });
@@ -659,8 +680,8 @@ router.post("/approvals/:id/reset-failed", async (req: any, res: any) => {
 router.post("/approvals/:id/mark-execution-failed", async (req: any, res: any) => {
   const { id } = req.params;
   const organizationId = req.body.organizationId || req.query.organizationId;
-  const performedBy = req.body.performedBy || req.query.performedBy || req.body.actor || req.query.actor;
-  const reasonInput = req.body.reason || "execution_timeout";
+  const performedByRaw = req.body.performedBy || req.query.performedBy || req.body.actor || req.query.actor;
+  const rawReason = req.body.reason;
   const shop = req.body.shop || req.query.shop;
   const storeConnectionIdInput = req.body.storeConnectionId || req.query.storeConnectionId;
 
@@ -669,18 +690,39 @@ router.post("/approvals/:id/mark-execution-failed", async (req: any, res: any) =
       return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
     }
 
-    if (!performedBy || typeof performedBy !== "string") {
-      return res.status(400).json({ ok: false, error: "performedBy or actor parameter is required. \"system\" is reserved and not allowed for API calls." });
+    if (typeof performedByRaw !== "string") {
+      return res.status(400).json({ ok: false, error: "performedBy or actor parameter must be a string." });
     }
 
-    if (performedBy === "system") {
+    const trimmedActor = performedByRaw.trim();
+    if (trimmedActor.length === 0) {
+      return res.status(400).json({ ok: false, error: "performedBy or actor parameter cannot be empty after trimming." });
+    }
+
+    if (trimmedActor.toLowerCase() === "system") {
       return res.status(400).json({ ok: false, error: "\"system\" actor is reserved for internal processes only and cannot be passed in public API calls." });
     }
 
+    if (trimmedActor.length > 100) {
+      return res.status(400).json({ ok: false, error: "performedBy or actor parameter exceeds the maximum allowed length of 100 characters." });
+    }
+
+    const performedBy = trimmedActor;
+
+    let reason = "execution_timeout";
+    if (rawReason !== undefined && rawReason !== null) {
+      if (typeof rawReason !== "string") {
+        return res.status(400).json({ ok: false, error: "reason parameter must be a string." });
+      }
+      reason = rawReason.trim();
+    }
+
     const allowlist = ["execution_timeout", "operator_marked_stuck", "manual_recovery"];
-    if (!allowlist.includes(reasonInput)) {
+    if (!allowlist.includes(reason)) {
       return res.status(400).json({ ok: false, error: `Invalid recovery reason. Accepted reasons: ${allowlist.join(", ")}` });
     }
+
+    const reasonInput = reason;
 
     const repos = getRepositories();
     const approvalItem = await repos.approvals.getApprovalById(id);
@@ -801,19 +843,20 @@ router.post("/approvals/:id/mark-execution-failed", async (req: any, res: any) =
 
     return res.json({
       ok: true,
-      approval: buildLegacyApprovalShape(updated)
+      approval: buildOperationalApprovalShape(updated)
     });
   } catch (error: any) {
+    const initiatorName = (typeof performedByRaw === "string" && performedByRaw.trim().length > 0) ? performedByRaw.trim() : "system";
     await writeAuditEvent({
       organizationId,
       event: AuditEventNames.APPROVAL_RECOVERY_BLOCKED,
-      initiator: performedBy || "system",
+      initiator: initiatorName,
       description: `Stuck timeout recovery blocked for approval '${id}': ${error.message}`,
       decision: "blocked",
       reason: "recovery_failed",
       metadata: {
         approvalId: id,
-        performedBy: performedBy || "system",
+        performedBy: initiatorName,
         reason: "recovery_failed",
         decision: "blocked"
       }

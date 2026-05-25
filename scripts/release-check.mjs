@@ -1101,6 +1101,14 @@ async function runVerification() {
     if (markBlock.includes("updateProductAllowedFields") || markBlock.includes("syncProductsForShop")) {
       throw new Error("Hardening Violation: mark-execution-failed endpoint calls mutation execution or product sync.");
     }
+
+    // Verify neither reset-failed nor mark-execution-failed call buildLegacyApprovalShape
+    if (resetBlock.includes("buildLegacyApprovalShape")) {
+      throw new Error("Hardening Violation: reset-failed endpoint calls buildLegacyApprovalShape.");
+    }
+    if (markBlock.includes("buildLegacyApprovalShape")) {
+      throw new Error("Hardening Violation: mark-execution-failed endpoint calls buildLegacyApprovalShape.");
+    }
   });
 
   // Test 50: Detail shape and parameter scoping sanity checks
@@ -1121,9 +1129,22 @@ async function runVerification() {
       throw new Error("Hardening Violation: GET /api/approvals/:id returns a legacy adaptored detail response shape.");
     }
 
-    // 2. Recovery endpoints require performedBy/actor and reject system
-    if (!routesContent.includes("performedBy === \"system\"")) {
-      throw new Error("Hardening Violation: Recovery endpoints do not validate and reject the 'system' actor input.");
+    // 2. Recovery endpoints require performedBy/actor and reject system case-insensitively
+    if (!routesContent.includes("trimmedActor.toLowerCase() === \"system\"")) {
+      throw new Error("Hardening Violation: Recovery endpoints do not validate and reject the 'system' actor input case-insensitively.");
+    }
+
+    // 3. Recovery endpoints enforce actor presence after trim and max length boundary
+    if (!routesContent.includes("trimmedActor.length === 0")) {
+      throw new Error("Hardening Violation: Recovery endpoints do not reject empty actor inputs after trimming.");
+    }
+    if (!routesContent.includes("trimmedActor.length > 100")) {
+      throw new Error("Hardening Violation: Recovery endpoints do not reject actors exceeding 100 characters.");
+    }
+
+    // 4. Stuck execution recovery endpoint enforces reason type checking
+    if (!routesContent.includes("typeof rawReason !== \"string\"")) {
+      throw new Error("Hardening Violation: Stuck execution recovery does not type check reason parameter.");
     }
   });
 

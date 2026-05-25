@@ -1223,14 +1223,54 @@ async function runSuite() {
         throw new Error(`Expected HTTP 400 for missing recovery performer, got: ${resStuckNoActor.status}`);
       }
 
-      // Rejects recovery if actor is "system"
+      // Rejects recovery if actor is empty after trim
+      const resStuckEmptyActor = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "   " })
+      });
+      if (resStuckEmptyActor.status !== 400) {
+        throw new Error(`Expected HTTP 400 for empty actor, got: ${resStuckEmptyActor.status}`);
+      }
+
+      // Rejects recovery if actor is too long (> 100 chars)
+      const resStuckTooLongActor = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "a".repeat(101) })
+      });
+      if (resStuckTooLongActor.status !== 400) {
+        throw new Error(`Expected HTTP 400 for actor > 100 chars, got: ${resStuckTooLongActor.status}`);
+      }
+
+      // Rejects recovery if actor is "system" (case-insensitive)
       const resStuckSystemActor = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "system" })
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "sYsTeM" })
       });
       if (resStuckSystemActor.status !== 400) {
         throw new Error(`Expected HTTP 400 for system performer, got: ${resStuckSystemActor.status}`);
+      }
+
+      // Rejects recovery if reason is invalid (non-string)
+      const resStuckNonStringReason = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "Shop Owner", reason: 12345 })
+      });
+      if (resStuckNonStringReason.status !== 400) {
+        throw new Error(`Expected HTTP 400 for non-string reason, got: ${resStuckNonStringReason.status}`);
+      }
+
+      // Rejects recovery if reason is not allowlisted
+      const resStuckInvalidReason = await fetch(`${baseUrl}/api/approvals/${stuckId}/mark-execution-failed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId: "demo-org-id", performedBy: "Shop Owner", reason: "arbitrary_reason" })
+      });
+      if (resStuckInvalidReason.status !== 400) {
+        throw new Error(`Expected HTTP 400 for non-allowlisted reason, got: ${resStuckInvalidReason.status}`);
       }
 
       // Rejects stuck recovery on non-stuck approval
@@ -1266,6 +1306,14 @@ async function runSuite() {
         throw new Error(`Expected transition to FAILED due to timeout, got: ${JSON.stringify(stuckRes)}`);
       }
 
+      // Verify that the mark-execution-failed response does not contain legacy keys
+      const legacyKeys = ["actionType", "beforeState", "afterState", "diff", "details"];
+      for (const key of legacyKeys) {
+        if (key in stuckRes.approval) {
+          throw new Error(`Security/Legacy Violation: Found forbidden legacy key "${key}" in mark execution failed response.`);
+        }
+      }
+
       // Verify APPROVAL_EXECUTION_TIMEOUT_MARKED_FAILED audit exists
       const resStuckAudit = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
       await checkResponse(resStuckAudit);
@@ -1299,6 +1347,13 @@ async function runSuite() {
       const resetRes = await resResetSuccess.json();
       if (resetRes.approval?.status !== "APPROVED" || resetRes.approval?.lastExecutionStatus !== "FAILED") {
         throw new Error(`Expected transition to APPROVED state, got: ${JSON.stringify(resetRes)}`);
+      }
+
+      // Verify that the reset failed response does not contain legacy keys
+      for (const key of legacyKeys) {
+        if (key in resetRes.approval) {
+          throw new Error(`Security/Legacy Violation: Found forbidden legacy key "${key}" in reset failed response.`);
+        }
       }
 
       // Verify APPROVAL_RECOVERY_RESET audit exists
