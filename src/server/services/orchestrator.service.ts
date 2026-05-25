@@ -120,25 +120,22 @@ export async function fallbackOrchestration(prompt: string, selectedAgentId?: st
     } else {
       const rawAfterStr = `✨ **POLISHED REVISED COPY: ${targetProduct.title}**\n\nExperience elevated comfort with this premium, meticulously crafted garment. Made of 100% natural, sustainable organic flax linen for lightweight breathability. Complete with high-durability structured tailoring, this wardrobe essential bridges relaxed everyday wear and refined office aesthetics with absolute ease.`;
 
-      const approvalResult = await executeToolWithContext("shopify.prepareProductUpdate", {
-        productId: targetProduct.id,
-        fields: { description: rawAfterStr }
-      }, toolContext, {
-        title: `Optimize description copy for ${targetProduct.title}`,
-        before: targetProduct.description,
-        summary: "Overhauled boilerplate descriptions to incorporate rich lifestyle hooks, highlights about lightweight breathability, and SEO-dense terminology."
-      });
+      const approvalResult = await executeToolWithContext("catalog.products.propose_update", {
+        productId: String(targetProduct.id),
+        fields: { tags: ["organic", "linen", "premium"] },
+        summary: "Overhauled boilerplate tags to optimize SEO discoverability and highlight lightweight breathability."
+      }, toolContext);
       mockCalls.push(approvalResult);
 
       if (approvalResult.status === "failed") {
-        agentResponseText = buildToolFailureResponse(agent.name, "shopify.prepareProductUpdate", approvalResult.result.error);
+        agentResponseText = buildToolFailureResponse(agent.name, "catalog.products.propose_update", approvalResult.result.error);
       } else {
         agentResponseText = `✍️ **Optimized SEO Product Copy Ready for Handshake**
         
-        I inspected your product catalog using \`shopify.getProducts\`. To optimize your catalog's checkout metrics, I drafted an SEO-enriched description for **${targetProduct.title}** and queued a secure write action.
+        I inspected your product catalog using \`shopify.getProducts\`. To optimize your catalog's checkout metrics, I drafted an SEO-enriched tag set for **${targetProduct.title}** and queued a secure write action.
         
         * **Proposed Content Enhancement:**
-        ${rawAfterStr.split("\n\n").map(p => `> ${p}`).join("\n")}
+        > tags: organic, linen, premium
         
         * **Security Gate Activated:**
         Since this is a write-capable action, the Tool Gateway blocked live deployment to Shopify. I have created a pending action **${approvalResult.approvalId}** in your Approval Queue. Please audit and accept or decline this change in your central dashboard tab.`;
@@ -147,32 +144,11 @@ export async function fallbackOrchestration(prompt: string, selectedAgentId?: st
   }
 
   else if (agent.id === "agent_theme_dev" || agent.id === "agent_design") {
-    const patchCode = `/* ${agent.name} Optimizations - Active */\n.btn-primary {\n  background-color: #0c1821;\n  letter-spacing: 0.05em;\n  transition: duration 300ms ease;\n}`;
-
-    const approvalResult = await executeToolWithContext("shopify.prepareThemePatch", {
-      themeId: "main_theme",
-      patch: patchCode
-    }, toolContext, {
-      title: `Asset layout update via ${agent.name}`,
-      summary: "Inserted CSS overrides to add sleek graphite buttons with fluid responsive scaling transitions.",
-      before: "/* Default CSS declarations in theme files */"
-    });
-    mockCalls.push(approvalResult);
-
-    if (approvalResult.status === "failed") {
-      agentResponseText = buildToolFailureResponse(agent.name, "shopify.prepareThemePatch", approvalResult.result.error);
-    } else {
-      agentResponseText = `🎨 **Layout Adjustments Proposed**
-      
-      I analyzed the Shopify store's style hooks using \`shopify.getShopInfo\`. To create a highly premium storefront feel, I drafted a theme layout override patch and logged it in the Tool Gateway.
-      
-      * **Calculated Theme Patch:**
-      \`\`\`css
-      ${patchCode}
-      \`\`\`
-      
-      Since this update changes your active storefront aesthetics, the rewrite is paused. I've sent item **${approvalResult.approvalId}** to the **Approval Queue** for your direct authorization.`;
-    }
+    agentResponseText = `🎨 **Theme Layout Adjustments Blocked**
+    
+    I inspected active Shopify theme configurations using \`shopify.getShopInfo\`. 
+    
+    Since theme asset write operations (\`theme.assets.patch\`) are disabled on this platform for safety, no layout changes can be drafted or queued. I am operating in a secure, read-only audit state.`;
   }
 
   else {
@@ -288,10 +264,9 @@ export async function orchestrate(prompt: string, selectedAgentId?: string): Pro
             - shopify.getProducts (queries full catalog lists)
             - shopify.getOrders (retrieves active retail order indices)
             - shopify.getSalesSummary (analyzes sales reports)
-            - shopify.prepareProductUpdate (write action -> locks changes inside approvals queue. Parameters: { productId: number, fields: { title?: string, description?: string, price?: number, inventory?: number } })
-            - shopify.prepareThemePatch (write action -> queues CSS file layout adjustments. Parameters: { themeId: string, patch: string })
+            - catalog.products.propose_update (propose product snapshot updates. Parameters: { productId: string, fields: { title?: string, vendor?: string, productType?: string, status?: string, tags?: string[] }, summary: string })
          b. Write high quality markdown markdown response representing the chosen agent's thoughts and text outputs.
-         c. If the agent makes a write-based tool call (prepareProductUpdate or prepareThemePatch), formulate the precise payload arguments to update the store item. This will create a pending approval queue item in the console.
+         c. If the agent makes a proposal tool call (catalog.products.propose_update), formulate the precise payload arguments to update the store item. This will create a pending approval queue item in the console.
 
       RETURN STRICTLY A JSON OBJECT matching this exact structure, with NO surrounding markdown backticks or other words:
       {
@@ -305,12 +280,13 @@ export async function orchestrate(prompt: string, selectedAgentId?: string): Pro
             "args": {}
           },
           {
-            "name": "shopify.prepareProductUpdate",
+            "name": "catalog.products.propose_update",
             "args": {
-              "productId": 101,
+              "productId": "101",
               "fields": {
-                "description": "Premium descriptive rich copy text here..."
-              }
+                "title": "Optimized Premium Tee"
+              },
+              "summary": "Optimizing title to increase SEO CTR."
             }
           }
         ]

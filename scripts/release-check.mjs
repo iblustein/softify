@@ -840,6 +840,61 @@ async function runVerification() {
     if (patchTheme) throw new Error("Security Violation: theme.assets.patch must not be registered in Phase 10.6.");
   });
 
+  // Test 40: Verify theme patching is completely absent from tools and gateway
+  await check("40. theme.assets.patch and shopify.prepareThemePatch must not be registered or executed", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    const defsPath = path.resolve(process.cwd(), "src/server/tools/tool-definitions.ts");
+    const gatewayPath = path.resolve(process.cwd(), "src/server/tools/tool-gateway.ts");
+    
+    const defsContent = fs.readFileSync(defsPath, "utf8");
+    const gatewayContent = fs.readFileSync(gatewayPath, "utf8");
+    
+    if (defsContent.includes("theme.assets.patch") || defsContent.includes("shopify.prepareThemePatch")) {
+      throw new Error("Security Violation: Legacy theme patch tools registered in definitions.");
+    }
+    if (gatewayContent.includes("theme.assets.patch") || gatewayContent.includes("shopify.prepareThemePatch")) {
+      throw new Error("Security Violation: Legacy theme patch references in gateway execution.");
+    }
+  });
+
+  // Test 41: Verify legacy prepareProductUpdate is not enabled
+  await check("41. shopify.prepareProductUpdate must not be enabled or create legacy approvals", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    const defsPath = path.resolve(process.cwd(), "src/server/tools/tool-definitions.ts");
+    const defsContent = fs.readFileSync(defsPath, "utf8");
+    if (defsContent.includes("shopify.prepareProductUpdate")) {
+      throw new Error("Security Violation: shopify.prepareProductUpdate is still registered.");
+    }
+    
+    const gatewayPath = path.resolve(process.cwd(), "src/server/tools/tool-gateway.ts");
+    const gatewayContent = fs.readFileSync(gatewayPath, "utf8");
+    if (gatewayContent.includes("case \"shopify.prepareProductUpdate\":")) {
+      throw new Error("Security Violation: shopify.prepareProductUpdate case handler exists in gateway.");
+    }
+  });
+
+  // Test 42: Verify decide routes contain zero execution capabilities
+  await check("42. setMockProducts, setActiveThemeCode, and upsertProductSnapshot must be unreachable from approvals decide routes", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    const routesPath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    const content = fs.readFileSync(routesPath, "utf8");
+    
+    if (content.includes("setMockProducts")) {
+      throw new Error("Security Violation: setMockProducts is referenced in approvals routes.");
+    }
+    if (content.includes("setActiveThemeCode")) {
+      throw new Error("Security Violation: setActiveThemeCode is referenced in approvals routes.");
+    }
+    if (content.includes("upsertProductSnapshot")) {
+      throw new Error("Security Violation: upsertProductSnapshot is referenced in approvals routes.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

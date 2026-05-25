@@ -1,7 +1,5 @@
 import * as mockTools from "./mock-shopify-tools.js";
-import { createApproval } from "../services/approval.service.js";
-import { writeLog, writeAuditEvent } from "../services/audit-log.service.js";
-import { getMockProducts } from "../data/mock-products.js";
+import { writeAuditEvent } from "../services/audit-log.service.js";
 import { getDemoPlatformContext } from "../services/platform-context.service.js";
 import { ToolExecutionContext } from "../services/tool-execution-context.service.js";
 import { readShopInfo, readProducts, ShopifyAdminApiError } from "../services/shopify-admin-client.service.js";
@@ -41,6 +39,11 @@ export function isToolExecutionContext(obj: any): obj is ToolExecutionContext {
  *  6. TODO: billing / plan enforcement
  */
 export function validateToolExecutionContext(toolName: string, context: ToolExecutionContext): ValidationResult {
+  let effectiveToolName = toolName;
+  if (toolName === "shopify.prepareProductUpdate") {
+    effectiveToolName = "catalog.products.propose_update";
+  }
+
   // 1. Agent installation disabled check
   if (!context.agentInstallation.enabled) {
     return {
@@ -60,17 +63,23 @@ export function validateToolExecutionContext(toolName: string, context: ToolExec
   }
 
   // 3. Tool not registered in enabledTools check
-  const isEnabled = context.enabledTools.some(t => t.name === toolName);
+  const isEnabled = context.enabledTools.some(t => t.name === effectiveToolName);
   if (!isEnabled) {
     return {
       isValid: false,
-      error: `Tool ${toolName} is not enabled on this platform`,
+      error: `Tool ${effectiveToolName} is not enabled on this platform`,
       reason: "tool_not_enabled"
     };
   }
 
   // 4. Tool not allowed by agentDefinition.allowedTools check
-  if (!context.agentDefinition.allowedTools || !context.agentDefinition.allowedTools.includes(toolName)) {
+  const isAllowedByAgent = (
+    context.agentDefinition.allowedTools && (
+      context.agentDefinition.allowedTools.includes(effectiveToolName) ||
+      context.agentDefinition.allowedTools.includes(toolName)
+    )
+  );
+  if (!isAllowedByAgent) {
     return {
       isValid: false,
       error: "Tool not allowed for this agent",
@@ -79,10 +88,16 @@ export function validateToolExecutionContext(toolName: string, context: ToolExec
   }
 
   // 4.5. Tool not allowed by agentInstallation.allowedTools check
-  if (!context.agentInstallation.allowedTools || !context.agentInstallation.allowedTools.includes(toolName)) {
+  const isAllowedByInstallation = (
+    context.agentInstallation.allowedTools && (
+      context.agentInstallation.allowedTools.includes(effectiveToolName) ||
+      context.agentInstallation.allowedTools.includes(toolName)
+    )
+  );
+  if (!isAllowedByInstallation) {
     return {
       isValid: false,
-      error: `Tool ${toolName} is not allowed by agent installation`,
+      error: `Tool ${effectiveToolName} is not allowed by agent installation`,
       reason: "tool_not_allowed_by_installation"
     };
   }
@@ -156,7 +171,20 @@ export async function executeToolWithContext(
   context: ToolExecutionContext,
   customApprovalDetails?: { title: string; summary: string; before?: string }
 ): Promise<ExecuteToolResult> {
-  const result = await executeToolWithContextRaw(toolName, args, context, customApprovalDetails);
+  let effectiveToolName = toolName;
+  let effectiveArgs = args;
+
+  if (toolName === "shopify.prepareProductUpdate") {
+    effectiveToolName = "catalog.products.propose_update";
+    const cleanArgs = args || {};
+    effectiveArgs = {
+      productId: String(cleanArgs.productId || ""),
+      fields: cleanArgs.fields || {},
+      summary: cleanArgs.summary || customApprovalDetails?.summary || "Legacy prepareProductUpdate proposal redirect."
+    };
+  }
+
+  const result = await executeToolWithContextRaw(effectiveToolName, effectiveArgs, context, customApprovalDetails);
   
   const status = result.status === "failed" ? "failed" : "completed";
   const decision = result.status === "failed" ? "failed" : "completed";
@@ -167,10 +195,10 @@ export async function executeToolWithContext(
     agentInstallationId: context.agentInstallation.id,
     agentId: context.agentDefinition.id,
     agentDefinitionId: context.agentDefinition.id,
-    toolName,
+    toolName: effectiveToolName,
     initiator: context.agentDefinition.name,
     event: AuditEventNames.GATEWAY_TOOL_EXECUTION,
-    description: `Tool \`${toolName}\` execution status: ${status}`,
+    description: `Tool \`${effectiveToolName}\` execution status: ${status}`,
     decision,
     reason: result.status === "failed" ? "tool_execution_failed" : undefined,
     metadata: {
@@ -178,10 +206,10 @@ export async function executeToolWithContext(
       storeConnectionId: context.storeConnection.id,
       agentInstallationId: context.agentInstallation.id,
       agentId: context.agentDefinition.id,
-      toolName,
+      toolName: effectiveToolName,
       decision,
       status,
-      argsCount: Object.keys(args || {}).length
+      argsCount: Object.keys(effectiveArgs || {}).length
     }
   });
 
@@ -377,99 +405,6 @@ async function executeToolWithContextRaw(
     case "shopify.getSalesSummary": {
       const result = mockTools.getSalesSummary();
       return { toolName, args: cleanArgs, status: "success", result };
-    }
-
-    case "shopify.prepareProductUpdate": {
-      const productId = Number(cleanArgs.productId || 101);
-      const localProducts = getMockProducts();
-      const localProd = localProducts.find(p => p.id === productId) || localProducts[0];
-      const newFields = cleanArgs.fields || {};
-
-      // Determine before and after description copy
-      const beforeDesc = customApprovalDetails?.before || localProd.description;
-      const afterDesc = newFields.description || "Updated copy content draft.";
-
-      const title = customApprovalDetails?.title || `Optimized content draft for ${localProd.title}`;
-      const summary = customApprovalDetails?.summary || "Gemini-generated high-converting sales copywriting overhaul.";
-
-      // Register approval
-      const approval = createApproval({
-        agentId: context.agentDefinition.id,
-        agentName: context.agentDefinition.name,
-        actionType: "PRODUCT_UPDATE",
-        targetId: String(productId),
-        details: {
-          title,
-          before: beforeDesc,
-          after: afterDesc,
-          summary,
-          productId,
-          fields: newFields
-        }
-      });
-
-      // Standard logging for approval creation
-      writeLog(
-        context.agentDefinition.name,
-        "APPROVAL_CREATED",
-        `Added manual audit item ${approval.id} for product ${productId}`,
-        { approvalId: approval.id }
-      );
-
-      return {
-        toolName,
-        args: cleanArgs,
-        status: "requires_approval",
-        approvalId: approval.id,
-        result: {
-          status: customApprovalDetails ? "Awaiting owner authentication" : "Awaiting shop owner sign-off",
-          approvalId: approval.id
-        }
-      };
-    }
-
-    case "shopify.prepareThemePatch": {
-      const themeId = cleanArgs.themeId || "main_theme";
-      const patch = cleanArgs.patch || "/* Polished rules */";
-
-      const title = customApprovalDetails?.title || "Shopify core theme UI/CSS layout adjustment";
-      const summary = customApprovalDetails?.summary || "Visual refinement compiled by theme agent.";
-      const beforeCode = customApprovalDetails?.before || "/* Former theme layout hooks */";
-
-      // Register approval
-      const approval = createApproval({
-        agentId: context.agentDefinition.id,
-        agentName: context.agentDefinition.name,
-        actionType: "THEME_PATCH",
-        targetId: themeId,
-        details: {
-          title,
-          before: beforeCode,
-          after: patch,
-          summary,
-          themeId,
-          patch
-        }
-      });
-
-      // Standard logging for approval creation
-      writeLog(
-        context.agentDefinition.name,
-        "APPROVAL_CREATED",
-        `Added manual CSS overhaul task ${approval.id}`,
-        { approvalId: approval.id }
-      );
-
-      return {
-        toolName,
-        args: cleanArgs,
-        status: "requires_approval",
-        approvalId: approval.id,
-        result: {
-          status: customApprovalDetails ? "Awaiting approval action" : "Awaiting theme verification",
-          approvalId: approval.id
-        }
-      };
     }
 
     case "shopify.shop.read": {

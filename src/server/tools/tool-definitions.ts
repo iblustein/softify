@@ -30,20 +30,6 @@ export const ENABLED_TOOLS: ToolDefinition[] = [
     riskLevel: "Low"
   },
   {
-    name: "shopify.prepareProductUpdate",
-    description: "Draft structural updates (e.g. SEO descriptions or pricing fields) for products, queuing items in the human-in-the-loop Approval interface.",
-    parameters: '{"productId": "number", "fields": "object", "summary": "string"}',
-    requiredScope: "write_products",
-    riskLevel: "Medium"
-  },
-  {
-    name: "shopify.prepareThemePatch",
-    description: "Draft custom layout theme patches or CSS rule modifications, queuing items in the human-in-the-loop Approval interface.",
-    parameters: '{"themeId": "string", "patch": "string", "summary": "string"}',
-    requiredScope: "write_themes",
-    riskLevel: "High"
-  },
-  {
     name: "shopify.shop.read",
     description: "Read real general shop settings, plan, currency, and scopes using live Shopify Admin API.",
     parameters: '{"shopDomain": "string?"}',

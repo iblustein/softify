@@ -13,24 +13,26 @@ The validation suite `scripts/release-check.mjs` was executed and completed succ
 - **Check 39 (Tool definitions proposal-only registration check)**: Passed
   - Asserts that only `catalog.products.propose_update` is registered with `read_products` scope and `Medium` risk.
   - Proves that `theme.assets.patch` is not registered.
-- **Check 28 (Allowed write/proposal keyword whitelist check)**: Passed
+- **Check 40 (Verify legacy theme patching is absent)**: Passed
+  - Ensures `theme.assets.patch` and `shopify.prepareThemePatch` are not registered in definitions or referenced in the gateway.
+- **Check 41 (Verify legacy prepareProductUpdate is disabled)**: Passed
+  - Confirms `shopify.prepareProductUpdate` is not enabled and does not have case blocks in the gateway.
+- **Check 42 (Verify unreachable decide routes capabilities)**: Passed
+  - Confirms `setMockProducts`, `setActiveThemeCode`, and `upsertProductSnapshot` are completely unreachable from decide routes.
 
 ```bash
 > node scripts/release-check.mjs
 
 === SOFTIFY SAAS PRE-DEPLOYMENT RELEASE VERIFICATION ===
 ...
-Verifying: 28. No write tools, product update tools, or mutation tools exist...
+Verifying: 40. theme.assets.patch and shopify.prepareThemePatch must not be registered or executed...
 ✓ PASS
-...
-Verifying: 37. Firestore approval repository contract compliance check...
+Verifying: 41. shopify.prepareProductUpdate must not be enabled or create legacy approvals...
 ✓ PASS
-Verifying: 38. Repository provider contract wireup check...
-✓ PASS
-Verifying: 39. Tool definitions proposal-only mutation tool registration check...
+Verifying: 42. setMockProducts, setActiveThemeCode, and upsertProductSnapshot must be unreachable from approvals decide routes...
 ✓ PASS
 
-Results: 39 passed, 0 failed, total 39
+Results: 42 passed, 0 failed, total 42
 RELEASE VERIFICATION PASSED SUCCESSFULLY!
 ```
 
