@@ -5,6 +5,8 @@ Phase 10.7 introduces a highly secure, tenant-isolated, transaction-locked execu
 
 All mutations are performed exclusively via the **Shopify Admin GraphQL API `productUpdate` mutation**, strictly avoiding the legacy REST write path. Concurrency is guarded via an atomic state claim transaction (`APPROVED` -> `EXECUTING`) before any external writes are dispatched.
 
+This release has been heavily hardened to defend tenant boundaries, verify scopes defensively at all layers, and protect execution log sequences.
+
 ---
 
 ## Changes Implemented
@@ -26,14 +28,16 @@ All mutations are performed exclusively via the **Shopify Admin GraphQL API `pro
 ### 3. Shopify Client GraphQL Integration (`src/server/services/shopify-admin-client.service.ts`)
 - Implemented `updateProductAllowedFields` using the GraphQL Admin API `productUpdate` mutation.
 - Fully encapsulated credentials resolution and token decryption inside the service.
+- **Defensive Permission Guard**: Added a self-contained, internal `write_products` scope validation to prevent unauthorized updates even if pre-scanned.
 - Enforced product GID structure normalization (supports both standard Shopify GIDs and raw numeric IDs, converting the latter seamlessly).
 - Treated non-empty `userErrors` returning from GraphQL as failures.
-- Sanitized return shape to strictly return only `productId`, `updatedFields`, and optional `shopifyUpdatedAt`.
+- **Sanitized Outcome Shape**: Return type `SanitizedProductMutationResult` is hardened so that `updatedFields` returns strictly the names of fields updated (`AllowedProductProposalField[]`), completely suppressing the retrieval or leakage of raw values.
 
 ### 4. Product Mutation Executor Service (`src/server/services/approved-product-mutation-executor.service.ts`)
 - Designed a separate, highly secure executor service orchestrating the full execution lifecycle.
-- Applied tenant matching validations and verified connection status (`CONNECTED`) and scope capabilities (`write_products`).
+- **Robust Tenant Verification**: Verifies `storeConn.organizationId === organizationId` immediately after connection lookup, throwing `TENANT_ISOLATION_VIOLATION` and auditing `APPROVAL_EXECUTION_BLOCKED` if mismatched.
 - Managed transition states: logged block events and returned non-destructive failures (keeping status `APPROVED`) on pre-execution network/scope issues, then atomically transitioned to `EXECUTING` during the database claim transaction.
+- **Hardened Audit Logging Order**: Shifted `APPROVAL_EXECUTION_STARTED` audit logging to occur strictly *after* the database transaction claim succeeds. If the claim fails due to concurrency lock conflicts, it audits `APPROVAL_EXECUTION_BLOCKED` with reason `concurrency_conflict`.
 - Conducted sanitization, trimming, length-capping, enum checks, and tag deduplication filters on all payload properties.
 - Triggered incremental product snapshot refresh on success by invoking the authentic read-based product sync service rather than patching database snapshots manually.
 
@@ -48,12 +52,12 @@ All mutations are performed exclusively via the **Shopify Admin GraphQL API `pro
   - **Test 44**: Enforces token signature encapsulation inside the client service.
   - **Test 45**: Tests tenant boundaries and state rejections.
   - **Test 46**: Validates atomic concurrency locks and duplicate claims blocking.
-  - **Test 47**: Protects against unauthorized scope expansions (forbids pricing, variants, themes, inventory, or media mutations).
+  - **Test 47**: Hardens static validations (asserts client checks `write_products`, executor verifies store connection organization ownership, started audit happens after claim, and no pricing/media/variant mutations exist).
 
 ### 7. End-to-End Integration Verification (`scripts/smoke-test.mjs`)
-- Added `Test P` running the full execution suite end-to-end:
-  - Generates proposal request, approves request (validation deferral).
-  - Triggers execution via `POST /execute` with tenant mismatch checks.
-  - Validates successful execution state transition to `APPLIED`.
-  - Verifies double execution / concurrency locks block correctly.
-  - Asserts audit log events presence.
+- Extended `Test P` to verify:
+  - Scoped execution test using `scope-mismatch.myshopify.com` connection without `write_products`.
+  - Verifies execution attempts are blocked and return `400` errors.
+  - Confirms approvals remain `APPROVED` non-destructively, `APPROVAL_EXECUTION_BLOCKED` audit is written, and no `APPLIED` state is reached.
+  - Succeeded execution status transition to `APPLIED` on correct credentials.
+  - Duplicate execution blocking / concurrency claim locks.

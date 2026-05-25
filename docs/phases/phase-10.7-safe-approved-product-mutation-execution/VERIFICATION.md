@@ -7,7 +7,10 @@ All offline release validation tests pass successfully:
 - **Test 44**: Verified that `updateProductAllowedFields` public signature does not accept decrypted access tokens.
 - **Test 45**: Verified that `executeApprovedProductMutation` fails when there's an organizationId mismatch or invalid state.
 - **Test 46**: Assured that concurrent execution is blocked by the transactional claims lock.
-- **Test 47**: Confirmed that pricing, inventory, variant, media, or description mutations are completely blocked.
+- **Test 47**: Confirmed that pricing, inventory, variant, media, or description mutations are completely blocked. Validated that:
+  - the client service checks `write_products` internally.
+  - the executor verifies store connection organization ownership.
+  - execution started audit happens after the atomic claim succeeds.
 
 Run this check:
 ```bash
@@ -26,8 +29,16 @@ We ran local end-to-end smoke testing under isolated test scopes. The following 
    - Sends execution request with mismatching `organizationId` -> Rejected with HTTP `403`.
    - Sends execution request with mismatching `shop` -> Rejected with HTTP `400`.
    - Executes with correct credentials -> Succeeded with HTTP `200` and state transitions to `APPLIED`.
-4. **Idempotency Guard**: Re-sends duplicate execution request -> Rejected with HTTP `400` indicating the request was already finalized.
-5. **Auditing Verification**: Verifies presence of `APPROVAL_EXECUTION_STARTED` and `APPROVAL_APPLIED` audit logs.
+4. **Defensive Missing Scope Verification**:
+   - Seeds a connection without `write_products` scope.
+   - Installs agent and generates a proposal.
+   - Approves request successfully.
+   - Executes proposal -> Blocked and returns `400` indicating missing `write_products` scope.
+   - Verifies request remains `APPROVED` (non-destructive status preservation).
+   - Verifies `APPROVAL_EXECUTION_BLOCKED` audit log exists.
+   - Verifies no `APPROVAL_APPLIED` event exists.
+5. **Idempotency Guard**: Re-sends duplicate execution request -> Rejected with HTTP `400` indicating the request was already finalized.
+6. **Auditing Verification**: Verifies presence of `APPROVAL_EXECUTION_STARTED` and `APPROVAL_APPLIED` audit logs.
 
 Run this check:
 ```bash

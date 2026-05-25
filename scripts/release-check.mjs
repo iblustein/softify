@@ -1010,14 +1010,47 @@ async function runVerification() {
     }
   });
 
-  // Test 47: No unauthorized themes, variants, price, media, inventory mutations in active client code or tools
-  await check("47. No unauthorized mutation capabilities in executor service", async () => {
+  // Test 47: No unauthorized mutations & executor / client service static hardening verification
+  await check("47. Hardening checks inside executor and shopify client", async () => {
     const fs = await import("fs");
     const path = await import("path");
     const execPath = path.resolve(process.cwd(), "src/server/services/approved-product-mutation-executor.service.ts");
-    const content = fs.readFileSync(execPath, "utf8");
-    if (content.includes("price") || content.includes("inventory") || content.includes("variant") || content.includes("media") || content.includes("descriptionHtml")) {
+    const execContent = fs.readFileSync(execPath, "utf8");
+    
+    // 1. Forbidden fields check
+    if (execContent.includes("price") || execContent.includes("inventory") || execContent.includes("variant") || execContent.includes("media") || execContent.includes("descriptionHtml")) {
       throw new Error("Security Violation: Found forbidden mutation scopes (price, inventory, variant, media, or descriptionHtml) in executor service.");
+    }
+
+    // 2. Verify store connection organization ownership validation is present in executor
+    if (!execContent.includes("storeConn.organizationId !== organizationId")) {
+      throw new Error("Hardening Violation: Executor service does not verify store connection organization ownership.");
+    }
+
+    // 3. Verify execution started audit happens after claim in executor code
+    const claimIdx = execContent.indexOf("claimApprovalForExecution");
+    const startedIdx = execContent.indexOf("APPROVAL_EXECUTION_STARTED");
+    if (claimIdx === -1 || startedIdx === -1) {
+      throw new Error("Hardening Violation: claimApprovalForExecution or APPROVAL_EXECUTION_STARTED references are missing in executor service.");
+    }
+    if (startedIdx < claimIdx) {
+      throw new Error("Hardening Violation: APPROVAL_EXECUTION_STARTED audit event occurs before claimApprovalForExecution.");
+    }
+
+    // 4. Verify shopify admin client checks write_products
+    const clientPath = path.resolve(process.cwd(), "src/server/services/shopify-admin-client.service.ts");
+    const clientContent = fs.readFileSync(clientPath, "utf8");
+    
+    // Scan for updateProductAllowedFields function block
+    if (!clientContent.includes("updateProductAllowedFields")) {
+      throw new Error("Hardening Violation: Could not locate updateProductAllowedFields in shopify client service.");
+    }
+    
+    const writeCheckIdx = clientContent.indexOf("write_products");
+    const updateFuncIdx = clientContent.indexOf("updateProductAllowedFields");
+    if (writeCheckIdx === -1 || writeCheckIdx < updateFuncIdx) {
+      // Must check write_products within or after updateProductAllowedFields definition
+      throw new Error("Hardening Violation: updateProductAllowedFields does not perform self-contained write_products validation.");
     }
   });
 

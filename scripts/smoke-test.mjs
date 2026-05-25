@@ -968,7 +968,107 @@ async function runSuite() {
     if (!startedEvent) throw new Error("Missing APPROVAL_EXECUTION_STARTED audit log event.");
     if (!appliedEvent) throw new Error("Missing APPROVAL_APPLIED audit log event.");
 
-    console.log("   [EXECUTION TESTS] Verified successful execution, tenant rejections, claim locks, and audit events.");
+    // 7. Verify missing write_products hardening checks dynamically
+    const mismatchShop = "scope-mismatch.myshopify.com";
+    
+    // Install agent on scope-mismatch connection
+    const resInstallMismatch = await fetch(`${baseUrl}/api/agents/install`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop: mismatchShop,
+        agentId: "agent_product_intelligence"
+      })
+    });
+    await checkResponse(resInstallMismatch);
+
+    // Trigger proposal creation on scope-mismatch
+    const resChatMismatch = await fetch(`${baseUrl}/api/agents/chat?t=${timestamp}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop: mismatchShop,
+        agentId: "agent_product_intelligence",
+        message: "simulate tool catalog.products.propose_update"
+      })
+    });
+    await checkResponse(resChatMismatch);
+
+    // Fetch approvals and find mismatch approval
+    const resApprovalsMismatch = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
+    await checkResponse(resApprovalsMismatch);
+    const approvalsMismatch = await resApprovalsMismatch.json();
+    const pendingMismatch = approvalsMismatch.find(
+      a => a.status === "PENDING" && a.toolName === "catalog.products.propose_update" && a.storeConnectionId === "store-scope-mismatch"
+    );
+    if (!pendingMismatch) {
+      throw new Error("Expected to find a PENDING approval request for scope-mismatch connection.");
+    }
+    const mismatchApprovalId = pendingMismatch.id;
+
+    // Approve the request
+    const resDecideMismatch = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/decide?t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision: "APPROVE",
+        organizationId: "demo-org-id"
+      })
+    });
+    await checkResponse(resDecideMismatch);
+
+    // Attempt execution (expect failure due to missing write_products scope)
+    const resExecMismatch = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/execute?t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organizationId: "demo-org-id",
+        shop: mismatchShop
+      })
+    });
+    if (resExecMismatch.status !== 400) {
+      throw new Error(`Expected HTTP 400 Bad Request for missing write scope execution, got: ${resExecMismatch.status}`);
+    }
+    const mismatchExecData = await resExecMismatch.json();
+    if (!mismatchExecData.error || !mismatchExecData.error.toLowerCase().includes("write_products")) {
+      throw new Error(`Expected write_products error message, got: ${JSON.stringify(mismatchExecData)}`);
+    }
+
+    // Verify approval request remains APPROVED
+    const resApprovalsMismatchAfter = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
+    await checkResponse(resApprovalsMismatchAfter);
+    const approvalsMismatchAfter = await resApprovalsMismatchAfter.json();
+    const checkedMismatch = approvalsMismatchAfter.find(a => a.id === mismatchApprovalId);
+    if (!checkedMismatch || checkedMismatch.status !== "APPROVED") {
+      throw new Error(`Expected approval status to remain APPROVED, got: ${checkedMismatch?.status}`);
+    }
+
+    // Verify APPROVAL_EXECUTION_BLOCKED audit event exists
+    const resAuditsMismatch = await fetch(`${baseUrl}/api/audit-logs?organizationId=demo-org-id&t=${timestamp}`);
+    await checkResponse(resAuditsMismatch);
+    const auditsMismatch = await resAuditsMismatch.json();
+    const blockedEvent = auditsMismatch.find(
+      a => a.event === "APPROVAL_EXECUTION_BLOCKED" && a.metadata?.approvalId === mismatchApprovalId && a.metadata?.reason === "missing_write_products_scope"
+    );
+    if (!blockedEvent) {
+      throw new Error("Expected to find APPROVAL_EXECUTION_BLOCKED audit log event with reason missing_write_products_scope.");
+    }
+
+    // Verify no APPLIED state is reached for this request
+    const appliedEventMismatch = auditsMismatch.find(
+      a => a.event === "APPROVAL_APPLIED" && a.metadata?.approvalId === mismatchApprovalId
+    );
+    if (appliedEventMismatch) {
+      throw new Error("Security Violation: APPROVAL_APPLIED audit event exists for scope-mismatch connection.");
+    }
+
+    console.log("   [EXECUTION TESTS] Verified successful execution, tenant rejections, claim locks, missing scope rejections, and audit events.");
   });
 
   // Summary Printing

@@ -3,6 +3,7 @@ import { decryptAccessToken } from "./token-crypto.service.js";
 import { getShopifyAdminApiConfig } from "../config/shopify-admin-api.config.js";
 import { isShopifyOAuthConfigured } from "../config/shopify.config.js";
 import { getMockProducts } from "../data/mock-products.js";
+import { AllowedProductProposalField } from "../domain/types.js";
 
 export class ShopifyAdminApiError extends Error {
   constructor(public code: string, message: string, public details?: any) {
@@ -497,7 +498,7 @@ export interface UpdateProductFieldsArgs {
 
 export interface SanitizedProductMutationResult {
   productId: string;
-  updatedFields: Record<string, any>;
+  updatedFields: AllowedProductProposalField[];
   shopifyUpdatedAt?: string;
 }
 
@@ -528,6 +529,14 @@ export async function updateProductAllowedFields(
     );
   }
 
+  // Self-contained write_products permission check
+  if (!connection.scopes.includes("write_products")) {
+    throw new ShopifyAdminApiError(
+      "SHOPIFY_SCOPE_MISSING",
+      "The connected Shopify store is missing the required write_products scope."
+    );
+  }
+
   // Normalize and validate GID format
   let gid = productId.trim();
   if (!gid.startsWith("gid://shopify/Product/")) {
@@ -551,7 +560,7 @@ export async function updateProductAllowedFields(
   if (!isConfigured || isMockDomain) {
     return {
       productId: gid,
-      updatedFields: fields,
+      updatedFields: Object.keys(fields) as AllowedProductProposalField[],
       shopifyUpdatedAt: new Date().toISOString()
     };
   }
@@ -669,7 +678,7 @@ export async function updateProductAllowedFields(
 
   return {
     productId: updatedProduct.id || gid,
-    updatedFields: fields,
+    updatedFields: Object.keys(fields) as AllowedProductProposalField[],
     shopifyUpdatedAt: updatedProduct.updatedAt || new Date().toISOString()
   };
 }

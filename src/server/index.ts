@@ -59,6 +59,19 @@ async function seedInMemoryDb() {
         plan: "Standard Plan",
         currency: "ILS"
       });
+
+      // Seed scope-mismatch connection (no write_products)
+      await repos.stores.createStoreConnection({
+        id: "store-scope-mismatch",
+        organizationId: "demo-org-id",
+        storeUrl: "scope-mismatch.myshopify.com",
+        accessTokenEncrypted: encryptedToken,
+        scopes: ["read_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+        status: "CONNECTED",
+        connectedAt: new Date().toISOString(),
+        plan: "Standard Plan",
+        currency: "USD"
+      });
       
       console.log("[DATABASE SEED] Seeded mock store connections in-memory.");
     }

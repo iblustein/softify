@@ -56,6 +56,33 @@ export async function executeApprovedProductMutation(
     );
   }
 
+  // Verify store connection organization ownership
+  if (storeConn.organizationId !== organizationId) {
+    const reason = "tenant_isolation_violation";
+    await writeAuditEvent({
+      organizationId,
+      storeConnectionId: approval.storeConnectionId,
+      agentInstallationId: approval.agentInstallationId,
+      agentId: approval.agentId,
+      toolName: approval.toolName,
+      initiator: performer,
+      event: AuditEventNames.APPROVAL_EXECUTION_BLOCKED,
+      description: `Execution blocked for approval '${approvalId}': ${reason}`,
+      decision: "blocked",
+      reason,
+      metadata: {
+        approvalId,
+        reason,
+        decision: "blocked"
+      }
+    });
+
+    throw new ApprovedProductMutationExecutorError(
+      "TENANT_ISOLATION_VIOLATION",
+      "Access denied. Store connection organization ownership mismatch."
+    );
+  }
+
   // Verify connected status and write scope
   const hasWriteScope = storeConn.scopes.includes("write_products");
   if (storeConn.status !== "CONNECTED" || !hasWriteScope) {
@@ -86,13 +113,43 @@ export async function executeApprovedProductMutation(
     );
   }
 
-  // Audit execution started event
+  // 2. Perform Atomic Claim transaction
+  let claimedApproval: ApprovalRequest;
+  try {
+    claimedApproval = await repos.approvals.claimApprovalForExecution(approvalId, organizationId);
+  } catch (err: any) {
+    // Audit execution blocked due to concurrency conflict
+    await writeAuditEvent({
+      organizationId,
+      storeConnectionId: approval.storeConnectionId,
+      agentInstallationId: approval.agentInstallationId,
+      agentId: approval.agentId,
+      toolName: approval.toolName,
+      initiator: performer,
+      event: AuditEventNames.APPROVAL_EXECUTION_BLOCKED,
+      description: `Execution blocked for approval '${approvalId}': concurrency_conflict`,
+      decision: "blocked",
+      reason: "concurrency_conflict",
+      metadata: {
+        approvalId,
+        reason: "concurrency_conflict",
+        decision: "blocked"
+      }
+    });
+
+    throw new ApprovedProductMutationExecutorError(
+      "CONCURRENCY_CONFLICT",
+      `Failed to claim approval for execution: ${err.message}`
+    );
+  }
+
+  // Audit execution started event AFTER successful claim
   await writeAuditEvent({
     organizationId,
-    storeConnectionId: approval.storeConnectionId,
-    agentInstallationId: approval.agentInstallationId,
-    agentId: approval.agentId,
-    toolName: approval.toolName,
+    storeConnectionId: claimedApproval.storeConnectionId,
+    agentInstallationId: claimedApproval.agentInstallationId,
+    agentId: claimedApproval.agentId,
+    toolName: claimedApproval.toolName,
     initiator: performer,
     event: AuditEventNames.APPROVAL_EXECUTION_STARTED,
     description: `Initiated execution for approval '${approvalId}'`,
@@ -102,17 +159,6 @@ export async function executeApprovedProductMutation(
       decision: "allowed"
     }
   });
-
-  // 2. Perform Atomic Claim transaction
-  let claimedApproval: ApprovalRequest;
-  try {
-    claimedApproval = await repos.approvals.claimApprovalForExecution(approvalId, organizationId);
-  } catch (err: any) {
-    throw new ApprovedProductMutationExecutorError(
-      "CONCURRENCY_CONFLICT",
-      `Failed to claim approval for execution: ${err.message}`
-    );
-  }
 
   // 3. String/Tag Validation & Sanitization
   const fields = claimedApproval.sanitizedPayload || {};
