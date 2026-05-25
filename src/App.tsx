@@ -47,14 +47,30 @@ export default function App() {
   const [shopifyTestShop, setShopifyTestShop] = useState<string | null>(null);
   const [isOAuthConfigured, setIsOAuthConfigured] = useState<boolean>(false);
 
+  // Centralized active shop context resolver
+  const resolveActiveShop = () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    return (
+      urlParams.get("shop") ||
+      shopifyLaunchShop ||
+      (store && store.url) ||
+      shopifyTestShop ||
+      null
+    );
+  };
+
+  const buildShopQuery = (isFirstParam = true) => {
+    const shop = resolveActiveShop();
+    if (!shop) return "";
+    return `${isFirstParam ? '?' : '&'}shop=${encodeURIComponent(shop)}`;
+  };
+
   // Fetch core parameters
   const fetchAllData = async () => {
     setIsLoading(true);
     setErrorText(null);
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const shopParam = urlParams.get("shop");
-      const shopQuery = shopParam ? `?shop=${encodeURIComponent(shopParam)}` : '';
+      const shopQuery = buildShopQuery();
 
       const [shopRes, agentsRes, approvalsRes, logsRes, statsRes] = await Promise.all([
         fetch(`/api/shop${shopQuery}`),
@@ -106,7 +122,7 @@ export default function App() {
       let latestStatus: string | null = null;
 
       try {
-        const shopQuery = shopParam ? `&shop=${encodeURIComponent(shopParam)}` : '';
+        const shopQuery = buildShopQuery(false);
         const res = await fetch(`/api/shopify/oauth/status?check_setup=true${shopQuery}`);
         if (res.ok) {
           const statusData = await res.json();
@@ -164,7 +180,16 @@ export default function App() {
       // Handle query params on redirection callback
       if (urlParams.get("shopify_connected") === "true") {
         const shop = urlParams.get("shop") || "Store";
-        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Construct new search params by preserving shop and host/embedded context, while removing shopify_connected
+        const cleanParams = new URLSearchParams(window.location.search);
+        cleanParams.delete("shopify_connected");
+        cleanParams.delete("hmac");
+        cleanParams.delete("timestamp");
+        
+        const newSearch = cleanParams.toString();
+        const newUrl = window.location.pathname + (newSearch ? `?${newSearch}` : "");
+        window.history.replaceState({}, document.title, newUrl);
         console.log(`[Shopify OAuth] Store ${shop} connected successfully via OAuth!`);
       }
     }
@@ -175,9 +200,7 @@ export default function App() {
   // Sync state stats after approvals/updates
   const syncStatsAndLogs = async () => {
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const shopParam = urlParams.get("shop");
-      const shopQuery = shopParam ? `?shop=${encodeURIComponent(shopParam)}` : '';
+      const shopQuery = buildShopQuery();
 
       const [statsRes, logsRes, approvalsRes, productsRes] = await Promise.all([
         fetch(`/api/dashboard-stats${shopQuery}`),
@@ -288,9 +311,7 @@ export default function App() {
     setIsActionLoading(true);
     setErrorText(null);
     try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const shopParam = urlParams.get("shop");
-      const shopQuery = shopParam ? `?shop=${encodeURIComponent(shopParam)}` : '';
+      const shopQuery = buildShopQuery();
 
       const res = await fetch(`/api/approvals/${id}/decide${shopQuery}`, {
         method: 'POST',

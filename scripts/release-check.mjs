@@ -1175,6 +1175,30 @@ async function runVerification() {
     }
   });
 
+  // Test 52: Frontend shop context persistence and URL cleanup regression validation
+  await check("52. Frontend shop context persistence and URL cleanup regression validation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    const appPath = path.resolve(process.cwd(), "src/App.tsx");
+    const appContent = fs.readFileSync(appPath, "utf8");
+    
+    // 1. App.tsx must not call window.history.replaceState with window.location.pathname only
+    if (appContent.includes("window.history.replaceState({}, document.title, window.location.pathname)")) {
+      throw new Error("Regression Violation: App.tsx blindly clears URL query params using window.location.pathname, which removes the shop context.");
+    }
+    
+    // 2. App.tsx must have a centralized helper for resolving shop context
+    if (!appContent.includes("resolveActiveShop") || !appContent.includes("buildShopQuery")) {
+      throw new Error("Hardening Violation: App.tsx is missing a centralized shop context resolver (resolveActiveShop / buildShopQuery).");
+    }
+
+    // 3. Check that URLSearchParams is used for selective parameter deletion
+    if (!appContent.includes("delete(\"shopify_connected\")")) {
+      throw new Error("Hardening Violation: App.tsx does not use URLSearchParams to selectively remove transient OAuth callback parameters.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {
