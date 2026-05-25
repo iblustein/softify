@@ -1148,6 +1148,33 @@ async function runVerification() {
     }
   });
 
+  // Test 51: Dynamic tenant context resolution validation on routes
+  await check("51. Dynamic tenant context resolution static assertions on routes", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    const auditPath = path.resolve(process.cwd(), "src/server/routes/audit.routes.ts");
+    const approvalsPath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    
+    const auditContent = fs.readFileSync(auditPath, "utf8");
+    const approvalsContent = fs.readFileSync(approvalsPath, "utf8");
+    
+    // Check audit-logs route has store connection lookup and context validation
+    if (!auditContent.includes("getStoreConnectionByUrl") || !auditContent.includes("storeConnection.organizationId")) {
+      throw new Error("Static Check Violation: audit.routes.ts is missing store connection lookup or organizationId resolution/validation.");
+    }
+    
+    // Check approvals routes have store connection lookup and organizationId resolution/validation
+    if (!approvalsContent.includes("getStoreConnectionByUrl") || !approvalsContent.includes("storeConnection.organizationId")) {
+      throw new Error("Static Check Violation: approvals.routes.ts is missing store connection lookup or organizationId resolution/validation.");
+    }
+
+    // Check approvals decide endpoint resolves requestShop from body or query
+    if (!approvalsContent.includes("req.body.shop") || !approvalsContent.includes("req.query.shop")) {
+      throw new Error("Static Check Violation: approvals.routes.ts decide endpoint does not support shop context resolution.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

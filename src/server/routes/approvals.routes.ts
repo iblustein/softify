@@ -85,10 +85,6 @@ router.get("/approvals", async (req: any, res: any) => {
   try {
     const { organizationId, shop, status } = req.query;
 
-    if (!organizationId || typeof organizationId !== "string") {
-      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
-    }
-
     if (status && typeof status === "string") {
       const validStatuses = ["PENDING", "APPROVED", "REJECTED", "EXECUTING", "APPLIED", "FAILED"];
       if (!validStatuses.includes(status)) {
@@ -97,6 +93,7 @@ router.get("/approvals", async (req: any, res: any) => {
     }
 
     const repos = getRepositories();
+    let resolvedOrgId: string | undefined = undefined;
     let storeConnectionId: string | undefined = undefined;
 
     if (shop && typeof shop === "string") {
@@ -106,16 +103,28 @@ router.get("/approvals", async (req: any, res: any) => {
         return res.status(404).json({ ok: false, error: "Store connection not found." });
       }
 
-      // Strict tenant scoping check: verify store connection scopes to requesting organizationId
-      if (storeConnection.organizationId !== organizationId) {
-        return res.status(403).json({ ok: false, error: "Access denied. Store does not belong to this organization." });
+      // If organizationId is also supplied, assert they match to prevent cross-tenant queries
+      if (organizationId && typeof organizationId === "string") {
+        if (storeConnection.organizationId !== organizationId) {
+          return res.status(403).json({ ok: false, error: "Access denied. Store does not belong to this organization." });
+        }
       }
 
+      resolvedOrgId = storeConnection.organizationId;
       storeConnectionId = storeConnection.id;
+    } else {
+      if (!organizationId || typeof organizationId !== "string") {
+        return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+      }
+      resolvedOrgId = organizationId;
+    }
+
+    if (!resolvedOrgId) {
+      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
     }
 
     // Retrieve via repository (dynamically resolving to Firestore or In-Memory fallback)
-    const dbApprovals = await repos.approvals.getApprovalsByOrganizationId(organizationId);
+    const dbApprovals = await repos.approvals.getApprovalsByOrganizationId(resolvedOrgId);
 
     let filteredApprovals = dbApprovals;
     if (storeConnectionId) {
@@ -129,7 +138,7 @@ router.get("/approvals", async (req: any, res: any) => {
       organizationId: (a as any).organizationId || "demo-org-id",
       storeConnectionId: (a as any).storeConnectionId || "store-luminary",
       agentInstallationId: (a as any).agentInstallationId || "inst-mock"
-    })).filter(a => a.organizationId === organizationId);
+    })).filter(a => a.organizationId === resolvedOrgId);
     
     // Prefer database records if Firestore is configured (never fall back to in-memory), otherwise use filtered cache
     const finalApprovals: any[] = isFirestore ? filteredApprovals : (filteredApprovals.length > 0 ? filteredApprovals : legacyQueue);
@@ -148,18 +157,41 @@ router.get("/approvals", async (req: any, res: any) => {
 
 router.post("/approvals/:id/decide", async (req: any, res: any) => {
   const { id } = req.params;
-  const { decision, organizationId } = req.body;
+  const { decision } = req.body;
+  const requestOrgId = req.body.organizationId || req.query.organizationId;
+  const requestShop = req.body.shop || req.query.shop;
 
   try {
     if (!decision || !["APPROVE", "REJECT"].includes(decision)) {
       return res.status(400).json({ ok: false, error: "Invalid or missing decision parameter. Acceptable: 'APPROVE', 'REJECT'." });
     }
 
-    if (!organizationId || typeof organizationId !== "string") {
-      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+    const repos = getRepositories();
+    let resolvedOrgId: string | undefined = undefined;
+
+    if (requestShop && typeof requestShop === "string") {
+      const cleanShop = normalizeShopDomain(requestShop);
+      const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+      if (!storeConnection) {
+        return res.status(404).json({ ok: false, error: "Store connection not found." });
+      }
+
+      if (requestOrgId && typeof requestOrgId === "string") {
+        if (storeConnection.organizationId !== requestOrgId) {
+          return res.status(403).json({ ok: false, error: "Access denied. Store does not belong to this organization." });
+        }
+      }
+      resolvedOrgId = storeConnection.organizationId;
+    } else {
+      if (!requestOrgId || typeof requestOrgId !== "string") {
+        return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+      }
+      resolvedOrgId = requestOrgId;
     }
 
-    const repos = getRepositories();
+    if (!resolvedOrgId) {
+      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+    }
     
     // 1. Resolve from dynamic repository provider
     let approvalItem = await repos.approvals.getApprovalById(id);
@@ -170,7 +202,7 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
       if (legacyItem) {
         approvalItem = {
           id: legacyItem.id,
-          organizationId: (legacyItem as any).organizationId || organizationId,
+          organizationId: (legacyItem as any).organizationId || resolvedOrgId,
           storeConnectionId: (legacyItem as any).storeConnectionId || "store-luminary",
           agentInstallationId: (legacyItem as any).agentInstallationId || "inst-mock",
           agentId: legacyItem.agentId,
@@ -194,7 +226,7 @@ router.post("/approvals/:id/decide", async (req: any, res: any) => {
     }
 
     // Strict tenant isolation scope check
-    if (approvalItem.organizationId !== organizationId) {
+    if (approvalItem.organizationId !== resolvedOrgId) {
       return res.status(403).json({ ok: false, error: "Access denied. Approval request does not belong to this organization." });
     }
 

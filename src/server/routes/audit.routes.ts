@@ -10,12 +10,8 @@ const router = Router();
 router.get("/audit-logs", async (req: any, res: any) => {
   try {
     const { organizationId, shop } = req.query;
-
-    if (!organizationId || typeof organizationId !== "string") {
-      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
-    }
-
     const repos = getRepositories();
+    let resolvedOrgId: string | undefined = undefined;
     let storeConnectionId: string | undefined = undefined;
 
     if (shop && typeof shop === "string") {
@@ -25,33 +21,44 @@ router.get("/audit-logs", async (req: any, res: any) => {
         return res.status(404).json({ ok: false, error: "Store connection not found." });
       }
 
-      // Strict tenant scoping check: verify store connection scopes to requesting organizationId
-      if (storeConnection.organizationId !== organizationId) {
-        // Add audit logging for tenant isolation shop mismatch before throwing/returning
-        await writeAuditEvent({
-          organizationId: storeConnection.organizationId,
-          storeConnectionId: storeConnection.id,
-          initiator: "system",
-          event: AuditEventNames.GATEWAY_VALIDATION_BLOCKED,
-          description: `Access denied. Store '${cleanShop}' queried with organizationId '${organizationId}' does not belong to it.`,
-          decision: "blocked",
-          reason: "tenant_isolation_violation",
-          metadata: {
+      // If organizationId is also supplied, assert they match to prevent cross-tenant queries
+      if (organizationId && typeof organizationId === "string") {
+        if (storeConnection.organizationId !== organizationId) {
+          await writeAuditEvent({
             organizationId: storeConnection.organizationId,
-            queriedOrganizationId: organizationId,
             storeConnectionId: storeConnection.id,
+            initiator: "system",
+            event: AuditEventNames.GATEWAY_VALIDATION_BLOCKED,
+            description: `Access denied. Store '${cleanShop}' queried with organizationId '${organizationId}' does not belong to it.`,
             decision: "blocked",
-            reason: "tenant_isolation_violation"
-          }
-        });
-        return res.status(403).json({ ok: false, error: "Access denied. Store does not belong to this organization." });
+            reason: "tenant_isolation_violation",
+            metadata: {
+              organizationId: storeConnection.organizationId,
+              queriedOrganizationId: organizationId,
+              storeConnectionId: storeConnection.id,
+              decision: "blocked",
+              reason: "tenant_isolation_violation"
+            }
+          });
+          return res.status(403).json({ ok: false, error: "Access denied. Store does not belong to this organization." });
+        }
       }
 
+      resolvedOrgId = storeConnection.organizationId;
       storeConnectionId = storeConnection.id;
+    } else {
+      if (!organizationId || typeof organizationId !== "string") {
+        return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
+      }
+      resolvedOrgId = organizationId;
+    }
+
+    if (!resolvedOrgId) {
+      return res.status(400).json({ ok: false, error: "Missing required organizationId parameter." });
     }
 
     // Retrieve via repository (dynamically resolving to Firestore or In-Memory fallback)
-    const dbEvents = await repos.audit.getAuditEventsByOrganizationId(organizationId);
+    const dbEvents = await repos.audit.getAuditEventsByOrganizationId(resolvedOrgId);
 
     let filteredEvents = dbEvents;
     if (storeConnectionId) {
@@ -59,7 +66,7 @@ router.get("/audit-logs", async (req: any, res: any) => {
     }
 
     // Sync context to in-memory audit logs strictly filtered by organizationId
-    const cachedLogs = getAuditLogs(organizationId, storeConnectionId);
+    const cachedLogs = getAuditLogs(resolvedOrgId, storeConnectionId);
 
     // Prefer database records if Firestore is configured (never fall back to in-memory), otherwise use filtered cache
     const finalLogs = isFirestoreConfigured() ? filteredEvents : (filteredEvents.length > 0 ? filteredEvents : cachedLogs);

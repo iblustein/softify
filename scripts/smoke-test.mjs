@@ -1371,6 +1371,75 @@ async function runSuite() {
     }
   });
 
+  // Test R: Embedded Admin Tenant Context Regression Fix validation
+  await check("R. Embedded Admin Tenant Context Regression Fix validation", async () => {
+    const timestamp = Date.now();
+
+    // 1. GET /api/approvals?shop=... should return 200
+    const approvalsShopUrl = `${baseUrl}/api/approvals?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resApprovalsShop = await fetch(approvalsShopUrl);
+    await checkResponse(resApprovalsShop);
+    const approvalsList = await resApprovalsShop.json();
+    if (!Array.isArray(approvalsList)) {
+      throw new Error("Expected approvals list to be an array.");
+    }
+
+    // 2. GET /api/audit-logs?shop=... should return 200
+    const auditShopUrl = `${baseUrl}/api/audit-logs?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resAuditShop = await fetch(auditShopUrl);
+    await checkResponse(resAuditShop);
+    const auditList = await resAuditShop.json();
+    if (!Array.isArray(auditList)) {
+      throw new Error("Expected audit-logs list to be an array.");
+    }
+
+    // 3. GET /api/approvals without organizationId and without shop should return 400
+    const resApprovalsEmpty = await fetch(`${baseUrl}/api/approvals?t=${timestamp}`);
+    if (resApprovalsEmpty.status !== 400) {
+      throw new Error(`Expected HTTP 400 for missing context, got: ${resApprovalsEmpty.status}`);
+    }
+
+    // 4. GET /api/audit-logs without organizationId and without shop should return 400
+    const resAuditEmpty = await fetch(`${baseUrl}/api/audit-logs?t=${timestamp}`);
+    if (resAuditEmpty.status !== 400) {
+      throw new Error(`Expected HTTP 400 for missing context, got: ${resAuditEmpty.status}`);
+    }
+
+    // 5. GET /api/approvals with mismatched organizationId and shop should return 403
+    const approvalsMismatchUrl = `${baseUrl}/api/approvals?shop=${encodeURIComponent(shop)}&organizationId=mismatch-org-999&t=${timestamp}`;
+    const resApprovalsMismatch = await fetch(approvalsMismatchUrl);
+    if (resApprovalsMismatch.status !== 403) {
+      throw new Error(`Expected HTTP 403 for mismatched tenant context, got: ${resApprovalsMismatch.status}`);
+    }
+
+    // 6. GET /api/audit-logs with mismatched organizationId and shop should return 403
+    const auditMismatchUrl = `${baseUrl}/api/audit-logs?shop=${encodeURIComponent(shop)}&organizationId=mismatch-org-999&t=${timestamp}`;
+    const resAuditMismatch = await fetch(auditMismatchUrl);
+    if (resAuditMismatch.status !== 403) {
+      throw new Error(`Expected HTTP 403 for mismatched tenant context, got: ${resAuditMismatch.status}`);
+    }
+
+    // 7. Decide an approval with shop context parameter
+    // Let's find a PENDING approval first
+    const pendingItem = approvalsList.find(a => a.status === "PENDING");
+    if (pendingItem) {
+      const decideUrl = `${baseUrl}/api/approvals/${pendingItem.id}/decide?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+      const resDecide = await fetch(decideUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision: "REJECT" })
+      });
+      await checkResponse(resDecide);
+      const decideRes = await resDecide.json();
+      const finalStatus = decideRes.status || decideRes.approval?.status;
+      if (finalStatus !== "REJECTED") {
+        throw new Error(`Expected status to be REJECTED, got: ${finalStatus}`);
+      }
+    } else {
+      console.log("   [INFO] No PENDING approvals found to test shop-based decision.");
+    }
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

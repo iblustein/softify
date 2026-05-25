@@ -59,8 +59,8 @@ export default function App() {
       const [shopRes, agentsRes, approvalsRes, logsRes, statsRes] = await Promise.all([
         fetch(`/api/shop${shopQuery}`),
         fetch('/api/agents'),
-        fetch('/api/approvals'),
-        fetch('/api/audit-logs'),
+        fetch(`/api/approvals${shopQuery}`),
+        fetch(`/api/audit-logs${shopQuery}`),
         fetch(`/api/dashboard-stats${shopQuery}`)
       ]);
 
@@ -175,11 +175,15 @@ export default function App() {
   // Sync state stats after approvals/updates
   const syncStatsAndLogs = async () => {
     try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shopParam = urlParams.get("shop");
+      const shopQuery = shopParam ? `?shop=${encodeURIComponent(shopParam)}` : '';
+
       const [statsRes, logsRes, approvalsRes, productsRes] = await Promise.all([
-        fetch('/api/dashboard-stats'),
-        fetch('/api/audit-logs'),
-        fetch('/api/approvals'),
-        fetch('/api/products')
+        fetch(`/api/dashboard-stats${shopQuery}`),
+        fetch(`/api/audit-logs${shopQuery}`),
+        fetch(`/api/approvals${shopQuery}`),
+        fetch(`/api/products${shopQuery}`)
       ]);
       if (statsRes.ok && logsRes.ok && approvalsRes.ok) {
         setStats(await statsRes.json());
@@ -284,7 +288,11 @@ export default function App() {
     setIsActionLoading(true);
     setErrorText(null);
     try {
-      const res = await fetch(`/api/approvals/${id}/decide`, {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shopParam = urlParams.get("shop");
+      const shopQuery = shopParam ? `?shop=${encodeURIComponent(shopParam)}` : '';
+
+      const res = await fetch(`/api/approvals/${id}/decide${shopQuery}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision })
@@ -350,6 +358,48 @@ export default function App() {
       setIsActionLoading(false);
     }
   };
+
+  // Render premium error recovery UI on initial sync failures
+  if (!isLoading && errorText && (!store || !stats)) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-950 text-slate-100 font-sans p-6">
+        <div className="max-w-md w-full bg-slate-900 border border-rose-500/30 rounded-2xl p-6 shadow-2xl relative overflow-hidden backdrop-blur-xl animate-fade-in">
+          {/* Subtle gradient glow */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+          
+          <div className="flex flex-col items-center text-center">
+            <div className="w-16 h-16 bg-rose-500/15 border border-rose-500/30 rounded-full flex items-center justify-center mb-5 animate-pulse">
+              <AlertCircle className="w-8 h-8 text-rose-500" />
+            </div>
+            
+            <h2 className="text-lg font-bold tracking-tight text-white mb-2 font-display uppercase">
+              Gateway Connection Interrupted
+            </h2>
+            
+            <p className="text-xs text-slate-400 mb-6 max-w-sm leading-relaxed">
+              We encountered a server handshake warning during initial gateway synchronization. Verify your store connection or database interfaces.
+            </p>
+            
+            <div className="w-full bg-slate-950/65 border border-slate-800/80 rounded-xl p-3.5 mb-6 text-left">
+              <span className="text-[10px] text-rose-400 font-mono tracking-wider uppercase block mb-1">Diagnostic Log</span>
+              <p className="text-xs text-rose-200/90 font-mono break-all leading-normal">
+                {errorText}
+              </p>
+            </div>
+            
+            <button
+              onClick={fetchAllData}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-rose-600 to-indigo-600 hover:from-rose-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg transition duration-200 cursor-pointer active:scale-95"
+            >
+              <RefreshCw className="w-4 h-4 animate-spin-slow" />
+              <span>Retry Syncing Gateway</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Render Loader screen
   if (isLoading || !store || !stats) {
