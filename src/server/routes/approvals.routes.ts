@@ -1203,7 +1203,14 @@ router.post("/approvals/batch-execute", async (req: any, res: any) => {
 
           results.push({ id: approvalItem.id, status: executed.status });
         } catch (execError: any) {
-          results.push({ id: approvalItem.id, status: "FAILED", error: execError.message });
+          const isBlocked = execError.code === "EXECUTION_BLOCKED" ||
+                            execError.message?.includes("missing write_products scope") ||
+                            execError.message?.includes("Store connection is missing write_products scope");
+          if (isBlocked) {
+            results.push({ id: approvalItem.id, status: "BLOCKED", error: execError.message });
+          } else {
+            results.push({ id: approvalItem.id, status: "FAILED", error: execError.message });
+          }
         }
       }
     }

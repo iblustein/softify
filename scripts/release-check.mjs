@@ -1485,6 +1485,14 @@ async function runVerification() {
     if (!propRouteContent.includes("allowedFieldsList")) {
       throw new Error("Preflight Safety Violation: batch-request-approval does not check allowed fields in Phase 1 preflight.");
     }
+
+    // 8. Verify batch-execute distinguishes EXECUTION_BLOCKED / missing write_products safe blocks from generic FAILED results
+    if (!approvalsRouteContent.includes("EXECUTION_BLOCKED") || !approvalsRouteContent.includes("missing write_products scope")) {
+      throw new Error("Safe Block Exception Violation: batch-execute does not check for EXECUTION_BLOCKED or missing write_products scope in sequential queue loop.");
+    }
+    if (!approvalsRouteContent.includes("status: \"BLOCKED\"") && !approvalsRouteContent.includes("status: 'BLOCKED'")) {
+      throw new Error("Safe Block Mapping Violation: batch-execute does not map safe scope-blocked exceptions to 'BLOCKED' status.");
+    }
   });
 
   // Print PASS/FAIL Summary
