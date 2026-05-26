@@ -368,8 +368,11 @@ router.post("/proposed-actions/batch-request-approval", async (req: any, res: an
       return res.status(400).json({ ok: false, error: "Duplicate IDs detected in batch request." });
     }
 
-    // Phase 1: Preflight Validation (Strict item existence & tenant checks)
+    // Phase 1: Preflight Validation (Strict item existence, tenant checks, eligibility)
     const fetchedItems: ProposedAction[] = [];
+    const classifications = new Map<string, "ALREADY_REQUESTED" | "BRIDGE_REQUIRED">();
+    const allowedFieldsList = ["title", "vendor", "productType", "status", "tags"];
+
     for (const id of ids) {
       const act = await repos.proposedActions.getProposedActionById(id);
       if (!act) {
@@ -381,6 +384,46 @@ router.post("/proposed-actions/batch-request-approval", async (req: any, res: an
         return res.status(403).json({ ok: false, error: `Access denied. Proposed action '${id}' does not belong to this organization or store connection.` });
       }
 
+      // Classify items
+      if (act.status === "APPROVAL_REQUESTED" || act.approvalRequestId) {
+        classifications.set(id, "ALREADY_REQUESTED");
+      } else if (act.status === "DRAFT" || act.status === "APPROVAL_ELIGIBLE") {
+        // Validate full bridge eligibility
+        if (act.executionMode !== "APPROVAL_REQUIRED") {
+          return res.status(400).json({ ok: false, error: `Proposed action '${id}' has invalid execution mode: '${act.executionMode}'.` });
+        }
+
+        const changes = act.changes || {};
+        const payloadKeys = Object.keys(changes);
+
+        if (payloadKeys.length === 0) {
+          return res.status(400).json({ ok: false, error: `Proposed action '${id}' has empty changes payload.` });
+        }
+
+        const hasForbidden = payloadKeys.some(k => !allowedFieldsList.includes(k));
+        if (hasForbidden) {
+          return res.status(400).json({ ok: false, error: `Proposed action '${id}' contains forbidden changes fields.` });
+        }
+
+        const sanitizedPayload: any = {};
+        if (typeof changes.title === "string") sanitizedPayload.title = changes.title;
+        if (typeof changes.vendor === "string") sanitizedPayload.vendor = changes.vendor;
+        if (typeof changes.productType === "string") sanitizedPayload.productType = changes.productType;
+        if (typeof changes.status === "string") sanitizedPayload.status = changes.status;
+        if (Array.isArray(changes.tags)) {
+          sanitizedPayload.tags = changes.tags.map((t: any) => String(t));
+        }
+
+        if (Object.keys(sanitizedPayload).length === 0) {
+          return res.status(400).json({ ok: false, error: `Proposed action '${id}' does not contain any valid updates.` });
+        }
+
+        classifications.set(id, "BRIDGE_REQUIRED");
+      } else {
+        // Any other status must fail preflight
+        return res.status(400).json({ ok: false, error: `Proposed action '${id}' has invalid status for bridging: '${act.status}'.` });
+      }
+
       fetchedItems.push(act);
     }
 
@@ -389,8 +432,8 @@ router.post("/proposed-actions/batch-request-approval", async (req: any, res: an
     let bridgedCount = 0;
 
     for (const act of fetchedItems) {
-      // Idempotency check: if already requested, do not recreate approval, report existing APV-id
-      if (act.status === "APPROVAL_REQUESTED" || act.approvalRequestId) {
+      const cls = classifications.get(act.id);
+      if (cls === "ALREADY_REQUESTED") {
         results.push({
           id: act.id,
           status: "ALREADY_REQUESTED",

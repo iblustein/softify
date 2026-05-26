@@ -1829,17 +1829,64 @@ async function runSuite() {
   await check("V. Production Bulk Operations Foundation (batch request, decide, execute, and tenant isolation)", async () => {
     const timestamp = Date.now();
 
-    // 1. Fetch draft proposed actions dynamically
+    // 1. Fetch draft proposed actions dynamically (trigger a run to ensure enough drafts exist)
+    const runUrl = `${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resRunDraft = await fetch(runUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "content_agent",
+        mode: "DRAFT",
+        scope: { type: "SHOP" }
+      })
+    });
+    await checkResponse(resRunDraft);
+
     const resGetActs = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&t=${timestamp}`);
     await checkResponse(resGetActs);
     const actsList = await resGetActs.json();
     const draftActions = actsList.filter(a => a.status === "DRAFT" || a.status === "APPROVAL_ELIGIBLE");
-    if (draftActions.length < 2) {
-      throw new Error(`Smoke Test Prep Error: Expected at least 2 draft proposed actions, got ${draftActions.length}. Run a scan first.`);
+    if (draftActions.length < 3) {
+      throw new Error(`Smoke Test Prep Error: Expected at least 3 draft proposed actions, got ${draftActions.length}.`);
     }
 
     const testAction1 = draftActions[0].id;
     const testAction2 = draftActions[1].id;
+    const testAction3 = draftActions[2].id;
+
+    // A. Two-Phase Preflight Safety Gating Test:
+    // Dismiss testAction3 first to make it ineligible for bridging (invalid status: DISMISSED)
+    const resDismissItem3 = await fetch(`${baseUrl}/api/proposed-actions/${testAction3}/dismiss?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST"
+    });
+    await checkResponse(resDismissItem3);
+
+    // Now try batch-request-approval where item 1 is valid (testAction1) but item 2 is invalid (testAction3 is DISMISSED)
+    const resInvalidBatchRequest = await fetch(`${baseUrl}/api/proposed-actions/batch-request-approval?t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: [testAction1, testAction3],
+        organizationId: TEST_ORGANIZATION_ID,
+        shop
+      })
+    });
+    // The entire batch request must fail with 400 Bad Request
+    if (resInvalidBatchRequest.status !== 400) {
+      throw new Error(`Expected HTTP 400 Bad Request for ineligible status in batch-request-approval preflight, got: ${resInvalidBatchRequest.status}`);
+    }
+    const dataInvalid = await resInvalidBatchRequest.json();
+    if (dataInvalid.ok === true) {
+      throw new Error(`Expected ok to be false for ineligible preflight request, got: ${JSON.stringify(dataInvalid)}`);
+    }
+
+    // Verify no partial state changes occurred: testAction1's status MUST still be strictly DRAFT in database
+    const resCheckAction1 = await fetch(`${baseUrl}/api/proposed-actions/${testAction1}?shop=${encodeURIComponent(shop)}&t=${timestamp}`);
+    await checkResponse(resCheckAction1);
+    const action1Details = await resCheckAction1.json();
+    if (action1Details.status !== "DRAFT" || action1Details.approvalRequestId) {
+      throw new Error(`Security/Two-Phase Violation: Valid item was partially bridged despite preflight failure. Details: ${JSON.stringify(action1Details)}`);
+    }
 
     // 2. Tenant Isolation validation: verify that passing a mismatched claimed organizationId returns 403 Forbidden
     const resDismissMismatched = await fetch(`${baseUrl}/api/proposed-actions/batch-dismiss?t=${timestamp}`, {

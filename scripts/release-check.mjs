@@ -1475,6 +1475,16 @@ async function runVerification() {
     if (!forbiddenMatches || forbiddenMatches.length < 2) {
       throw new Error("Tenant Safety Violation: Missing or weak tenant context validation check in approvals batch routes.");
     }
+
+    // 7. Verify batch-request-approval performs preflight validation for executionMode and allowed fields before calling requestProposedActionApprovalBridge
+    const propRoutePath = path.resolve(process.cwd(), "src/server/routes/proposed-actions.routes.ts");
+    const propRouteContent = fs.readFileSync(propRoutePath, "utf8");
+    if (!propRouteContent.includes("executionMode !== \"APPROVAL_REQUIRED\"") && !propRouteContent.includes("executionMode !== 'APPROVAL_REQUIRED'")) {
+      throw new Error("Preflight Safety Violation: batch-request-approval does not check executionMode in Phase 1 preflight.");
+    }
+    if (!propRouteContent.includes("allowedFieldsList")) {
+      throw new Error("Preflight Safety Violation: batch-request-approval does not check allowed fields in Phase 1 preflight.");
+    }
   });
 
   // Print PASS/FAIL Summary
