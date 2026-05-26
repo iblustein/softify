@@ -39,3 +39,15 @@ These notes provide security and architectural review parameters for the Lead Ar
 ### 2. Tenant Context Scoping
 - Mismatched request headers are securely rejected at the route boundaries with `403 Forbidden` responses.
 - Every workspace fetch in `AgentWorkspace.tsx` successfully passes the normalized `shopQuery` query parameter, ensuring secure tenant isolation inside embedded Shopify iframe contexts.
+
+---
+
+## Follow-up Notes / Non-blocking Technical Debt
+
+- `scripts/smoke-test.mjs` still uses `demo-org-id` as a smoke-test fixture. This is acceptable for Phase 10.11 because it is isolated to test code and no longer appears in production-facing frontend code.
+- Before Phase 10.12, especially if Phase 10.12 introduces Bulk Operations, review whether tenant test fixtures should be centralized into named constants or test configuration, for example:
+  - `TEST_ORGANIZATION_ID`
+  - `TEST_SHOP`
+  - `TEST_STORE_CONNECTION_ID`
+- Goal: avoid confusion between test fixture tenant IDs and production tenant context, and reduce the risk of accidentally copying fixture tenant IDs into runtime frontend/backend code.
+- This is non-blocking and does not require immediate code changes.
