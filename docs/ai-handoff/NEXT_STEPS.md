@@ -4,43 +4,26 @@ This document outlines the goals and requirements for the next proposed developm
 
 ---
 
-## Next Milestone: Phase 10.11 — MVP End-to-End Merchant Workflow Hardening
+## Next Milestone: Phase 10.12 — Production Bulk Operations Foundation
 
 ### Goal
-Harden the core MVP merchant workflow to ensure a highly stable, secure, and demo-ready end-to-end loop. The priority is user experience clarity, error resilience, empty-state guidance, and operational assurance across the entire pipeline:
-  Run Agent
-  → Review Recommendation
-  → Review Proposed Action
-  → Request Approval
-  → Approve
-  → Explicitly Execute
-  → See Result
-  → See Audit / Timeline / Analytics Update
+Define and implement secure, throttled, and transactional bulk/batch operational capabilities in the Softify multi-agent workspace. After hardening the end-to-end manual loop in Phase 10.11, the platform is ready to evaluate batch utilities while preserving strict tenant isolation and merchant safety controls.
 
 ### Scope & Requirements (Proposed)
-1. **End-to-End Workflow Hardening**:
-   - Ensure the full loop from agent run diagnostics to live catalog write executions operates safely, transactionally, and predictably.
-2. **UX Clarity & Operational Guidance**:
-   - Improve visual states throughout the workspace: clear empty states, descriptive error boundaries, dynamic success states, and informative step-by-step guidance.
-   - Refine recommendations, proposed actions, merchant approvals, execution trackers, and analytics views to represent a coherent, cohesive workflow.
-3. **Demo & Pilot Readiness**:
-   - Prepare the application for stable merchant demonstration, verifying edge cases in context resolution, and providing seamless visual recovery flows.
+1. **Safe Bulk Handshake**:
+   - Introduce secure merchant-initiated batch approvals (`POST /api/approvals/batch-decide`) and batch execution (`POST /api/approvals/batch-execute`) routes.
+2. **Rate-Limiting & Concurrency Control**:
+   - Implement queue throttling in the execution pipeline to prevent API limit exhausts or rate-limit blocks on Shopify admin channels.
+3. **Workspace Batch Actions**:
+   - Enable batch request approval (`POST /api/proposed-actions/batch-request-approval`) and batch dismissal (`POST /api/proposed-actions/batch-dismiss`) in the frontend workspace.
 4. **Preserved Mutation Scope**:
-   - Ensure mutation scope remains strictly capped to approved text fields (`title`, `vendor`, `productType`, `status`, `tags`).
+   - Ensure mutation scope remains strictly capped to approved text fields (`title`, `vendor`, `productType`, `status`, `tags`). No price, variant, inventory, media, or descriptionHtml mutations.
 
 ### Deferrals & Boundaries
-The following features are explicitly deferred to later phases:
-- **Bulk Operations**: Batch dismiss, batch request approval, batch approve, and batch execute are strictly deferred.
-- **Automated Operations**: Auto-execution on approval is prohibited.
+The following features remain strictly out-of-scope:
+- **Auto-Execution**: Automatic execution on approval is prohibited.
 - **Theme Capabilities**: No theme tools, no `read_themes`, and no `write_themes` permissions.
-- **Mutation Scope Expansion**: Price, inventory, variant, media, and descriptionHtml mutations remain strictly disallowed.
-
-> [!IMPORTANT]
-> **Implementation Boundaries**:
-> - Antigravity must **not** implement Phase 10.11 code or modify actual backend/frontend logic until the implementation plan is explicitly reviewed and approved by the Architecture Supervisor.
-> - Any future phase **must not expand mutation scope** beyond the existing text fields (`title`, `vendor`, `productType`, `status`, `tags`).
-> - No theme tools, no `write_themes`, no price/inventory/variant/media/descriptionHtml mutations, and no auto-execution are allowed. All recovery endpoints remain strictly state-only.
-
+- **Direct AI mutations**: AI provider runtime may never invoke write tools directly on live stores; mutations must go through the merchant proposal and approval execution pipelines.
 
 ---
 

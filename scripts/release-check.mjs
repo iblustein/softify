@@ -1354,6 +1354,58 @@ async function runVerification() {
     }
   });
 
+  // Test 55: Phase 10.11 MVP End-to-End Merchant Workflow Hardening static guardrails
+  await check("55. Phase 10.11 MVP End-to-End Merchant Workflow Hardening static validation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+
+    // 1. Verify docs exist
+    const planPath = path.resolve(process.cwd(), "docs/phases/phase-10.11/IMPLEMENTATION_PLAN.md");
+    if (!fs.existsSync(planPath)) {
+      throw new Error("Phase 10.11 Implementation Plan file is missing.");
+    }
+
+    // 2. Validate no forbidden bulk/batch operations routes
+    const appPath = path.resolve(process.cwd(), "src/server/app.ts");
+    const appContent = fs.readFileSync(appPath, "utf8");
+    if (appContent.includes("batch-dismiss") || appContent.includes("batch-approve") || appContent.includes("batch-execute")) {
+      throw new Error("Security Violation: Batch/bulk routing paths found in app.ts.");
+    }
+
+    const approvalsRoutePath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    const approvalsRouteContent = fs.readFileSync(approvalsRoutePath, "utf8");
+    if (approvalsRouteContent.includes("batch-dismiss") || approvalsRouteContent.includes("batch-approve") || approvalsRouteContent.includes("batch-execute")) {
+      throw new Error("Security Violation: Batch/bulk routing paths found in approvals routes.");
+    }
+
+    // 3. Validate explicit approval and explicit execution language in components
+    const queuePath = path.resolve(process.cwd(), "src/components/ApprovalQueue.tsx");
+    const queueContent = fs.readFileSync(queuePath, "utf8");
+    
+    if (!queueContent.includes("Manual Gatekeeper Guardrail:") && !queueContent.includes("Manual Gatekeeper")) {
+      throw new Error("UX Hardening Violation: Missing explicit manual execution warning in ApprovalQueue.");
+    }
+    if (!queueContent.includes("Execute Commit to Shopify")) {
+      throw new Error("UX Hardening Violation: Missing explicit Execute Commit CTA button in ApprovalQueue.");
+    }
+
+    // 4. Validate no raw payload exposure patterns in proposed actions rendering
+    const workspacePath = path.resolve(process.cwd(), "src/components/AgentWorkspace.tsx");
+    const workspaceContent = fs.readFileSync(workspacePath, "utf8");
+    
+    if (workspaceContent.includes("JSON.stringify(act.changes")) {
+      throw new Error("Security Violation: Raw JSON payload exposure found in AgentWorkspace proposed actions review.");
+    }
+    
+    // Assert that the allowlist mapping is strictly present
+    const requiredAllowlistFields = ["'title'", "'vendor'", "'productType'", "'status'", "'tags'"];
+    for (const field of requiredAllowlistFields) {
+      if (!workspaceContent.includes(field) && !workspaceContent.includes(field.replace(/'/g, '"'))) {
+        throw new Error(`Security Violation: Allowlisted field mapping for '${field}' is missing in proposed action review.`);
+      }
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

@@ -50,12 +50,12 @@ This document provides a highly durable and centralized technical reference for 
 - **Embedded Admin Tenant Context Regression Fix**: Seamless backend shop-based dynamic context resolution for audit, approvals list, and approvals decide API endpoints. Frontend shop context persistence across url-redirection cleanups (preserving shop context and discarding only transient signatures), and premium visual sync warning recovery cards preventing infinite loaders.
 - **Multi-Agent Product Workspace Foundation**: A centralized agent catalog (`GET /api/agents/catalog`) exposing available agents. Scoped domain models (`AgentRun`, `Recommendation`, `ProposedAction`) in in-memory and GCP Firestore repository layers. REST routes with strict tenantcontext resolution and audit integrations, proposed action approval bridge with titlecase risk mapping, and a glassmorphic dashboard component `AgentWorkspace.tsx` integrated in the merchant app.
 - **Multi-Agent Workspace Analytics & Operational Visibility**: Strictly read-only, non-mutating operational analytics endpoints (`/api/workspace/analytics/*`) returning aggregated metric summaries, run trends, recommendation distributions, proposed action types, approval conversion funnels, and chronological trace timelines. Enforces clean `403 Forbidden` tenant mismatch responses with zero side effects or database writes, and strips all developer/internal metadata (such as raw prompts or reasoning) via a strictly-controlled allowlist-only timeline mapper.
-- **CI/CD & Production Smoke Tests**: All static release checks (54 tests) and live local/deployed smoke tests (27 tests) pass cleanly.
+- **MVP End-to-End Merchant Workflow Hardening**: Complete, robust merchant optimization pipeline (Select Agent → Scan → Propose Revision → Request Approval → Approve → Explicit execution → Live catalog refresh) fully hardened with premium spinner state masks, allowlisted comparison cards, dedicated error recoveries, and dynamic local synchronization.
+- **CI/CD & Production Smoke Tests**: All static release checks (55 tests) and live local/deployed smoke tests (27 tests) pass cleanly.
 
 ## Next Recommended Phase
-- **Phase 10.11 — MVP End-to-End Merchant Workflow Hardening**: Focuses strictly on hardening the core MVP flow (Analyze → Recommend → Propose → Approve → Execute safely → Audit).
-- **Deferred Bulk Operations**: Bulk operations (batch dismiss, batch request approval, batch approve, batch execute) are deferred until after the core MVP workflow is fully verified and stable.
-- **Capped Mutation Scope**: The current safe mutation scope (capping edits strictly to approved text fields: `title`, `vendor`, `productType`, `status`, `tags`) remains unchanged.
+- **Phase 10.12 — Production Bulk Operations Foundation**: Focuses on defining secure batch/bulk operations routes, queue rate-limiting, and bulk dismissal handshakes.
+- **Preserved Mutation Scope**: The current safe mutation scope (capping edits strictly to approved text fields: `title`, `vendor`, `productType`, `status`, `tags`) remains unchanged.
 
 ## Current Non-Goals
 - **No Theme Patching / Theme Tools**: Theme layout/CSS patching is entirely out-of-scope and disabled. No theme tools or read/write theme scopes may be used.

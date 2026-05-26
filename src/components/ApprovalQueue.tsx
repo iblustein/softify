@@ -6,30 +6,40 @@ import {
   Clock, 
   User, 
   Calendar, 
-  ArrowRight,
-  ChevronRight,
-  Eye,
-  Settings,
-  ShieldCheck,
-  AlertCircle
+  ArrowRight, 
+  ChevronRight, 
+  Eye, 
+  Settings, 
+  ShieldCheck, 
+  AlertCircle,
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
 import { ApprovalItem } from '../types';
 
 interface ApprovalQueueProps {
   approvals: ApprovalItem[];
   onDecide: (id: string, decision: 'APPROVE' | 'REJECT') => void;
+  onExecute: (id: string) => Promise<void>;
+  onResetFailed: (id: string) => Promise<void>;
   isLoading: boolean;
 }
 
 export default function ApprovalQueue({
   approvals,
   onDecide,
+  onExecute,
+  onResetFailed,
   isLoading
 }: ApprovalQueueProps) {
-  const [selectedItem, setSelectedItem] = useState<ApprovalItem | null>(
-    approvals.find(a => a.status === 'PENDING') || approvals[0] || null
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    const pending = approvals.find(a => a.status === 'PENDING');
+    if (pending) return pending.id;
+    return approvals[0]?.id || null;
+  });
   const [activeTab, setActiveTab] = useState<'PENDING' | 'DECIDED'>('PENDING');
+
+  const selectedItem = approvals.find(a => a.id === selectedId) || null;
 
   const pendingList = approvals.filter(a => a.status === 'PENDING');
   const decidedList = approvals.filter(a => a.status !== 'PENDING');
@@ -37,7 +47,7 @@ export default function ApprovalQueue({
   const displayedList = activeTab === 'PENDING' ? pendingList : decidedList;
 
   const handleSelect = (item: ApprovalItem) => {
-    setSelectedItem(item);
+    setSelectedId(item.id);
   };
 
   const handleAction = async (id: string, decision: 'APPROVE' | 'REJECT') => {
@@ -46,9 +56,9 @@ export default function ApprovalQueue({
     // Smooth transition: search for next pending item if available
     const nextItem = approvals.find(a => a.id !== id && a.status === 'PENDING');
     if (nextItem) {
-      setSelectedItem(nextItem);
+      setSelectedId(nextItem.id);
     } else {
-      setSelectedItem(null);
+      setSelectedId(null);
     }
   };
 
@@ -68,7 +78,7 @@ export default function ApprovalQueue({
         {/* Tab Selection */}
         <div className="flex border border-slate-200 rounded-xl p-0.5 bg-slate-50/75 max-w-sm shrink-0 shadow-3xs">
           <button
-            onClick={() => { setActiveTab('PENDING'); setSelectedItem(pendingList[0] || null); }}
+            onClick={() => { setActiveTab('PENDING'); setSelectedId(pendingList[0]?.id || null); }}
             className={`px-3 py-1.5 text-3xs font-bold rounded-lg transition-all ${
               activeTab === 'PENDING' 
                 ? 'bg-white text-indigo-950 shadow-xs border border-slate-150' 
@@ -78,7 +88,7 @@ export default function ApprovalQueue({
             Pending Reviews ({pendingList.length})
           </button>
           <button
-            onClick={() => { setActiveTab('DECIDED'); setSelectedItem(decidedList[0] || null); }}
+            onClick={() => { setActiveTab('DECIDED'); setSelectedId(decidedList[0]?.id || null); }}
             className={`px-3 py-1.5 text-3xs font-bold rounded-lg transition-all ${
               activeTab === 'DECIDED' 
                 ? 'bg-white text-indigo-950 shadow-xs border border-slate-150' 
@@ -120,8 +130,12 @@ export default function ApprovalQueue({
                         item.status === 'PENDING' 
                           ? 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse' 
                           : item.status === 'APPROVED' 
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                          : 'bg-red-50 text-red-700 border-red-105 border-red-100'
+                          ? 'bg-indigo-50 text-indigo-700 border-indigo-100 font-bold' 
+                          : item.status === 'EXECUTING'
+                          ? 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse'
+                          : item.status === 'APPLIED' || item.status === 'EXECUTED'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100 font-bold'
+                          : 'bg-red-50 text-red-700 border-red-100'
                       }`}>
                         {item.status}
                       </span>
@@ -207,39 +221,168 @@ export default function ApprovalQueue({
               </div>
 
               {/* Action Handlers */}
-              {selectedItem.status === 'PENDING' ? (
-                <div className="pt-5 border-t border-slate-200 flex items-center justify-between gap-4 mt-5">
-                  <span className="text-3xs text-slate-400 flex items-center gap-1.5 font-bold uppercase tracking-wider text-[8px]">
-                    <Eye className="w-4 h-4 text-indigo-500" />
-                    Review parameters before accepting
-                  </span>
+              {/* Action Handlers */}
+              {selectedItem.status === 'PENDING' && (
+                <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-800 flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Manual Gatekeeper Guardrail:</span> Approving is state-only and registers your authorization inside Softify. You must explicitly execute the approved action afterwards to apply changes to your Shopify storefront.
+                    </div>
+                  </div>
                   
-                  <div className="flex gap-2.5 shrink-0">
-                    <button
-                      onClick={() => handleAction(selectedItem.id, 'REJECT')}
-                      disabled={isLoading}
-                      className="px-4.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl border border-red-100 shadow-xs transition flex items-center gap-1 cursor-pointer animate-fade-in"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      Reject Payload
-                    </button>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-3xs text-slate-400 flex items-center gap-1.5 font-bold uppercase tracking-wider text-[8px]">
+                      <Eye className="w-4 h-4 text-indigo-500" />
+                      Review parameters before authorizing
+                    </span>
+                    
+                    <div className="flex gap-2.5 shrink-0">
+                      <button
+                        onClick={() => handleAction(selectedItem.id, 'REJECT')}
+                        disabled={isLoading}
+                        className="px-4.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl border border-red-100 shadow-xs transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        Reject Payload
+                      </button>
+                      
+                      <button
+                        onClick={() => handleAction(selectedItem.id, 'APPROVE')}
+                        disabled={isLoading}
+                        className="px-4.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer"
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        Authorize Proposed Payload
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedItem.status === 'APPROVED' && (
+                <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
+                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-3xs text-indigo-850 flex items-start gap-2 leading-relaxed">
+                    <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-indigo-950 uppercase block text-[9px] mb-0.5">Authorization Finalized (State-Only)</span>
+                      This proposed update has been approved by the merchant. No data has been committed to your Shopify catalog yet. Click the button below to explicitly execute this commit.
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-3xs text-slate-400 font-mono font-bold uppercase">
+                      Status: AUTHORIZED
+                    </span>
                     
                     <button
-                      onClick={() => handleAction(selectedItem.id, 'APPROVE')}
+                      onClick={() => onExecute(selectedItem.id)}
                       disabled={isLoading}
-                      className="px-4.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer animate-fade-in"
+                      className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
-                      <Check className="w-3.5 h-3.5" />
-                      Approve & Execute Commit
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                      Execute Commit to Shopify
                     </button>
                   </div>
                 </div>
-              ) : (
-                <div className="pt-4 border-t border-slate-100 mt-4 text-3xs text-slate-405 text-slate-500 flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-150 font-mono font-bold">
-                  <span>Authorized choice finalized on this payload.</span>
-                  <span className="font-bold text-slate-700 uppercase tracking-widest text-[9px]">
-                    Result: {selectedItem.status}
-                  </span>
+              )}
+
+              {selectedItem.status === 'EXECUTING' && (
+                <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-3xs text-blue-800 flex items-start gap-2 leading-relaxed">
+                    <RefreshCw className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 animate-spin" />
+                    <div>
+                      <span className="font-bold text-blue-950 uppercase block text-[9px] mb-0.5">Executing Shopify Mutation</span>
+                      Concurrency claim lock acquired. Safely writing catalog updates to Shopify Store via GraphQL product mutation pipeline...
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-3xs text-slate-400 font-mono font-bold uppercase animate-pulse">
+                      Status: CLAIMED & MUTATING
+                    </span>
+                    
+                    <button
+                      disabled
+                      className="px-5 py-2.5 text-xs font-bold text-white bg-blue-400 rounded-xl shadow-xs flex items-center gap-1.5 cursor-not-allowed"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Executing...
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {(selectedItem.status === 'APPLIED' || selectedItem.status === 'EXECUTED') && (
+                <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-3xs text-emerald-800 flex items-start gap-2 leading-relaxed">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-emerald-950 uppercase block text-[9px] mb-0.5">Execution Successful</span>
+                      The product catalog revision has been successfully committed to the active Shopify storefront! These updates are now live.
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-3xs font-mono font-bold text-slate-500">
+                    <span>Authorized changes successfully finalized.</span>
+                    <span className="text-emerald-700 uppercase tracking-widest text-[9px]">
+                      Result: APPLIED
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {selectedItem.status === 'FAILED' && (
+                <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-3xs text-rose-805 text-rose-800 space-y-2 leading-relaxed">
+                    <div className="flex items-start gap-2">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-rose-955 text-rose-950 uppercase block text-[9px] mb-0.5">Execution Failed</span>
+                        The safe execution was blocked or failed to apply.
+                      </div>
+                    </div>
+                    <div className="pl-6 border-l-2 border-rose-200 text-rose-700 text-[10px] space-y-1">
+                      <p><span className="font-bold font-mono text-rose-900">Operator Guidance:</span> Storefront connection credentials may be invalid, required scopes (e.g. <code className="bg-rose-100 px-1 py-0.5 rounded font-mono text-[9px]">write_products</code>) might be missing, or concurrency locks conflicted.</p>
+                      {(selectedItem as any).lastFailureReason && (
+                        <p><span className="font-bold text-rose-900">Detail:</span> "{(selectedItem as any).lastFailureReason}"</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-3xs text-slate-400 font-mono font-bold uppercase text-rose-700">
+                      Status: SYSTEM_FAILED
+                    </span>
+                    
+                    <button
+                      onClick={() => onResetFailed(selectedItem.id)}
+                      disabled={isLoading}
+                      className="px-5 py-2.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-205 border-rose-200 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                      Reset Failed Status (Retry)
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {selectedItem.status === 'REJECTED' && (
+                <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
+                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-3xs text-slate-600 flex items-start gap-2 leading-relaxed">
+                    <X className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-slate-900 uppercase block text-[9px] mb-0.5">Payload Rejected</span>
+                      This revision has been explicitly rejected and discarded. No modifications were written to your live storefront.
+                    </div>
+                  </div>
+                  
+                  <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-3xs font-mono font-bold text-slate-500">
+                    <span>Authorized choice finalized on this payload.</span>
+                    <span className="text-red-700 uppercase tracking-widest text-[9px]">
+                      Result: REJECTED
+                    </span>
+                  </div>
                 </div>
               )}
             </div>

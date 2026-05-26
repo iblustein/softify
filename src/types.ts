@@ -56,7 +56,7 @@ export interface ApprovalItem {
     fields?: any;
     patch?: string;
   };
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTING' | 'APPLIED' | 'FAILED' | 'EXECUTED';
   decidedAt?: string;
 }
 

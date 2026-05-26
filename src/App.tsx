@@ -331,6 +331,80 @@ export default function App() {
     }
   };
 
+  // Execute Approval Queue Item
+  const handleExecuteApproval = async (id: string) => {
+    setIsActionLoading(true);
+    setErrorText(null);
+    // Optimistic UI state transition to EXECUTING
+    setApprovals(prev => prev.map(item => item.id === id ? { ...item, status: 'EXECUTING' } : item));
+    
+    try {
+      const shop = resolveActiveShop();
+      const shopQuery = buildShopQuery();
+
+      const res = await fetch(`/api/approvals/${id}/execute${shopQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: 'demo-org-id',
+          shop,
+          performer: 'Shop Owner'
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Execution failed.');
+      }
+      
+      const data = await res.json();
+      const updatedItem = data.approval || data;
+      setApprovals(prev => prev.map(item => item.id === id ? updatedItem : item));
+      await syncStatsAndLogs();
+    } catch (err: any) {
+      setErrorText(err.message || 'Execution failed.');
+      // Rollback or mark as FAILED
+      setApprovals(prev => prev.map(item => item.id === id ? { ...item, status: 'FAILED', lastFailureReason: err.message } : item));
+      await syncStatsAndLogs();
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // Reset Failed Approval Queue Item
+  const handleResetFailedApproval = async (id: string) => {
+    setIsActionLoading(true);
+    setErrorText(null);
+    try {
+      const shop = resolveActiveShop();
+      const shopQuery = buildShopQuery();
+
+      const res = await fetch(`/api/approvals/${id}/reset-failed${shopQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          organizationId: 'demo-org-id',
+          shop,
+          performedBy: 'Shop Owner'
+        })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Reset failed.');
+      }
+      
+      const data = await res.json();
+      const updatedItem = data.approval || data;
+      setApprovals(prev => prev.map(item => item.id === id ? updatedItem : item));
+      await syncStatsAndLogs();
+    } catch (err: any) {
+      setErrorText(err.message || 'Reset failed.');
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   // Core Request Orchestration
   const handleSendOrchestratorMessage = async (prompt: string, selectedAgentId?: string) => {
     const userMessage: OrchestrationMessage = {
@@ -693,6 +767,8 @@ export default function App() {
               <ApprovalQueue 
                 approvals={approvals} 
                 onDecide={handleDecideApproval}
+                onExecute={handleExecuteApproval}
+                onResetFailed={handleResetFailedApproval}
                 isLoading={isActionLoading}
               />
             )}

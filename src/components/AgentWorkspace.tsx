@@ -101,6 +101,7 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
   const [isRunning, setIsRunning] = useState<boolean>(false);
   const [activeConsoleLog, setActiveConsoleLog] = useState<string>('// Workspace Idle...\n// Choose an agent and click "Launch Diagnostic Scan".');
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [requestingId, setRequestingId] = useState<string | null>(null);
 
   // Analytics States
   const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(false);
@@ -256,6 +257,7 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
 
   const handleRequestApproval = async (id: string) => {
     setErrorText(null);
+    setRequestingId(id);
     try {
       const res = await fetch(`/api/proposed-actions/${id}/request-approval${shopQuery}`, {
         method: 'POST'
@@ -267,6 +269,8 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
       await onRefreshStats();
     } catch (err: any) {
       setErrorText(err.message || 'Bridge request failed.');
+    } finally {
+      setRequestingId(null);
     }
   };
 
@@ -314,6 +318,20 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
             <RefreshCw className={`w-3.5 h-3.5 ${activeTab === 'analytics' && analyticsLoading ? 'animate-spin' : ''}`} />
             Sync
           </button>
+        </div>
+      </div>
+
+      {/* Sandboxed Safety Banner */}
+      <div className="p-4 bg-slate-900 border border-slate-800 rounded-2xl shadow-sm text-slate-300 text-xs flex items-start gap-3 relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="p-2 bg-indigo-950 border border-indigo-900 text-indigo-400 rounded-xl shrink-0">
+          <ShieldCheck className="w-5 h-5" />
+        </div>
+        <div>
+          <h4 className="text-white font-bold tracking-tight text-3xs uppercase font-mono mb-0.5">Sandboxed Environment</h4>
+          <p className="text-[11px] leading-relaxed text-slate-400">
+            Workspace agents suggest changes for your review. No mutations are ever written to your live store without explicit merchant approval and execution.
+          </p>
         </div>
       </div>
 
@@ -381,7 +399,16 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
           {/* Grid 2: Run Launcher & Log Console */}
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* Launcher controls */}
-            <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-4.5 shadow-2xs flex flex-col justify-between">
+            <div className="lg:col-span-2 bg-white border border-slate-200 rounded-2xl p-4.5 shadow-2xs flex flex-col justify-between relative overflow-hidden">
+              {isRunning && (
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center z-10 space-y-3">
+                  <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin" />
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-slate-900">Diagnostic Scanner Active</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-sans font-bold">Scoping store listing catalog...</p>
+                  </div>
+                </div>
+              )}
               <div className="space-y-4">
                 <div>
                   <h3 className="text-xs font-bold text-slate-900 uppercase">Scanner Settings</h3>
@@ -477,9 +504,7 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                 Sandboxed Telemetry Scrubber active
               </div>
             </div>
-          </div>
-
-          {/* Grid 3: Active Recommendations and Proposed Actions lists */}
+          </div>          {/* Grid 3: Active Recommendations and Proposed Actions lists */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* Recommendations block */}
             <div className="space-y-3">
@@ -487,37 +512,58 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                 Active Recommendations Center ({recommendations.length})
               </span>
               {recommendations.length === 0 ? (
-                <div className="p-6 border border-dashed border-slate-200 bg-white rounded-2xl text-center text-xs text-slate-400">
-                  <Info className="w-5 h-5 mx-auto text-slate-300 mb-1.5" />
-                  No active diagnostic recommendations. Execute a run scan to populate guidelines.
+                <div className="p-8 border border-dashed border-slate-205 bg-white rounded-3xl text-center text-xs text-slate-400 space-y-3 shadow-3xs">
+                  <div className="w-10 h-10 bg-indigo-50 border border-indigo-100 rounded-full flex items-center justify-center mx-auto text-indigo-600">
+                    <Sparkles className="w-5 h-5 animate-pulse" />
+                  </div>
+                  <div className="max-w-xs mx-auto space-y-1">
+                    <p className="font-bold text-slate-800 text-sm">Your Catalog is optimized</p>
+                    <p className="text-3xs text-slate-500 leading-relaxed font-sans">
+                      Select the Product Intelligence Agent above to inspect metadata completeness and scan for new optimization opportunities.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
-                  {recommendations.map(rec => (
-                    <div key={rec.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">{rec.title}</h4>
-                          <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block mt-0.5">
-                            Agent: {rec.agentId} • Impact: {rec.impactLevel} • Confidence: {Math.round(rec.confidence * 100)}%
-                          </span>
+                  {recommendations.map(rec => {
+                    let impactColor = 'bg-slate-50 text-slate-700 border-slate-200';
+                    if (rec.impactLevel === 'HIGH') impactColor = 'bg-indigo-50 text-indigo-700 border-indigo-200 font-extrabold';
+                    else if (rec.impactLevel === 'MEDIUM') impactColor = 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
+                    
+                    return (
+                      <div key={rec.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3 hover:shadow-2xs transition duration-200">
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="space-y-1.5">
+                            <h4 className="text-xs font-bold text-slate-900">{rec.title}</h4>
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="text-[8px] bg-slate-100 border border-slate-200 text-slate-600 font-mono uppercase tracking-wider px-2 py-0.5 rounded">
+                                Agent: {rec.agentId}
+                              </span>
+                              <span className={`text-[8px] border font-mono uppercase tracking-wider px-2 py-0.5 rounded ${impactColor}`}>
+                                IMPACT: {rec.impactLevel}
+                              </span>
+                              <span className="text-[8px] bg-emerald-50 border border-emerald-100 text-emerald-705 text-emerald-700 font-mono uppercase tracking-wider px-2 py-0.5 rounded font-bold">
+                                Confidence: {Math.round(rec.confidence * 100)}%
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleDismissRecommendation(rec.id)}
+                            className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                            title="Dismiss Alert"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button
-                          onClick={() => handleDismissRecommendation(rec.id)}
-                          className="p-1 text-slate-400 hover:text-rose-500 rounded hover:bg-slate-50 transition cursor-pointer"
-                          title="Dismiss Alert"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <p className="text-3xs text-slate-600 leading-relaxed font-sans">
+                          {rec.summary}
+                        </p>
+                        <div className="bg-slate-50/70 border border-slate-100 rounded-xl p-2.5 text-[9px] text-slate-500 leading-normal font-sans">
+                          <strong className="text-slate-700">Safe Recommendation Rationale:</strong> {rec.reasoningSummary}
+                        </div>
                       </div>
-                      <p className="text-3xs text-slate-650 leading-normal text-slate-650">
-                        {rec.summary}
-                      </p>
-                      <div className="bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-[9px] text-slate-500 leading-normal">
-                        <strong>Reasoning Analysis:</strong> {rec.reasoningSummary}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -528,9 +574,16 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                 Proposed Action Sandbox ({proposedActions.length})
               </span>
               {proposedActions.length === 0 ? (
-                <div className="p-6 border border-dashed border-slate-200 bg-white rounded-2xl text-center text-xs text-slate-400">
-                  <Info className="w-5 h-5 mx-auto text-slate-300 mb-1.5" />
-                  No draft proposed updates currently available in inbox.
+                <div className="p-8 border border-dashed border-slate-205 bg-white rounded-3xl text-center text-xs text-slate-400 space-y-3 shadow-3xs">
+                  <div className="w-10 h-10 bg-slate-50 border border-slate-200 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                    <Cpu className="w-5 h-5" />
+                  </div>
+                  <div className="max-w-xs mx-auto space-y-1">
+                    <p className="font-bold text-slate-800 text-sm">No Draft Updates in Inbox</p>
+                    <p className="text-3xs text-slate-500 leading-relaxed font-sans">
+                      Once you launch an optimization scan in DRAFT mode, proposed storefront revision suggestions will be staged here for your secure audit.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
@@ -538,60 +591,96 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                     const isRequested = act.status === 'APPROVAL_REQUESTED';
                     const isExecutable = act.executionMode === 'APPROVAL_REQUIRED';
                     return (
-                      <div key={act.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3 relative overflow-hidden">
-                        <div className="flex justify-between items-start">
+                      <div key={act.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3 relative overflow-hidden hover:shadow-2xs transition duration-200">
+                        <div className="flex justify-between items-start gap-4">
                           <div>
                             <h4 className="text-xs font-bold text-slate-900">{act.title}</h4>
-                            <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block mt-0.5">
-                              Agent: {act.agentId} • Risk: {act.riskLevel} • Execution: {act.executionMode}
+                            <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block mt-1">
+                              Agent: {act.agentId} • Risk: {act.riskLevel}
                             </span>
                           </div>
                           {!isRequested && (
                             <button
                               onClick={() => handleDismissProposedAction(act.id)}
-                              className="p-1 text-slate-400 hover:text-rose-500 rounded hover:bg-slate-50 transition cursor-pointer"
+                              disabled={requestingId === act.id}
+                              className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
                               title="Discard Draft"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
                           )}
                         </div>
-                        <p className="text-3xs text-slate-600 leading-normal">
+                        <p className="text-3xs text-slate-550 text-slate-650 leading-relaxed font-sans">
                           {act.description}
                         </p>
 
-                        <div className="bg-slate-50 border border-slate-150 rounded-xl p-3 space-y-2">
-                          <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none">Changes Payload</span>
-                          <pre className="text-4xs text-slate-600 font-mono whitespace-pre-wrap leading-tight max-h-24 overflow-y-auto bg-slate-950 text-emerald-400 p-2 rounded-lg border border-slate-200">
-                            {JSON.stringify(act.changes, null, 2)}
-                          </pre>
+                        {/* Sanitized side-by-side allowlisted Before/After comparison blocks */}
+                        <div className="bg-slate-50/65 border border-slate-150 rounded-xl p-3.5 space-y-3">
+                          <span className="block text-[8px] font-bold text-slate-400 font-mono uppercase tracking-wider leading-none">
+                            Sanitized Proposed Modifications
+                          </span>
+                          <div className="space-y-2.5 max-h-48 overflow-y-auto pr-0.5">
+                            {Object.entries(act.changes)
+                              .filter(([key]) => ['title', 'vendor', 'productType', 'status', 'tags'].includes(key))
+                              .map(([key, value]) => {
+                                const beforeText = "Status: Sync storefront snap properties";
+                                let afterText = typeof value === 'object' && Array.isArray(value) ? value.join(', ') : String(value);
+                                
+                                return (
+                                  <div key={key} className="space-y-1.5">
+                                    <div className="text-[8px] font-mono font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded w-max uppercase tracking-wider leading-none">
+                                      {key.replace(/([A-Z])/g, ' $1')}
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-[9px] leading-relaxed">
+                                      <div className="bg-red-50/20 border border-red-100 rounded-lg p-2 text-red-800">
+                                        <span className="block text-[7px] text-red-500 font-sans font-bold uppercase tracking-wider mb-1 leading-none">- BEFORE</span>
+                                        {beforeText}
+                                      </div>
+                                      <div className="bg-emerald-50/20 border border-emerald-100 rounded-lg p-2 text-emerald-950 font-bold">
+                                        <span className="block text-[7px] text-emerald-600 font-sans font-bold uppercase tracking-wider mb-1 leading-none">+ AFTER</span>
+                                        {afterText}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                          </div>
                         </div>
 
                         <div className="pt-3 border-t border-slate-100 flex items-center justify-between mt-3 text-3xs">
-                          <span className={`px-2 py-0.5 rounded-full font-bold uppercase ${
+                          <span className={`px-2.5 py-0.5 rounded-full font-bold uppercase border text-[8px] ${
                             isRequested 
-                              ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' 
-                              : 'bg-amber-50 text-amber-700 border border-amber-100 animate-pulse'
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-100' 
+                              : 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse'
                           }`}>
                             {act.status}
                           </span>
+                          
                           {isExecutable && !isRequested && (
                             <button
                               onClick={() => handleRequestApproval(act.id)}
-                              className="inline-flex items-center gap-1 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-750 text-white rounded-lg font-bold shadow-xs transition cursor-pointer leading-none"
+                              disabled={requestingId === act.id}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold shadow-xs transition cursor-pointer leading-none disabled:opacity-50"
                             >
-                              <FileCheck className="w-3.5 h-3.5" />
-                              <span>Request Merchant Approval</span>
+                              {requestingId === act.id ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <FileCheck className="w-3.5 h-3.5" />
+                              )}
+                              <span>{requestingId === act.id ? 'Requesting...' : 'Request Merchant Approval'}</span>
                             </button>
                           )}
+                          
                           {isRequested && act.approvalRequestId && (
-                            <span className="text-4xs text-indigo-450 text-indigo-400 font-mono flex items-center gap-1">
+                            <span className="text-4xs text-indigo-400 font-mono flex items-center gap-1">
                               <Clock className="w-3 h-3 animate-spin" />
                               Bridged: {act.approvalRequestId}
                             </span>
                           )}
+                          
                           {!isExecutable && (
-                            <span className="text-4xs text-slate-450 font-mono flex items-center gap-1 font-bold">
+                            <span className="text-4xs text-slate-500 font-mono flex items-center gap-1 font-bold">
                               <ShieldCheck className="w-3 h-3 text-slate-400" />
                               NOT_EXECUTABLE
                             </span>
