@@ -8,6 +8,13 @@ This document provides a highly durable and centralized technical reference for 
 - **Repository**: [iblustein/softify](https://github.com/iblustein/softify)
 - **Shopify Test Shop**: `yambasurf-co-il.myshopify.com`
 
+## Project Operating Model
+- The user defines business vision, priorities, and final approval.
+- ChatGPT provides architecture supervision, best-practice guidance, implementation-plan review, guardrail enforcement, and read-only verification.
+- Antigravity performs implementation, file changes, commands, commits, and pushes.
+- ChatGPT should proactively verify repository state and planning details when needed, without asking for separate permission for read-only checks.
+- Implementation changes remain Antigravity’s responsibility unless the user explicitly instructs otherwise.
+
 ## Infrastructure & Databases
 - **Deployment**:
   - **Google Cloud Run Service**: `softify`

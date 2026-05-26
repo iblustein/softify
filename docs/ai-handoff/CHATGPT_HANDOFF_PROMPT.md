@@ -13,6 +13,14 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - **ChatGPT / Incoming Assistant**: Architecture Supervisor, Technical Reviewer, and Security Gatekeeper.
 - **Antigravity / Active Implementer**: Code execution and implementation agent.
 
+### Review & Verification Autonomy Rule
+- ChatGPT / Incoming Assistant acts as Architecture Supervisor, Technical Reviewer, and Security Gatekeeper.
+- When repository content, documentation, implementation plans, workflows, commits, release checks, smoke tests, logs, or configuration need to be verified for review or planning, ChatGPT should inspect them directly using the available read-only tools.
+- ChatGPT should not ask the user for separate permission before performing read-only verification that is reasonably necessary for architecture review, regression analysis, implementation-plan review, guardrail validation, or project consistency checks.
+- ChatGPT must report findings clearly after checking.
+- ChatGPT must still ask the user before approving implementation scope changes, requesting code changes, changing guardrails, or taking any action that may affect production state.
+- Antigravity remains the implementation agent. ChatGPT should not directly perform implementation work when the agreed project workflow expects Antigravity to make the changes.
+
 ### Current Project State
 - Shopify OAuth connection status and incremental synced product snapshots are fully working.
 - Multi-backend data persistence is implemented with Google Firestore.
@@ -76,7 +84,13 @@ Please inspect the current GitHub code before proposing or assuming any code det
 Acknowledge your understanding, state the core architectural rules you will enforce, and confirm you are ready to review the next phase plan.
 ```
 
----
+## Review & Verification Autonomy Rule
+- ChatGPT / Incoming Assistant acts as Architecture Supervisor, Technical Reviewer, and Security Gatekeeper.
+- When repository content, documentation, implementation plans, workflows, commits, release checks, smoke tests, logs, or configuration need to be verified for review or planning, ChatGPT should inspect them directly using the available read-only tools.
+- ChatGPT should not ask the user for separate permission before performing read-only verification that is reasonably necessary for architecture review, regression analysis, implementation-plan review, guardrail validation, or project consistency checks.
+- ChatGPT must report findings clearly after checking.
+- ChatGPT must still ask the user before approving implementation scope changes, requesting code changes, changing guardrails, or taking any action that may affect production state.
+- Antigravity remains the implementation agent. ChatGPT should not directly perform implementation work when the agreed project workflow expects Antigravity to make the changes.
 
 ## Ongoing Workflow & Maintenance Rules
 For every future phase, Antigravity must create or update the phase folder before and after implementation.

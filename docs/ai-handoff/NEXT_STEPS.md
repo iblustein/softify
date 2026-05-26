@@ -28,6 +28,11 @@ Extend the multi-agent workspace foundation with comprehensive historical run an
 ## Ongoing Workflow & Maintenance Rules
 For every future phase, Antigravity must create or update the phase folder before and after implementation.
 
+Review flow reminder:
+- ChatGPT may directly inspect repo/docs/workflows/tests for read-only review and planning validation.
+- Antigravity must perform implementation changes.
+- Implementation must not begin until the plan is reviewed and approved.
+
 ### 1. Before Implementation
 Create or update:
 - `/docs/phases/phase-*/IMPLEMENTATION_PLAN.md`
