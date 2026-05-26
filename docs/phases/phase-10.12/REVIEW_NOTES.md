@@ -16,6 +16,7 @@ These notes provide security and architectural review parameters for the Lead Ar
 ### 3. Fail-Fast Preflight Tenant Isolation Gating (Phase 1)
 - The backend resolves the authoritative owning `organizationId` directly from the authenticated `shop` database record. It then asserts that every single item requested in the batch shares the exact same `organizationId` ownership.
 - If **any** item fails ownership validation, the entire request is rejected with `403 Forbidden` **before** any state changes or sequential operations are dispatched. This guarantees zero cross-tenant leakage or state manipulation.
+- **Two-Phase Bridging Safety**: The `POST /api/proposed-actions/batch-request-approval` route has been fully hardened to enforce two-phase preflight eligibility. Phase 1 preflight validates and classifies every item in the batch—checking execution mode, changes presence, allowed mutation keys, and valid draft statuses—before Phase 2 performs any database mutations. If any item is invalid, the entire batch request fails safely with `400 Bad Request`, preventing partial bridging states.
 
 ### 4. Shopify Rate Protection & Throttling
 - The batch execution engine processes items sequentially (one-by-one) with a **mandatory 500ms safety throttle delay** injected between executions.
