@@ -1698,6 +1698,127 @@ async function runSuite() {
     }
   });
 
+  // Test U: Phase 10.11 MVP Merchant Workflow Normalization and Explicit Execution safety validation
+  await check("U. Phase 10.11 MVP Merchant Workflow Normalization and Explicit Execution safety validation", async () => {
+    const timestamp = Date.now();
+
+    // 1. Create a PENDING approval request using agent chat
+    const chatUrl = `${baseUrl}/api/agents/chat?t=${timestamp}`;
+    const resChat = await fetch(chatUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence",
+        message: "simulate tool catalog.products.propose_update"
+      })
+    });
+    await checkResponse(resChat);
+    const chatData = await resChat.json();
+    if (chatData.ok !== true) {
+      throw new Error(`Expected chat query to succeed, got: ${JSON.stringify(chatData)}`);
+    }
+
+    // 2. Fetch approvals strictly for our organization
+    const approvalsUrl = `${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`;
+    const resApprovals = await fetch(approvalsUrl);
+    await checkResponse(resApprovals);
+    const approvals = await resApprovals.json();
+
+    const pendingApproval = approvals.find(
+      a => a.status === "PENDING" && a.toolName === "catalog.products.propose_update"
+    );
+    if (!pendingApproval) {
+      throw new Error("Expected to find a PENDING approval request.");
+    }
+    const approvalId = pendingApproval.id;
+
+    // 3. Approve the request and test the normalization shape
+    const decideUrl = `${baseUrl}/api/approvals/${approvalId}/decide?t=${timestamp}`;
+    const resDecide = await fetch(decideUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        decision: "APPROVE",
+        organizationId: "demo-org-id"
+      })
+    });
+    await checkResponse(resDecide);
+    const decideRes = await resDecide.json();
+
+    // Verify: APPROVE response contains wrapper object { ok, status, executionDeferred, approval }
+    if (decideRes.ok !== true || decideRes.status !== "APPROVED" || decideRes.executionDeferred !== true || !decideRes.approval) {
+      throw new Error(`Approve response wrapper mismatch, got: ${JSON.stringify(decideRes)}`);
+    }
+
+    // Normalize the response shape mimicking App.tsx: `const updatedItem = data.approval || data;`
+    const updatedItem = decideRes.approval || decideRes;
+
+    // Verify: Approved item remains a valid ApprovalItem
+    if (!updatedItem.id || updatedItem.status !== "APPROVED" || !updatedItem.details || !updatedItem.details.title) {
+      throw new Error(`Normalized item is not a valid ApprovalItem: ${JSON.stringify(updatedItem)}`);
+    }
+
+    // Verify: Response explicitly includes organizationId and storeConnectionId
+    if (!updatedItem.organizationId || updatedItem.organizationId !== "demo-org-id") {
+      throw new Error(`Normalized approval item missing organizationId: ${JSON.stringify(updatedItem)}`);
+    }
+    if (!updatedItem.storeConnectionId) {
+      throw new Error(`Normalized approval item missing storeConnectionId: ${JSON.stringify(updatedItem)}`);
+    }
+
+    // 4. Verify that approval does NOT auto-execute (must remain APPROVED in db)
+    const checkRes = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
+    await checkResponse(checkRes);
+    const updatedApprovalsList = await checkRes.json();
+    const dbItem = updatedApprovalsList.find(a => a.id === approvalId);
+    if (!dbItem || dbItem.status !== "APPROVED") {
+      throw new Error(`Expected item status in DB to remain APPROVED (no auto-execution), got: ${dbItem?.status}`);
+    }
+
+    // Verify that catalog product is not changed
+    const resProducts = await fetch(`${baseUrl}/api/catalog/products?shop=${shop}&t=${timestamp}`);
+    await checkResponse(resProducts);
+    const products = await resProducts.json();
+    const targetProduct = products.find(p => String(p.shopifyProductId || p.id) === "101");
+    if (targetProduct && targetProduct.title === "Super Polished Tee") {
+      throw new Error("Security Violation: mutation committed to catalog upon approval decision (auto-executed).");
+    }
+
+    // 5. Verify execute and reset-failed reject hardcoded or incorrect organizationId
+    const execUrl = `${baseUrl}/api/approvals/${approvalId}/execute?t=${timestamp}`;
+    const resExecMismatched = await fetch(execUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organizationId: "mismatched-org-id",
+        shop
+      })
+    });
+    if (resExecMismatched.status !== 403) {
+      throw new Error(`Expected HTTP 403 Forbidden for mismatched execution tenant organizationId, got: ${resExecMismatched.status}`);
+    }
+
+    const resetUrl = `${baseUrl}/api/approvals/${approvalId}/reset-failed?t=${timestamp}`;
+    const resResetMismatched = await fetch(resetUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        organizationId: "mismatched-org-id",
+        shop,
+        performedBy: "Shop Owner"
+      })
+    });
+    if (resResetMismatched.status !== 403) {
+      throw new Error(`Expected HTTP 403 Forbidden for mismatched recovery tenant organizationId, got: ${resResetMismatched.status}`);
+    }
+
+    console.log("   [TEST U] Successfully verified APPROVE response normalization, valid ApprovalItem fields (organizationId & storeConnectionId), safe no-auto-execute status, and dynamic tenant-safe execute/reset validation.");
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

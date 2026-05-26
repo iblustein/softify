@@ -320,7 +320,8 @@ export default function App() {
         body: JSON.stringify({ decision })
       });
       if (!res.ok) throw new Error('Authorization post failure');
-      const updatedItem = await res.json();
+      const data = await res.json();
+      const updatedItem = data.approval || data;
 
       setApprovals(prev => prev.map(item => item.id === id ? updatedItem : item));
       await syncStatsAndLogs();
@@ -335,10 +336,20 @@ export default function App() {
   const handleExecuteApproval = async (id: string) => {
     setIsActionLoading(true);
     setErrorText(null);
-    // Optimistic UI state transition to EXECUTING
-    setApprovals(prev => prev.map(item => item.id === id ? { ...item, status: 'EXECUTING' } : item));
     
     try {
+      const item = approvals.find(a => a.id === id);
+      if (!item) {
+        throw new Error('Selected approval item not found in state.');
+      }
+      const organizationId = item.organizationId;
+      if (!organizationId) {
+        throw new Error('Tenant context organizationId is missing. Safe execution blocked.');
+      }
+
+      // Optimistic UI state transition to EXECUTING
+      setApprovals(prev => prev.map(item => item.id === id ? { ...item, status: 'EXECUTING' } : item));
+      
       const shop = resolveActiveShop();
       const shopQuery = buildShopQuery();
 
@@ -346,7 +357,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          organizationId: 'demo-org-id',
+          organizationId,
           shop,
           performer: 'Shop Owner'
         })
@@ -376,6 +387,15 @@ export default function App() {
     setIsActionLoading(true);
     setErrorText(null);
     try {
+      const item = approvals.find(a => a.id === id);
+      if (!item) {
+        throw new Error('Selected approval item not found in state.');
+      }
+      const organizationId = item.organizationId;
+      if (!organizationId) {
+        throw new Error('Tenant context organizationId is missing. Safe recovery blocked.');
+      }
+
       const shop = resolveActiveShop();
       const shopQuery = buildShopQuery();
 
@@ -383,7 +403,7 @@ export default function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          organizationId: 'demo-org-id',
+          organizationId,
           shop,
           performedBy: 'Shop Owner'
         })

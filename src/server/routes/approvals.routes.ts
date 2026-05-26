@@ -26,6 +26,8 @@ function buildLegacyApprovalShape(a: any): any {
 
   return {
     ...a,
+    organizationId: a.organizationId,
+    storeConnectionId: a.storeConnectionId,
     actionType: "PRODUCT_UPDATE",
     beforeState: "Status: Sync product snapshot properties",
     afterState: JSON.stringify(sanitizedPayload),

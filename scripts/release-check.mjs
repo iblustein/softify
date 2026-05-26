@@ -1404,6 +1404,30 @@ async function runVerification() {
         throw new Error(`Security Violation: Allowlisted field mapping for '${field}' is missing in proposed action review.`);
       }
     }
+
+    // 5. Verify no hardcoded demo-org-id in App.tsx
+    const appTsxPath = path.resolve(process.cwd(), "src/App.tsx");
+    const appTsxContent = fs.readFileSync(appTsxPath, "utf8");
+    if (appTsxContent.includes("organizationId: 'demo-org-id'") || appTsxContent.includes('organizationId: "demo-org-id"')) {
+      throw new Error("Security Violation: Hardcoded 'demo-org-id' is still present in src/App.tsx.");
+    }
+
+    // 6. Verify handleDecideApproval uses data.approval || data normalization
+    if (!appTsxContent.includes("data.approval || data")) {
+      throw new Error("Normalizer Violation: App.tsx handleDecideApproval does not normalize decide response shape using data.approval || data.");
+    }
+
+    // 7. Verify approval response shape in route maps includes organizationId and storeConnectionId explicitly
+    const approvalsRoutePath2 = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    const approvalsRouteContent2 = fs.readFileSync(approvalsRoutePath2, "utf8");
+    if (!approvalsRouteContent2.includes("organizationId: a.organizationId") || !approvalsRouteContent2.includes("storeConnectionId: a.storeConnectionId")) {
+      throw new Error("Sanitization Shape Violation: approval routes response shape mapping must explicitly propagate organizationId and storeConnectionId.");
+    }
+
+    // 8. Verify explicit execution language remains present and is conditional only on APPROVED
+    if (!queueContent.includes("selectedItem.status === 'APPROVED'") && !queueContent.includes('selectedItem.status === "APPROVED"')) {
+      throw new Error("UX Hardening Violation: Explicit Execute Commit CTA must be conditional on status === APPROVED.");
+    }
   });
 
   // Print PASS/FAIL Summary
