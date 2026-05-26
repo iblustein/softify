@@ -58,6 +58,8 @@ export interface ApprovalItem {
   };
   status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'EXECUTING' | 'APPLIED' | 'FAILED' | 'EXECUTED';
   decidedAt?: string;
+  organizationId?: string;
+  storeConnectionId?: string;
 }
 
 export interface OrchestrationMessage {
