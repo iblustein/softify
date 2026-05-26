@@ -36,9 +36,9 @@ function getMappedEventType(event: string): string {
   return event;
 }
 
-function getSafeSummary(event: string, auditDescription: string, metadata: any): string {
+function getSafeSummary(event: string, metadata: any): string {
   const mapped = getMappedEventType(event);
-  let base = traceEventDescriptions[event] || traceEventDescriptions[mapped] || auditDescription || "Workspace event processed.";
+  let base = traceEventDescriptions[event] || traceEventDescriptions[mapped] || "Workspace event processed.";
   if (event === "AGENT_RUN_COMPLETED" && metadata) {
     const recs = metadata.recommendationCount ?? metadata.recommendationsCount ?? 0;
     const acts = metadata.proposedActionCount ?? metadata.actionsCount ?? 0;
@@ -49,6 +49,7 @@ function getSafeSummary(event: string, auditDescription: string, metadata: any):
   }
   return base;
 }
+
 
 // Helpers for date filtering
 function isWithinDateRange(timestamp: string, dateFrom?: string, dateTo?: string): boolean {
@@ -438,7 +439,7 @@ export async function getTimelineTrace(params: {
   // Strict allowlist-only mapping
   const timeline = sorted.slice(0, limit).map(e => {
     const eventType = getMappedEventType(e.event);
-    const safeSummary = getSafeSummary(e.event, e.description, e.metadata);
+    const safeSummary = getSafeSummary(e.event, e.metadata);
     const metadata = e.metadata || {};
 
     return {

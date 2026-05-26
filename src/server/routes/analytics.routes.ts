@@ -2,8 +2,6 @@ import { Router } from "express";
 import { getMockSalesReport } from "../data/mock-sales.js";
 import { getRepositories } from "../repositories/repository-provider.js";
 import { normalizeShopDomain } from "../services/shopify-oauth.service.js";
-import { writeAuditEvent } from "../services/audit-log.service.js";
-import { AuditEventNames } from "../domain/types.js";
 import * as analyticsService from "../services/workspace-analytics.service.js";
 
 const router = Router();
@@ -33,22 +31,6 @@ async function resolveTenantContext(req: any, res: any) {
 
     if (organizationId && typeof organizationId === "string") {
       if (storeConnection.organizationId !== organizationId) {
-        await writeAuditEvent({
-          organizationId: storeConnection.organizationId,
-          storeConnectionId: storeConnection.id,
-          initiator: "system",
-          event: AuditEventNames.GATEWAY_VALIDATION_BLOCKED,
-          description: `Access denied. Store '${cleanShop}' queried with organizationId '${organizationId}' does not belong to it.`,
-          decision: "blocked",
-          reason: "tenant_isolation_violation",
-          metadata: {
-            organizationId: storeConnection.organizationId,
-            queriedOrganizationId: organizationId,
-            storeConnectionId: storeConnection.id,
-            decision: "blocked",
-            reason: "tenant_isolation_violation"
-          }
-        });
         return { status: 403, error: "Access denied. Store does not belong to this organization." };
       }
     }

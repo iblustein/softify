@@ -4,24 +4,26 @@ This document outlines the goals and requirements for the next proposed developm
 
 ---
 
-## Next Milestone: Phase 10.10 — Multi-Agent Workspace Analytics and Logs Dashboard
+## Next Milestone: Phase 10.11 — Workspace Bulk Operations Foundation
 
 ### Goal
-Extend the multi-agent workspace foundation with comprehensive historical run analysis, visual diagnostic report metrics, and live streaming trace telemetries.
+Extend the multi-agent workspace with merchant-approved bulk operations and batch processing capabilities to safely streamline large-scale optimizations across multiple recommendations or proposed actions simultaneously.
 
 ### Scope & Requirements (Proposed)
-1. **Agent Workspace Run Analytics**:
-   - Provide summary visual dashboards with diagnostic health graphs, optimization performance timelines, and merchant approval conversion rates.
-2. **Interactive Run Telemetry Tracing**:
-   - Stream sanitized intermediate agent reasoning events dynamically on the frontend.
-3. **Advanced Bulk Actions Queue**:
-   - Allow merchants to multi-select and batch-dismiss or batch-approve proposed draft optimizations.
+1. **Batch Dismissal for Diagnostic Recommendations**:
+   - Provide a `POST /api/recommendations/batch-dismiss` endpoint to safely dismiss multiple recommendations in a single tenant-scoped atomic write.
+2. **Batch Optimization Proposals Handling**:
+   - Provide a `POST /api/proposed-actions/batch-dismiss` endpoint to dismiss multiple actions.
+   - Provide a `POST /api/proposed-actions/batch-request-approval` endpoint to bridge multiple draft actions to the approvals queue at once.
+3. **Bulk UI Management Grid**:
+   - Integrate multi-select grids and execution controls cleanly within the responsive **AgentWorkspace** dashboard.
 
 > [!IMPORTANT]
 > **Implementation Boundaries**:
-> - Antigravity must **not** implement Phase 10.10 code or modify actual backend/frontend logic until the implementation plan is explicitly reviewed and approved by the Architecture Supervisor.
+> - Antigravity must **not** implement Phase 10.11 code or modify actual backend/frontend logic until the implementation plan is explicitly reviewed and approved by the Architecture Supervisor.
 > - Any future phase **must not expand mutation scope** beyond the existing text fields (`title`, `vendor`, `productType`, `status`, `tags`).
 > - No theme tools, no `write_themes`, no price/inventory/variant/media/descriptionHtml mutations, and no auto-execution are allowed. All recovery endpoints remain strictly state-only.
+
 
 ---
 

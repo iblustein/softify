@@ -1278,18 +1278,77 @@ async function runVerification() {
       throw new Error("Security Violation: Analytics endpoints are missing non-GET block rejections.");
     }
 
-    // 3. Static verification that no database writes or mutations are initiated by the analytics endpoints
+    // 3. Static verification that no database writes, mutations, or side effects are initiated by routes or service
     const servicePath = path.resolve(process.cwd(), "src/server/services/workspace-analytics.service.ts");
     const serviceContent = fs.readFileSync(servicePath, "utf8");
     
-    const mutationKws = ["createProposedAction", "updateProposedAction", "createRecommendation", "updateRecommendation", "createApprovalRequest", "updateApprovalRequest", "delete", "writeAuditEvent"];
-    for (const kw of mutationKws) {
+    const serviceForbidden = [
+      "createProposedAction",
+      "updateProposedAction",
+      "createRecommendation",
+      "updateRecommendation",
+      "createApprovalRequest",
+      "updateApprovalRequest",
+      "delete",
+      "writeAuditEvent"
+    ];
+    for (const kw of serviceForbidden) {
       if (serviceContent.includes(kw)) {
-        throw new Error(`Security Violation: Workspace Analytics Service invokes mutating operation '${kw}'.`);
+        throw new Error(`Security Violation: Workspace Analytics Service invokes mutating operation or event write: '${kw}'.`);
       }
     }
 
-    // 4. Verify Timeline allowlist security constraints (disallowed fields are completely stripped and not on the return payload object)
+    const routesForbidden = [
+      "createProposedAction",
+      "updateProposedAction",
+      "createRecommendation",
+      "updateRecommendation",
+      "createApprovalRequest",
+      "updateApprovalRequest",
+      "delete",
+      "writeAuditEvent",
+      "shopifyProductSync",
+      "syncProductsForShop",
+      "updateProductAllowedFields",
+      "prepareProductUpdate",
+      "prepareThemePatch"
+    ];
+    for (const kw of routesForbidden) {
+      if (routesContent.includes(kw)) {
+        throw new Error(`Security Violation: Analytics routes file contains forbidden mutation keyword or side effect: '${kw}'.`);
+      }
+    }
+
+    // 4. Verify no POST, PUT, DELETE, PATCH routes are defined for analytics
+    if (routesContent.includes("router.post(") || routesContent.includes("router.put(") || routesContent.includes("router.patch(") || routesContent.includes("router.delete(")) {
+      throw new Error("Security Violation: Analytics routes must be strictly read-only GET routes, no mutating route verbs are allowed.");
+    }
+
+    // 5. Verify no batch/bulk actions exist in the analytics layer
+    if (routesContent.includes("batch") || serviceContent.includes("batch")) {
+      throw new Error("Security/Scope Violation: Batch or bulk operations are not permitted in Phase 10.10 operational analytics.");
+    }
+
+    // 6. Verify timeline safeSummary sanitization (no raw description fallback allowed)
+    if (serviceContent.includes("auditDescription ||") || serviceContent.includes("e.description ||")) {
+      throw new Error("Security Violation: Timeline safeSummary uses forbidden raw audit description fallback.");
+    }
+    if (serviceContent.includes("getSafeSummary(e.event, e.description")) {
+      throw new Error("Security Violation: Timeline Trace passes raw description to safeSummary.");
+    }
+    if (serviceContent.includes("function getSafeSummary(event: string, auditDescription")) {
+      throw new Error("Security Violation: getSafeSummary signature takes auditDescription, violating the allowlist-only design.");
+    }
+
+    // 7. Verify no exposure of raw prompts, reasoning steps, tool arguments, or Shopify responses
+    const exposureForbidden = ["rawPrompt", "rawReasoning", "rawToolArgs", "rawShopifyResponse"];
+    for (const kw of exposureForbidden) {
+      if (routesContent.includes(kw) || serviceContent.includes(kw)) {
+        throw new Error(`Security Violation: Operational Visibility leaks internal raw trace fields: '${kw}'.`);
+      }
+    }
+
+    // 8. Verify Timeline allowlist security constraints (disallowed fields are completely stripped and not on the return payload object)
     if (!serviceContent.includes("id: e.id") || !serviceContent.includes("safeSummary")) {
       throw new Error("Security Violation: Timeline Trace does not enforce strict allowlist-only payload scrub mapping.");
     }
