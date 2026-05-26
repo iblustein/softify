@@ -4,6 +4,12 @@ const baseUrl = process.env.SOFTIFY_BASE_URL || "https://softify-595151907767.eu
 const shop = process.env.SOFTIFY_TEST_SHOP || "yambasurf-co-il.myshopify.com";
 const defaultLimit = process.env.SMOKE_PRODUCTS_LIMIT ? parseInt(process.env.SMOKE_PRODUCTS_LIMIT, 10) : 5;
 
+// Centralized Test Fixtures (Strictly restricted to test environment context)
+const TEST_ORGANIZATION_ID = "demo-org-id";
+const TEST_SHOP = shop;
+const TEST_STORE_CONNECTION_ID = "store-luminary";
+const TEST_AGENT_INSTALLATION_ID = "inst-mock";
+
 let isInMemory = false;
 
 const isLocalBaseUrl =
@@ -1723,7 +1729,7 @@ async function runSuite() {
     }
 
     // 2. Fetch approvals strictly for our organization
-    const approvalsUrl = `${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`;
+    const approvalsUrl = `${baseUrl}/api/approvals?organizationId=${TEST_ORGANIZATION_ID}&t=${timestamp}`;
     const resApprovals = await fetch(approvalsUrl);
     await checkResponse(resApprovals);
     const approvals = await resApprovals.json();
@@ -1743,7 +1749,7 @@ async function runSuite() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         decision: "APPROVE",
-        organizationId: "demo-org-id"
+        organizationId: TEST_ORGANIZATION_ID
       })
     });
     await checkResponse(resDecide);
@@ -1763,7 +1769,7 @@ async function runSuite() {
     }
 
     // Verify: Response explicitly includes organizationId and storeConnectionId
-    if (!updatedItem.organizationId || updatedItem.organizationId !== "demo-org-id") {
+    if (!updatedItem.organizationId || updatedItem.organizationId !== TEST_ORGANIZATION_ID) {
       throw new Error(`Normalized approval item missing organizationId: ${JSON.stringify(updatedItem)}`);
     }
     if (!updatedItem.storeConnectionId) {
@@ -1771,7 +1777,7 @@ async function runSuite() {
     }
 
     // 4. Verify that approval does NOT auto-execute (must remain APPROVED in db)
-    const checkRes = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
+    const checkRes = await fetch(`${baseUrl}/api/approvals?organizationId=${TEST_ORGANIZATION_ID}&t=${timestamp}`);
     await checkResponse(checkRes);
     const updatedApprovalsList = await checkRes.json();
     const dbItem = updatedApprovalsList.find(a => a.id === approvalId);
@@ -1817,6 +1823,120 @@ async function runSuite() {
     }
 
     console.log("   [TEST U] Successfully verified APPROVE response normalization, valid ApprovalItem fields (organizationId & storeConnectionId), safe no-auto-execute status, and dynamic tenant-safe execute/reset validation.");
+  });
+
+  // Test V: Phase 10.12 Production Bulk Operations Foundation
+  await check("V. Production Bulk Operations Foundation (batch request, decide, execute, and tenant isolation)", async () => {
+    const timestamp = Date.now();
+
+    // 1. Fetch draft proposed actions dynamically
+    const resGetActs = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&t=${timestamp}`);
+    await checkResponse(resGetActs);
+    const actsList = await resGetActs.json();
+    const draftActions = actsList.filter(a => a.status === "DRAFT" || a.status === "APPROVAL_ELIGIBLE");
+    if (draftActions.length < 2) {
+      throw new Error(`Smoke Test Prep Error: Expected at least 2 draft proposed actions, got ${draftActions.length}. Run a scan first.`);
+    }
+
+    const testAction1 = draftActions[0].id;
+    const testAction2 = draftActions[1].id;
+
+    // 2. Tenant Isolation validation: verify that passing a mismatched claimed organizationId returns 403 Forbidden
+    const resDismissMismatched = await fetch(`${baseUrl}/api/proposed-actions/batch-dismiss?t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: [testAction1, testAction2],
+        organizationId: "mismatched-org-id",
+        shop
+      })
+    });
+    if (resDismissMismatched.status !== 403) {
+      throw new Error(`Expected HTTP 403 Forbidden for mismatched batch dismiss organizationId, got: ${resDismissMismatched.status}`);
+    }
+
+    const resRequestMismatched = await fetch(`${baseUrl}/api/proposed-actions/batch-request-approval?t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: [testAction1, testAction2],
+        organizationId: "mismatched-org-id",
+        shop
+      })
+    });
+    if (resRequestMismatched.status !== 403) {
+      throw new Error(`Expected HTTP 403 Forbidden for mismatched batch request approval organizationId, got: ${resRequestMismatched.status}`);
+    }
+
+    // 3. Batch request approvals: bridge the 2 mock actions
+    const resRequest = await fetch(`${baseUrl}/api/proposed-actions/batch-request-approval?t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: [testAction1, testAction2],
+        organizationId: TEST_ORGANIZATION_ID,
+        shop
+      })
+    });
+    await checkResponse(resRequest);
+    const dataRequest = await resRequest.json();
+    scanForForbiddenKeys(dataRequest);
+
+    if (dataRequest.ok !== true || typeof dataRequest.bridgedCount !== "number") {
+      throw new Error(`Expected batch request approval to succeed, got: ${JSON.stringify(dataRequest)}`);
+    }
+
+    const bridgedIds = (dataRequest.results || []).map(r => r.approvalId).filter(Boolean);
+    if (bridgedIds.length === 0) {
+      throw new Error("No approvals were bridged during batch request approvals.");
+    }
+
+    // 4. Batch decide: bulk approve the bridged items
+    const resDecide = await fetch(`${baseUrl}/api/approvals/batch-decide?t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: bridgedIds,
+        decision: "APPROVE",
+        organizationId: TEST_ORGANIZATION_ID,
+        shop
+      })
+    });
+    await checkResponse(resDecide);
+    const dataDecide = await resDecide.json();
+    scanForForbiddenKeys(dataDecide);
+
+    if (dataDecide.ok !== true || dataDecide.decision !== "APPROVE" || dataDecide.executionDeferred !== true) {
+      throw new Error(`Expected batch decide to succeed in deferred mode, got: ${JSON.stringify(dataDecide)}`);
+    }
+
+    // 5. Batch execute: sequentially dispatch live storefront commits
+    const resExecute = await fetch(`${baseUrl}/api/approvals/batch-execute?t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ids: bridgedIds,
+        organizationId: TEST_ORGANIZATION_ID,
+        shop,
+        performer: "Shop Owner"
+      })
+    });
+    await checkResponse(resExecute);
+    const dataExecute = await resExecute.json();
+    scanForForbiddenKeys(dataExecute);
+
+    if (dataExecute.ok !== true || !Array.isArray(dataExecute.results)) {
+      throw new Error(`Expected batch execute to succeed with per-item results, got: ${JSON.stringify(dataExecute)}`);
+    }
+
+    // Verify all processed items successfully applied (APPLIED or ALREADY_APPLIED)
+    for (const resItem of dataExecute.results) {
+      if (resItem.status !== "APPLIED" && resItem.status !== "ALREADY_APPLIED") {
+        throw new Error(`Item execution failed in batch execute: ${JSON.stringify(resItem)}`);
+      }
+    }
+
+    console.log("   [TEST V] Successfully verified sequential batch request, batch decide deferred approvals, sequential batch execute, and strict preflight tenant isolation checks.");
   });
 
   // Summary Printing

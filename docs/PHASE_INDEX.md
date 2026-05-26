@@ -16,7 +16,7 @@ This index acts as the central directory for Softify's completed and planned dev
 | **10.9** | Multi-Agent Product Workspace Foundation | **Completed** | Multi-agent dashboard workspace, runs registry, diagnostic recommendations, draft actions queue, approval bridging, automated index GHA pipelines | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.10** | Multi-Agent Workspace Analytics & Operational Visibility | **Completed** | Strictly read-only, non-mutating aggregated analytics dashboards, scanned runs and recommendation trend metrics, allowlist-sanitized trace timeline | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.11** | MVP End-to-End Merchant Workflow Hardening | **Completed** | Hardened manual optimization loop, onboarding empty states, launcher overlays, allowlisted compare panels, explicit manual execution pipeline, operator recovery cues | 100% Passed (Pre-deploy checks & smoke tests) |
-| **10.12** | Production Bulk Operations Foundation | **Planned** | Throttled bulk approvals, workspace batch dismissals, batch request approvals, and Shopify queue rate limits | Planned |
+| **10.12** | Production Bulk Operations Foundation | **Completed** | Throttled bulk approvals, workspace batch dismissals, batch request approvals, sequential execution with 500ms safety delays, preflight tenant checks | 100% Passed (Pre-deploy checks & smoke tests) |
 
 ## Ongoing Workflow & Maintenance Rules
 For every future phase, Antigravity must create or update the phase folder before and after implementation.

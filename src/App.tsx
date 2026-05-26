@@ -425,6 +425,106 @@ export default function App() {
     }
   };
 
+  // Batch Decide Approvals
+  const handleBatchDecideApprovals = async (ids: string[], decision: 'APPROVE' | 'REJECT') => {
+    setIsActionLoading(true);
+    setErrorText(null);
+    try {
+      const shop = resolveActiveShop();
+      const shopQuery = buildShopQuery();
+      const claimedOrgId = store?.organizationId || approvals[0]?.organizationId || '';
+
+      const res = await fetch(`/api/approvals/batch-decide${shopQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids,
+          decision,
+          organizationId: claimedOrgId,
+          shop
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to bulk decide approvals.');
+      }
+      const data = await res.json();
+      
+      const resultsMap = new Map((data.results || []).map((r: any) => [r.id, r]));
+      setApprovals(prev => prev.map(item => {
+        const match = resultsMap.get(item.id) as any;
+        if (match) {
+          return {
+            ...item,
+            status: match.status,
+            decidedAt: new Date().toISOString(),
+            decidedBy: 'Shop Owner'
+          };
+        }
+        return item;
+      }));
+      await syncStatsAndLogs();
+    } catch (err: any) {
+      setErrorText(err.message || 'Failed to bulk decide approvals.');
+      throw err;
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
+  // Batch Execute Approvals
+  const handleBatchExecuteApprovals = async (ids: string[]) => {
+    setIsActionLoading(true);
+    setErrorText(null);
+    try {
+      const shop = resolveActiveShop();
+      const shopQuery = buildShopQuery();
+      const claimedOrgId = store?.organizationId || approvals[0]?.organizationId || '';
+
+      // Optimistically mark execution claim lock status to EXECUTING
+      setApprovals(prev => prev.map(item => ids.includes(item.id) ? { ...item, status: 'EXECUTING' } : item));
+
+      const res = await fetch(`/api/approvals/batch-execute${shopQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids,
+          organizationId: claimedOrgId,
+          shop,
+          performer: 'Shop Owner'
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to bulk execute approvals.');
+      }
+      const data = await res.json();
+      
+      const resultsMap = new Map((data.results || []).map((r: any) => [r.id, r]));
+      setApprovals(prev => prev.map(item => {
+        const match = resultsMap.get(item.id) as any;
+        if (match) {
+          return {
+            ...item,
+            status: match.status === 'ALREADY_APPLIED' || match.status === 'APPLIED' ? 'APPLIED' : (match.status === 'FAILED' ? 'FAILED' : item.status),
+            lastFailureReason: match.error || item.lastFailureReason
+          };
+        }
+        return item;
+      }));
+      await syncStatsAndLogs();
+      return data;
+    } catch (err: any) {
+      setErrorText(err.message || 'Failed to bulk execute approvals.');
+      // Revert executing statuses to APPROVED on error
+      setApprovals(prev => prev.map(item => (ids.includes(item.id) && item.status === 'EXECUTING') ? { ...item, status: 'APPROVED' } : item));
+      await syncStatsAndLogs();
+      throw err;
+    } finally {
+      setIsActionLoading(false);
+    }
+  };
+
   // Core Request Orchestration
   const handleSendOrchestratorMessage = async (prompt: string, selectedAgentId?: string) => {
     const userMessage: OrchestrationMessage = {
@@ -789,6 +889,8 @@ export default function App() {
                 onDecide={handleDecideApproval}
                 onExecute={handleExecuteApproval}
                 onResetFailed={handleResetFailedApproval}
+                onBatchDecide={handleBatchDecideApprovals}
+                onBatchExecute={handleBatchExecuteApprovals}
                 isLoading={isActionLoading}
               />
             )}

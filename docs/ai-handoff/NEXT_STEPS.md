@@ -4,26 +4,28 @@ This document outlines the goals and requirements for the next proposed developm
 
 ---
 
-## Next Milestone: Phase 10.12 — Production Bulk Operations Foundation
+## Next Milestone: Phase 10.13 — Production Catalog Auto-Optimization
 
 ### Goal
-Define and implement secure, throttled, and transactional bulk/batch operational capabilities in the Softify multi-agent workspace. After hardening the end-to-end manual loop in Phase 10.11, the platform is ready to evaluate batch utilities while preserving strict tenant isolation and merchant safety controls.
+Establish an opt-in, merchant-controlled background auto-optimization system. After stabilizing bulk operations in Phase 10.12, Phase 10.13 allows merchants to define automated rules (e.g. auto-apply title case or missing tag corrections) that execute in the background via a safe scheduler, keeping their catalog continuously optimized without manual intervention.
 
 ### Scope & Requirements (Proposed)
-1. **Safe Bulk Handshake**:
-   - Introduce secure merchant-initiated batch approvals (`POST /api/approvals/batch-decide`) and batch execution (`POST /api/approvals/batch-execute`) routes.
-2. **Rate-Limiting & Concurrency Control**:
-   - Implement queue throttling in the execution pipeline to prevent API limit exhausts or rate-limit blocks on Shopify admin channels.
-3. **Workspace Batch Actions**:
-   - Enable batch request approval (`POST /api/proposed-actions/batch-request-approval`) and batch dismissal (`POST /api/proposed-actions/batch-dismiss`) in the frontend workspace.
-4. **Preserved Mutation Scope**:
-   - Ensure mutation scope remains strictly capped to approved text fields (`title`, `vendor`, `productType`, `status`, `tags`). No price, variant, inventory, media, or descriptionHtml mutations.
+1. **Automation Rules Configuration**:
+   - Provide REST endpoints to store store-level merchant automation rules (e.g. enabled agents, specific keywords, or safe tags categories).
+2. **Background Automation Engine**:
+   - Create a background/cron engine that scans eligible proposed actions and automatically bridges, approves, and executes mutations for matching items.
+3. **Execution Rate & Failure Gating**:
+   - Enforce daily auto-optimization mutation limits per store.
+   - Automatically pause rules and email/notify the merchant on *any* execution failure, transitioning the system back to manual-only until resolved.
+4. **Authoritative Safety & Logging**:
+   - All auto-optimizations must write distinct audit log events with the performer set to `'System Automation'`.
+   - Maintain the strict allowlisted mutation fields cap (`title`, `vendor`, `productType`, `status`, `tags`).
 
 ### Deferrals & Boundaries
 The following features remain strictly out-of-scope:
-- **Auto-Execution**: Automatic execution on approval is prohibited.
+- **No Global Enablement**: Automation must be strictly opt-in and configured per-store.
 - **Theme Capabilities**: No theme tools, no `read_themes`, and no `write_themes` permissions.
-- **Direct AI mutations**: AI provider runtime may never invoke write tools directly on live stores; mutations must go through the merchant proposal and approval execution pipelines.
+- **Direct AI Writes**: AI providers cannot execute mutations directly; they must still output structured `ProposedAction` objects processed by the rules engine.
 
 ---
 

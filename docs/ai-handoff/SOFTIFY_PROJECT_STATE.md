@@ -51,10 +51,11 @@ This document provides a highly durable and centralized technical reference for 
 - **Multi-Agent Product Workspace Foundation**: A centralized agent catalog (`GET /api/agents/catalog`) exposing available agents. Scoped domain models (`AgentRun`, `Recommendation`, `ProposedAction`) in in-memory and GCP Firestore repository layers. REST routes with strict tenantcontext resolution and audit integrations, proposed action approval bridge with titlecase risk mapping, and a glassmorphic dashboard component `AgentWorkspace.tsx` integrated in the merchant app.
 - **Multi-Agent Workspace Analytics & Operational Visibility**: Strictly read-only, non-mutating operational analytics endpoints (`/api/workspace/analytics/*`) returning aggregated metric summaries, run trends, recommendation distributions, proposed action types, approval conversion funnels, and chronological trace timelines. Enforces clean `403 Forbidden` tenant mismatch responses with zero side effects or database writes, and strips all developer/internal metadata (such as raw prompts or reasoning) via a strictly-controlled allowlist-only timeline mapper.
 - **MVP End-to-End Merchant Workflow Hardening**: Complete, robust merchant optimization pipeline (Select Agent → Scan → Propose Revision → Request Approval → Approve → Explicit execution → Live catalog refresh) fully hardened with premium spinner state masks, allowlisted comparison cards, dedicated error recoveries, and dynamic local synchronization.
-- **CI/CD & Production Smoke Tests**: All static release checks (55 tests) and live local/deployed smoke tests (27 tests) pass cleanly.
+- **Production Bulk Operations Foundation**: Multi-select bulk workflows on proposed actions (batch request-approval, batch dismiss) and merchant approvals (batch-decide, batch-execute). Implements strict Phase 1 preflight tenant assertions, 500ms safety throttle delays, sequential dispatch via ApprovedProductMutationExecutorService, individual claim locks, and live sequential progress checklist stepper UX.
+- **CI/CD & Production Smoke Tests**: All static release checks (56 tests) and live local/deployed smoke tests (29 tests) pass cleanly.
 
 ## Next Recommended Phase
-- **Phase 10.12 — Production Bulk Operations Foundation**: Focuses on defining secure batch/bulk operations routes, queue rate-limiting, and bulk dismissal handshakes.
+- **Phase 10.13 — Production Catalog Auto-Optimization**: Introduces opt-in merchant-approved automatic background optimization rules, scheduling engine, and automated execution queue monitoring.
 - **Preserved Mutation Scope**: The current safe mutation scope (capping edits strictly to approved text fields: `title`, `vendor`, `productType`, `status`, `tags`) remains unchanged.
 
 ## Current Non-Goals

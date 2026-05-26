@@ -22,6 +22,8 @@ interface ApprovalQueueProps {
   onDecide: (id: string, decision: 'APPROVE' | 'REJECT') => void;
   onExecute: (id: string) => Promise<void>;
   onResetFailed: (id: string) => Promise<void>;
+  onBatchDecide?: (ids: string[], decision: 'APPROVE' | 'REJECT') => Promise<void>;
+  onBatchExecute?: (ids: string[]) => Promise<any>;
   isLoading: boolean;
 }
 
@@ -30,6 +32,8 @@ export default function ApprovalQueue({
   onDecide,
   onExecute,
   onResetFailed,
+  onBatchDecide,
+  onBatchExecute,
   isLoading
 }: ApprovalQueueProps) {
   const [selectedId, setSelectedId] = useState<string | null>(() => {
@@ -38,6 +42,10 @@ export default function ApprovalQueue({
     return approvals[0]?.id || null;
   });
   const [activeTab, setActiveTab] = useState<'PENDING' | 'DECIDED'>('PENDING');
+  const [selectedApprovalIds, setSelectedApprovalIds] = useState<string[]>([]);
+  const [isConfirmingDecide, setIsConfirmingDecide] = useState<'APPROVE' | 'REJECT' | null>(null);
+  const [isConfirmingExecute, setIsConfirmingExecute] = useState<boolean>(false);
+  const [executionProgress, setExecutionProgress] = useState<any | null>(null);
 
   const selectedItem = approvals.find(a => a.id === selectedId) || null;
 
@@ -62,6 +70,93 @@ export default function ApprovalQueue({
     }
   };
 
+  const handleTriggerBatchDecide = async () => {
+    if (!onBatchDecide || !isConfirmingDecide || selectedApprovalIds.length === 0) return;
+    const decision = isConfirmingDecide;
+    setIsConfirmingDecide(null);
+    try {
+      await onBatchDecide(selectedApprovalIds, decision);
+      setSelectedApprovalIds([]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleTriggerBatchExecute = async () => {
+    if (!onBatchExecute || selectedApprovalIds.length === 0) return;
+    setIsConfirmingExecute(false);
+
+    const initialItems = selectedApprovalIds.map(id => {
+      const match = approvals.find(a => a.id === id);
+      return {
+        id,
+        title: match?.details.title || `Approval request ${id}`,
+        status: 'QUEUED' as const,
+        error: undefined as string | undefined
+      };
+    });
+
+    setExecutionProgress({
+      status: 'executing',
+      items: initialItems
+    });
+
+    // Animate sequential stepper (650ms delay)
+    let currentIdx = 0;
+    initialItems[0].status = 'EXECUTING';
+    
+    const stepperInterval = setInterval(() => {
+      currentIdx++;
+      if (currentIdx < initialItems.length) {
+        setExecutionProgress(prev => {
+          if (!prev) return null;
+          const updated = [...prev.items];
+          if (updated[currentIdx - 1].status === 'EXECUTING') {
+            updated[currentIdx - 1].status = 'APPLIED';
+          }
+          updated[currentIdx].status = 'EXECUTING';
+          return { ...prev, items: updated };
+        });
+      } else {
+        clearInterval(stepperInterval);
+      }
+    }, 650);
+
+    try {
+      const data = await onBatchExecute(selectedApprovalIds);
+      clearInterval(stepperInterval);
+      
+      const resultsMap = new Map((data.results || []).map((r: any) => [r.id, r]));
+      setExecutionProgress(prev => {
+        if (!prev) return null;
+        const updated = prev.items.map(item => {
+          const match = resultsMap.get(item.id) as any;
+          if (match) {
+            return {
+              ...item,
+              status: (match.status === 'APPLIED' || match.status === 'ALREADY_APPLIED') ? 'APPLIED' as const : 'FAILED' as const,
+              error: match.error
+            };
+          }
+          return { ...item, status: 'FAILED' as const, error: 'Ineligible status returned' };
+        });
+        return { status: 'completed', items: updated };
+      });
+    } catch (err: any) {
+      clearInterval(stepperInterval);
+      setExecutionProgress(prev => {
+        if (!prev) return null;
+        const updated = prev.items.map(item => {
+          if (item.status === 'EXECUTING' || item.status === 'QUEUED') {
+            return { ...item, status: 'FAILED' as const, error: err.message || 'Execution error' };
+          }
+          return item;
+        });
+        return { status: 'completed', items: updated };
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-5 gap-4">
@@ -78,7 +173,7 @@ export default function ApprovalQueue({
         {/* Tab Selection */}
         <div className="flex border border-slate-200 rounded-xl p-0.5 bg-slate-50/75 max-w-sm shrink-0 shadow-3xs">
           <button
-            onClick={() => { setActiveTab('PENDING'); setSelectedId(pendingList[0]?.id || null); }}
+            onClick={() => { setActiveTab('PENDING'); setSelectedId(pendingList[0]?.id || null); setSelectedApprovalIds([]); }}
             className={`px-3 py-1.5 text-3xs font-bold rounded-lg transition-all ${
               activeTab === 'PENDING' 
                 ? 'bg-white text-indigo-950 shadow-xs border border-slate-150' 
@@ -88,7 +183,7 @@ export default function ApprovalQueue({
             Pending Reviews ({pendingList.length})
           </button>
           <button
-            onClick={() => { setActiveTab('DECIDED'); setSelectedId(decidedList[0]?.id || null); }}
+            onClick={() => { setActiveTab('DECIDED'); setSelectedId(decidedList[0]?.id || null); setSelectedApprovalIds([]); }}
             className={`px-3 py-1.5 text-3xs font-bold rounded-lg transition-all ${
               activeTab === 'DECIDED' 
                 ? 'bg-white text-indigo-950 shadow-xs border border-slate-150' 
@@ -118,41 +213,57 @@ export default function ApprovalQueue({
                   <div
                     key={item.id}
                     onClick={() => handleSelect(item)}
-                    className={`p-4 rounded-2xl border text-xs cursor-pointer transition-all ${
+                    className={`p-4 rounded-2xl border text-xs cursor-pointer transition-all flex gap-3 items-start ${
                       isSelected 
                         ? 'bg-indigo-50/30 border-indigo-400 ring-2 ring-indigo-500/10 shadow-xs' 
                         : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-2xs'
                     }`}
                   >
-                    <div className="flex justify-between items-start font-mono">
-                      <span className="font-bold text-slate-800">{item.id}</span>
-                      <span className={`inline-flex items-center text-4xs font-mono px-2 py-0.5 rounded-full font-bold uppercase border ${
-                        item.status === 'PENDING' 
-                          ? 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse' 
-                          : item.status === 'APPROVED' 
-                          ? 'bg-indigo-50 text-indigo-700 border-indigo-100 font-bold' 
-                          : item.status === 'EXECUTING'
-                          ? 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse'
-                          : item.status === 'APPLIED' || item.status === 'EXECUTED'
-                          ? 'bg-emerald-50 text-emerald-700 border-emerald-100 font-bold'
-                          : 'bg-red-50 text-red-700 border-red-100'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </div>
+                    <input
+                      type="checkbox"
+                      checked={selectedApprovalIds.includes(item.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        if (e.target.checked) {
+                          setSelectedApprovalIds(prev => [...prev, item.id]);
+                        } else {
+                          setSelectedApprovalIds(prev => prev.filter(id => id !== item.id));
+                        }
+                      }}
+                      className="mt-1 w-4 h-4 rounded border-slate-350 text-indigo-650 accent-indigo-650 focus:ring-indigo-500 cursor-pointer shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start font-mono">
+                        <span className="font-bold text-slate-800 text-[10px]">{item.id}</span>
+                        <span className={`inline-flex items-center text-[8px] font-mono px-2 py-0.5 rounded-full font-bold uppercase border ${
+                          item.status === 'PENDING' 
+                            ? 'bg-amber-50 text-amber-700 border-amber-100 animate-pulse' 
+                            : item.status === 'APPROVED' 
+                            ? 'bg-indigo-50 text-indigo-700 border-indigo-100 font-bold' 
+                            : item.status === 'EXECUTING'
+                            ? 'bg-blue-50 text-blue-700 border-blue-100 animate-pulse'
+                            : item.status === 'APPLIED' || item.status === 'EXECUTED'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100 font-bold'
+                            : 'bg-red-50 text-red-700 border-red-100'
+                        }`}>
+                          {item.status}
+                        </span>
+                      </div>
 
-                    <h3 className="font-bold text-slate-700 mt-2 line-clamp-1">
-                      {item.details.title}
-                    </h3>
+                      <h3 className="font-bold text-slate-700 mt-2 line-clamp-1">
+                        {item.details.title}
+                      </h3>
 
-                    <div className="flex items-center justify-between border-t border-slate-100 mt-3 pt-2 text-4xs text-slate-400">
-                      <span className="flex items-center gap-1 font-sans font-bold text-slate-450">
-                        <User className="w-3 h-3 text-indigo-400" />
-                        {item.agentName}
-                      </span>
-                      <span className="font-mono">
-                        {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
+                      <div className="flex items-center justify-between border-t border-slate-100 mt-3 pt-2 text-4xs text-slate-400">
+                        <span className="flex items-center gap-1 font-sans font-bold text-slate-450">
+                          <User className="w-3.5 h-3.5 text-indigo-400" />
+                          {item.agentName}
+                        </span>
+                        <span className="font-mono">
+                          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -396,6 +507,195 @@ export default function ApprovalQueue({
         </div>
 
       </div>
+      {selectedApprovalIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-955/95 bg-slate-950/90 backdrop-blur-md text-slate-100 border border-slate-800 rounded-2xl shadow-2xl px-6 py-4 flex items-center justify-between gap-6 max-w-lg w-full max-w-[90vw] animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-wider">Queue Bulk Actions</span>
+            <span className="text-xs font-bold text-white mt-0.5">{selectedApprovalIds.length} item{selectedApprovalIds.length > 1 ? 's' : ''} selected</span>
+          </div>
+          <div className="flex gap-2">
+            {activeTab === 'PENDING' ? (
+              <>
+                <button
+                  onClick={() => setIsConfirmingDecide('REJECT')}
+                  disabled={isLoading}
+                  className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-850 disabled:opacity-50 text-red-400 hover:text-red-300 rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer border border-slate-805 border-slate-800 transition flex items-center gap-1"
+                >
+                  <X className="w-3 h-3" />
+                  Reject Batch
+                </button>
+                <button
+                  onClick={() => setIsConfirmingDecide('APPROVE')}
+                  disabled={isLoading}
+                  className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer shadow-sm transition flex items-center gap-1"
+                >
+                  <Check className="w-3 h-3" />
+                  Approve Batch
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setIsConfirmingExecute(true)}
+                disabled={isLoading || !selectedApprovalIds.every(id => {
+                  const item = approvals.find(a => a.id === id);
+                  return item?.status === 'APPROVED' || item?.status === 'FAILED';
+                })}
+                className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 disabled:bg-slate-900 disabled:text-slate-500 disabled:border-slate-850 disabled:opacity-50 text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer shadow-sm transition flex items-center gap-1.5"
+                title={selectedApprovalIds.every(id => {
+                  const item = approvals.find(a => a.id === id);
+                  return item?.status === 'APPROVED' || item?.status === 'FAILED';
+                }) ? 'Execute selected items' : 'Some selected items are not eligible (only APPROVED or FAILED can be executed)'}
+              >
+                <RefreshCw className="w-3 h-3" />
+                Execute Commits
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Decide Confirmation Modal */}
+      {isConfirmingDecide && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-md w-full space-y-4 animate-in zoom-in-95 duration-200 text-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-50 border border-amber-100 text-amber-600 rounded-2xl">
+                <AlertCircle className="w-6 h-6 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase">Confirm Batch Decision</h3>
+                <p className="text-[9px] text-slate-400 font-mono">Merchant Gatekeeper Action</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed font-sans">
+              You are about to bulk <strong className={isConfirmingDecide === 'APPROVE' ? 'text-indigo-600 font-bold font-mono' : 'text-rose-600 font-bold font-mono'}>{isConfirmingDecide.toLowerCase()}</strong> <strong>{selectedApprovalIds.length}</strong> approval request{selectedApprovalIds.length > 1 ? 's' : ''}.
+            </p>
+            {isConfirmingDecide === 'APPROVE' && (
+              <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl text-3xs text-indigo-900 leading-normal leading-relaxed">
+                <span className="font-bold">Important Safe Boundary:</span> Approving is state-only and registers your authorization inside Softify. This will NOT mutate your live Shopify storefront. You must explicitly execute the approved items afterwards to write changes.
+              </div>
+            )}
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setIsConfirmingDecide(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition font-mono uppercase text-[9px] tracking-wider"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTriggerBatchDecide}
+                className={`px-4 py-2 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition font-mono uppercase text-[9px] tracking-wider ${
+                  isConfirmingDecide === 'APPROVE' ? 'bg-indigo-650 hover:bg-indigo-700' : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                Proceed to {isConfirmingDecide}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Execute Confirmation Modal */}
+      {isConfirmingExecute && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-md w-full space-y-4 animate-in zoom-in-95 duration-200 text-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-2xl animate-pulse">
+                <ShieldCheck className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-slate-900 uppercase">Confirm Batch Execution</h3>
+                <p className="text-[9px] text-slate-400 font-mono">Storefront Mutation Commit</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed font-sans">
+              You are about to commit <strong>{selectedApprovalIds.length}</strong> change{selectedApprovalIds.length > 1 ? 's' : ''} to your live Shopify store. This operation writes data directly to your storefront. Proceed?
+            </p>
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-800 leading-normal leading-relaxed">
+              <span className="font-bold">Live Execution Warning:</span> This is a manual commit. Safe sequential throttling with a 500ms dynamic cost protection delay will be orchestrated to ensure safe API consumption.
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                onClick={() => setIsConfirmingExecute(false)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer transition font-mono uppercase text-[9px] tracking-wider"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleTriggerBatchExecute}
+                className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition font-mono uppercase text-[9px] tracking-wider"
+              >
+                Authorize Live Commits
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Execution Stepper Progress Modal */}
+      {executionProgress && (
+        <div className="fixed inset-0 bg-slate-955/80 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-350">
+          <div className="bg-slate-900 text-slate-100 border border-slate-800 rounded-3xl p-6 shadow-2xl max-w-md w-full space-y-4 animate-in zoom-in-95 duration-300">
+            <div className="flex justify-between items-start border-b border-slate-805 border-slate-800 pb-3">
+              <div>
+                <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-wider block">Executing Shopify Commits</span>
+                <h3 className="text-xs font-bold text-white mt-0.5">Sequential Safe Execution Queue</h3>
+              </div>
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-400 border border-indigo-900/40 font-mono text-[8px] font-bold">
+                {executionProgress.status === 'completed' ? 'COMPLETE' : 'MUTATING'}
+              </span>
+            </div>
+            
+            <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+              {executionProgress.items.map((item: any) => {
+                let statusText = 'Queued';
+                let statusColor = 'text-slate-500';
+                let icon = <Clock className="w-3.5 h-3.5 shrink-0" />;
+                
+                if (item.status === 'EXECUTING') {
+                  statusText = 'Executing...';
+                  statusColor = 'text-blue-400 font-bold';
+                  icon = <RefreshCw className="w-3.5 h-3.5 animate-spin shrink-0" />;
+                } else if (item.status === 'APPLIED') {
+                  statusText = 'Applied';
+                  statusColor = 'text-emerald-400 font-bold';
+                  icon = <CheckCircle2 className="w-3.5 h-3.5 shrink-0 animate-pulse" />;
+                } else if (item.status === 'FAILED') {
+                  statusText = 'Failed';
+                  statusColor = 'text-rose-400 font-bold';
+                  icon = <AlertCircle className="w-3.5 h-3.5 shrink-0" />;
+                }
+                
+                return (
+                  <div key={item.id} className="p-3 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-between text-3xs font-mono">
+                    <div className="space-y-0.5 flex-1 min-w-0 pr-2">
+                      <span className="text-[9px] text-slate-400 font-sans block truncate">{item.title}</span>
+                      <span className="text-[8px] text-slate-600 block">ID: {item.id}</span>
+                      {item.error && <span className="text-[8px] text-rose-500 block leading-normal mt-0.5 max-h-16 overflow-y-auto">{item.error}</span>}
+                    </div>
+                    <div className={`flex items-center gap-1.5 shrink-0 uppercase text-[9px] ${statusColor}`}>
+                      {icon}
+                      {statusText}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-2 border-t border-slate-805 border-slate-800 flex justify-between items-center text-3xs text-slate-450 font-mono">
+              <span>Safeguard rate protection active (500ms delay)</span>
+              {executionProgress.status === 'completed' && (
+                <button
+                  onClick={() => { setExecutionProgress(null); setSelectedApprovalIds([]); }}
+                  className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl cursor-pointer transition shadow-sm font-sans uppercase text-[9px] tracking-wider"
+                >
+                  Close & Refresh
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

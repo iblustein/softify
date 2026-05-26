@@ -899,4 +899,322 @@ router.post("/approvals/:id/mark-execution-failed", async (req: any, res: any) =
   }
 });
 
+router.post("/approvals/batch-decide", async (req: any, res: any) => {
+  const { ids, decision, organizationId: claimedOrgId, shop } = req.body;
+
+  try {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ ok: false, error: "Missing or invalid ids parameter. Acceptable: array of strings." });
+    }
+    if (ids.length > 10) {
+      return res.status(400).json({ ok: false, error: "Batch size exceeds maximum limit of 10 items." });
+    }
+    if (!decision || !["APPROVE", "REJECT"].includes(decision)) {
+      return res.status(400).json({ ok: false, error: "Invalid or missing decision parameter. Acceptable: 'APPROVE', 'REJECT'." });
+    }
+    if (!shop || typeof shop !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required shop parameter." });
+    }
+
+    const repos = getRepositories();
+    const cleanShop = normalizeShopDomain(shop);
+    const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+    if (!storeConnection) {
+      return res.status(404).json({ ok: false, error: "Store connection not found." });
+    }
+
+    // Claimed vs Authority check
+    if (!claimedOrgId || storeConnection.organizationId !== claimedOrgId) {
+      return res.status(403).json({ ok: false, error: "Access denied. Claimed organizationId does not match shop context authority." });
+    }
+
+    const resolvedOrgId = storeConnection.organizationId;
+    const storeConnectionId = storeConnection.id;
+
+    // Check duplicate IDs
+    const uniqueIds = new Set(ids);
+    if (uniqueIds.size !== ids.length) {
+      return res.status(400).json({ ok: false, error: "Duplicate IDs detected in batch request." });
+    }
+
+    // Phase 1: Preflight Validation (Strict item existence, tenant checks, eligibility)
+    const fetchedItems: any[] = [];
+    for (const id of ids) {
+      let approvalItem = await repos.approvals.getApprovalById(id);
+
+      // Fallback search to legacy queue list if repository misses (backwards compatibility for mock seeds)
+      if (!approvalItem) {
+        const legacyItem = approvalService.getApprovals().find(a => a.id === id);
+        if (legacyItem) {
+          approvalItem = {
+            id: legacyItem.id,
+            organizationId: (legacyItem as any).organizationId || resolvedOrgId,
+            storeConnectionId: (legacyItem as any).storeConnectionId || "store-luminary",
+            agentInstallationId: (legacyItem as any).agentInstallationId || "inst-mock",
+            agentId: legacyItem.agentId,
+            toolName: "catalog.products.propose_update",
+            requestedBy: legacyItem.agentName,
+            requestedAt: legacyItem.timestamp,
+            status: legacyItem.status as any,
+            riskLevel: "Medium",
+            targetType: "PRODUCT_PROPOSAL",
+            targetId: legacyItem.targetId,
+            proposedChangesSummary: legacyItem.details.summary,
+            diffSummary: legacyItem.details.summary,
+            sanitizedPayload: legacyItem.details.fields || {},
+            allowedFields: ["title", "vendor", "productType", "status", "tags"]
+          };
+        }
+      }
+
+      if (!approvalItem) {
+        return res.status(404).json({ ok: false, error: `Approval request '${id}' not found.` });
+      }
+
+      // Cross-tenant boundary check
+      if (approvalItem.organizationId !== resolvedOrgId) {
+        return res.status(403).json({ ok: false, error: `Access denied. Approval request '${id}' does not belong to this organization.` });
+      }
+      if (storeConnectionId && approvalItem.storeConnectionId !== storeConnectionId) {
+        return res.status(400).json({ ok: false, error: `Store connection context mismatch for approval '${id}'.` });
+      }
+
+      // Eligibility: Batch decide may only operate on PENDING approvals
+      if (approvalItem.status !== "PENDING") {
+        return res.status(400).json({
+          ok: false,
+          error: `Approval request '${id}' has status '${approvalItem.status}' and cannot be decided (only PENDING approvals are eligible).`
+        });
+      }
+
+      fetchedItems.push(approvalItem);
+    }
+
+    // Phase 2: Sequential Decide Operation
+    const results: any[] = [];
+    const now = new Date().toISOString();
+
+    for (const approvalItem of fetchedItems) {
+      if (decision === "REJECT") {
+        const updated = await repos.approvals.updateApprovalRequest(approvalItem.id, {
+          status: "REJECTED",
+          decidedAt: now,
+          decidedBy: "Shop Owner"
+        });
+
+        // Update local memory legacy queue if applicable
+        const queueIdx = approvalService.approvalQueue.findIndex(a => a.id === approvalItem.id);
+        if (queueIdx !== -1) {
+          approvalService.approvalQueue[queueIdx].status = "REJECTED";
+          approvalService.approvalQueue[queueIdx].decidedAt = now;
+        }
+
+        const legacyCompatItem = buildLegacyApprovalShape(approvalItem);
+        await writeAuditEvent({
+          organizationId: approvalItem.organizationId,
+          storeConnectionId: approvalItem.storeConnectionId,
+          agentInstallationId: approvalItem.agentInstallationId,
+          agentId: approvalItem.agentId,
+          toolName: approvalItem.toolName,
+          initiator: "Shop Owner",
+          event: AuditEventNames.APPROVAL_REJECTED,
+          description: `Rejected modification proposed by ${approvalItem.requestedBy} inside batch: '${legacyCompatItem.details.title}'`,
+          decision: "blocked",
+          reason: "merchant_rejected",
+          metadata: {
+            organizationId: approvalItem.organizationId,
+            storeConnectionId: approvalItem.storeConnectionId,
+            approvalId: approvalItem.id,
+            decision: "blocked",
+            reason: "merchant_rejected"
+          }
+        });
+
+        results.push({ id: approvalItem.id, status: "REJECTED" });
+      } else {
+        // decision === "APPROVE"
+        const updated = await repos.approvals.updateApprovalRequest(approvalItem.id, {
+          status: "APPROVED",
+          decidedAt: now,
+          decidedBy: "Shop Owner"
+        });
+
+        // Update local memory legacy queue if applicable
+        const queueIdx = approvalService.approvalQueue.findIndex(a => a.id === approvalItem.id);
+        if (queueIdx !== -1) {
+          approvalService.approvalQueue[queueIdx].status = "APPROVED";
+          approvalService.approvalQueue[queueIdx].decidedAt = now;
+        }
+
+        const legacyCompatItem = buildLegacyApprovalShape(approvalItem);
+        await writeAuditEvent({
+          organizationId: approvalItem.organizationId,
+          storeConnectionId: approvalItem.storeConnectionId,
+          agentInstallationId: approvalItem.agentInstallationId,
+          agentId: approvalItem.agentId,
+          toolName: approvalItem.toolName,
+          initiator: "Shop Owner",
+          event: AuditEventNames.APPROVAL_APPROVED,
+          description: `Approved changes inside batch for '${legacyCompatItem.details.title}' proposed by ${approvalItem.requestedBy}`,
+          decision: "allowed",
+          metadata: {
+            organizationId: approvalItem.organizationId,
+            storeConnectionId: approvalItem.storeConnectionId,
+            approvalId: approvalItem.id,
+            decision: "allowed"
+          }
+        });
+
+        results.push({ id: approvalItem.id, status: "APPROVED" });
+      }
+    }
+
+    if (decision === "APPROVE") {
+      return res.json({
+        ok: true,
+        decision: "APPROVE",
+        executionDeferred: true,
+        results
+      });
+    } else {
+      return res.json({
+        ok: true,
+        decision: "REJECT",
+        results
+      });
+    }
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.post("/approvals/batch-execute", async (req: any, res: any) => {
+  const { ids, organizationId: claimedOrgId, shop, performer = "Shop Owner" } = req.body;
+
+  try {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ ok: false, error: "Missing or invalid ids parameter. Acceptable: array of strings." });
+    }
+    if (ids.length > 10) {
+      return res.status(400).json({ ok: false, error: "Batch size exceeds maximum limit of 10 items." });
+    }
+    if (!shop || typeof shop !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required shop parameter." });
+    }
+
+    const repos = getRepositories();
+    const cleanShop = normalizeShopDomain(shop);
+    const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+    if (!storeConnection) {
+      return res.status(404).json({ ok: false, error: "Store connection not found." });
+    }
+
+    // Claimed vs Authority check
+    if (!claimedOrgId || storeConnection.organizationId !== claimedOrgId) {
+      return res.status(403).json({ ok: false, error: "Access denied. Claimed organizationId does not match shop context authority." });
+    }
+
+    const resolvedOrgId = storeConnection.organizationId;
+    const storeConnectionId = storeConnection.id;
+
+    // Check duplicate IDs
+    const uniqueIds = new Set(ids);
+    if (uniqueIds.size !== ids.length) {
+      return res.status(400).json({ ok: false, error: "Duplicate IDs detected in batch request." });
+    }
+
+    // Phase 1: Preflight Validation (Strict item existence & tenant checks)
+    const fetchedItems: any[] = [];
+    for (const id of ids) {
+      let approvalItem = await repos.approvals.getApprovalById(id);
+
+      // Fallback search to legacy queue list if repository misses (backwards compatibility for mock seeds)
+      if (!approvalItem) {
+        const legacyItem = approvalService.getApprovals().find(a => a.id === id);
+        if (legacyItem) {
+          approvalItem = {
+            id: legacyItem.id,
+            organizationId: (legacyItem as any).organizationId || resolvedOrgId,
+            storeConnectionId: (legacyItem as any).storeConnectionId || "store-luminary",
+            agentInstallationId: (legacyItem as any).agentInstallationId || "inst-mock",
+            agentId: legacyItem.agentId,
+            toolName: "catalog.products.propose_update",
+            requestedBy: legacyItem.agentName,
+            requestedAt: legacyItem.timestamp,
+            status: legacyItem.status as any,
+            riskLevel: "Medium",
+            targetType: "PRODUCT_PROPOSAL",
+            targetId: legacyItem.targetId,
+            proposedChangesSummary: legacyItem.details.summary,
+            diffSummary: legacyItem.details.summary,
+            sanitizedPayload: legacyItem.details.fields || {},
+            allowedFields: ["title", "vendor", "productType", "status", "tags"]
+          };
+        }
+      }
+
+      if (!approvalItem) {
+        return res.status(404).json({ ok: false, error: `Approval request '${id}' not found.` });
+      }
+
+      // Cross-tenant boundary check
+      if (approvalItem.organizationId !== resolvedOrgId) {
+        return res.status(403).json({ ok: false, error: `Access denied. Approval request '${id}' does not belong to this organization.` });
+      }
+      if (storeConnectionId && approvalItem.storeConnectionId !== storeConnectionId) {
+        return res.status(400).json({ ok: false, error: `Store connection context mismatch for approval '${id}'.` });
+      }
+
+      fetchedItems.push(approvalItem);
+    }
+
+    // Phase 2: Sequential execution/operation
+    const results: any[] = [];
+
+    for (const approvalItem of fetchedItems) {
+      const currentStatus = approvalItem.status;
+
+      // Idempotency & Eligibility Gating Rules
+      if (currentStatus === "EXECUTING") {
+        results.push({ id: approvalItem.id, status: "ALREADY_EXECUTING", error: "Item is already claimed & currently executing." });
+      } else if (currentStatus === "APPLIED" || currentStatus === "EXECUTED") {
+        results.push({ id: approvalItem.id, status: "ALREADY_APPLIED" });
+      } else if (currentStatus !== "APPROVED") {
+        results.push({ id: approvalItem.id, status: "INELIGIBLE", error: `Approval has status '${currentStatus}' (only APPROVED approvals can be executed).` });
+      } else {
+        // Sequentially execute using the ApprovedProductMutationExecutorService single-item pipeline
+        try {
+          // Fixed safety delay to throttle Shopify Admin API cost consumption
+          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // Run single-item execution (preserves Claim Lock, execution logging, token lookup, mutation scopes)
+          const executed = await executorService.executeApprovedProductMutation(
+            approvalItem.id,
+            resolvedOrgId,
+            performer
+          );
+
+          // Update local memory legacy queue if applicable
+          const queueIdx = approvalService.approvalQueue.findIndex(a => a.id === approvalItem.id);
+          if (queueIdx !== -1) {
+            approvalService.approvalQueue[queueIdx].status = executed.status as any;
+            (approvalService.approvalQueue[queueIdx] as any).executedAt = executed.executedAt;
+          }
+
+          results.push({ id: approvalItem.id, status: executed.status });
+        } catch (execError: any) {
+          results.push({ id: approvalItem.id, status: "FAILED", error: execError.message });
+        }
+      }
+    }
+
+    return res.json({
+      ok: true,
+      results
+    });
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 export default router;

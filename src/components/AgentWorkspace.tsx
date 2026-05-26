@@ -102,6 +102,8 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
   const [activeConsoleLog, setActiveConsoleLog] = useState<string>('// Workspace Idle...\n// Choose an agent and click "Launch Diagnostic Scan".');
   const [errorText, setErrorText] = useState<string | null>(null);
   const [requestingId, setRequestingId] = useState<string | null>(null);
+  const [selectedActionIds, setSelectedActionIds] = useState<string[]>([]);
+  const [isBulkRequesting, setIsBulkRequesting] = useState<boolean>(false);
 
   // Analytics States
   const [analyticsLoading, setAnalyticsLoading] = useState<boolean>(false);
@@ -271,6 +273,84 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
       setErrorText(err.message || 'Bridge request failed.');
     } finally {
       setRequestingId(null);
+    }
+  };
+
+  const handleBatchDismissProposedActions = async () => {
+    if (selectedActionIds.length === 0) return;
+    setErrorText(null);
+    setIsBulkRequesting(true);
+    try {
+      const shop = new URLSearchParams(shopQuery).get('shop') || '';
+      const claimedOrgId = new URLSearchParams(shopQuery).get('organizationId') || '';
+
+      const res = await fetch(`/api/proposed-actions/batch-dismiss${shopQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedActionIds,
+          organizationId: claimedOrgId,
+          shop
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to bulk dismiss proposed actions.');
+      }
+      const data = await res.json();
+      const successfullyDismissed = (data.results || []).map((r: any) => r.id);
+      setProposedActions(prev => prev.filter(a => !successfullyDismissed.includes(a.id)));
+      setSelectedActionIds([]);
+      await onRefreshStats();
+    } catch (err: any) {
+      setErrorText(err.message || 'Failed to bulk dismiss proposed actions.');
+    } finally {
+      setIsBulkRequesting(false);
+    }
+  };
+
+  const handleBatchRequestProposedActionsApprovals = async () => {
+    if (selectedActionIds.length === 0) return;
+    setErrorText(null);
+    setIsBulkRequesting(true);
+    try {
+      const shop = new URLSearchParams(shopQuery).get('shop') || '';
+      const claimedOrgId = new URLSearchParams(shopQuery).get('organizationId') || '';
+
+      const res = await fetch(`/api/proposed-actions/batch-request-approval${shopQuery}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ids: selectedActionIds,
+          organizationId: claimedOrgId,
+          shop
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to bulk request approvals.');
+      }
+      const data = await res.json();
+      
+      const resultsMap = new Map((data.results || []).map((r: any) => [r.id, r]));
+      setProposedActions(prev => prev.map(a => {
+        const match = resultsMap.get(a.id) as any;
+        if (match) {
+          return {
+            ...a,
+            status: match.status === 'ALREADY_REQUESTED' ? 'APPROVAL_REQUESTED' : match.status,
+            approvalRequestId: match.approvalId
+          };
+        }
+        return a;
+      }));
+      setSelectedActionIds([]);
+      await fetchCatalogAndWorkspaceData();
+      await onRefreshStats();
+    } catch (err: any) {
+      setErrorText(err.message || 'Failed to bulk request approvals.');
+    } finally {
+      setIsBulkRequesting(false);
     }
   };
 
@@ -593,11 +673,27 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                     return (
                       <div key={act.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs space-y-3 relative overflow-hidden hover:shadow-2xs transition duration-200">
                         <div className="flex justify-between items-start gap-4">
-                          <div>
-                            <h4 className="text-xs font-bold text-slate-900">{act.title}</h4>
-                            <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block mt-1">
-                              Agent: {act.agentId} • Risk: {act.riskLevel}
-                            </span>
+                          <div className="flex items-start gap-2.5">
+                            {!isRequested && (
+                              <input
+                                type="checkbox"
+                                checked={selectedActionIds.includes(act.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedActionIds(prev => [...prev, act.id]);
+                                  } else {
+                                    setSelectedActionIds(prev => prev.filter(id => id !== act.id));
+                                  }
+                                }}
+                                className="mt-0.5 w-4 h-4 rounded border-slate-350 text-indigo-600 accent-indigo-650 focus:ring-indigo-500 cursor-pointer shrink-0"
+                              />
+                            )}
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-900">{act.title}</h4>
+                              <span className="text-[9px] text-slate-400 font-mono uppercase tracking-wider block mt-1">
+                                Agent: {act.agentId} • Risk: {act.riskLevel}
+                              </span>
+                            </div>
                           </div>
                           {!isRequested && (
                             <button
@@ -902,6 +998,35 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
               )}
             </div>
 
+          </div>
+        </div>
+      )}
+      {selectedActionIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-950/90 backdrop-blur-md text-slate-100 border border-slate-800 rounded-2xl shadow-2xl px-6 py-4 flex items-center justify-between gap-6 max-w-lg w-full max-w-[90vw] animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-wider">Bulk Actions Staged</span>
+            <span className="text-xs font-bold text-white mt-0.5">{selectedActionIds.length} item{selectedActionIds.length > 1 ? 's' : ''} selected</span>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleBatchDismissProposedActions}
+              disabled={isBulkRequesting}
+              className="px-3.5 py-1.5 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-slate-300 hover:text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer border border-slate-800 transition"
+            >
+              Dismiss
+            </button>
+            <button
+              onClick={handleBatchRequestProposedActionsApprovals}
+              disabled={isBulkRequesting}
+              className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer shadow-sm transition flex items-center gap-1"
+            >
+              {isBulkRequesting ? (
+                <RefreshCw className="w-3 h-3 animate-spin" />
+              ) : (
+                <FileCheck className="w-3.5 h-3.5 shrink-0" />
+              )}
+              Request Approval
+            </button>
           </div>
         </div>
       )}

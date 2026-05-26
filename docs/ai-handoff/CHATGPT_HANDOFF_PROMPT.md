@@ -34,8 +34,9 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Embedded shop-based dynamic context resolution on backend routes, selective transient parameter URL scrubbing, and premium warning panels are verified and live (Phase 10.8.1).
 - Multi-agent workspace dashboard catalog grid, runs tracking endpoints, interactive recommendations inbox, and draft proposed actions bridging approvals are verified and live (Phase 10.9).
 - Strictly read-only, non-mutating workspace analytics endpoints and allowlist-sanitized trace timeline steppers are fully implemented, stabilized, and verified (Phase 10.10).
-- Complete core merchant optimization workflow is fully hardened end-to-end (Analyze → Recommend → Propose → Approve → Explicit execution → Live catalog refresh) with premium spinner state masks, allowlisted side-by-side comparison cards, safety alerts, and dynamic local synchronization (Phase 10.11).
-- Robust pre-deployment static checks (55 tests) and integration smoke test suites (27 tests) are passing completely.
+- Complete core merchant workflow hardening with premium spinner overlays, allowlisted side-by-side comparison cards, safety alerts, and dynamic local synchronization (Phase 10.11).
+- Production Bulk Operations Foundation (Phase 10.12) is complete, establishing secure multi-select bulk proposed actions and merchant approvals, dynamic fail-fast tenant preflight validations, 500ms safety delays, sequential claim locks, and live stepper UI checklists.
+- Robust pre-deployment static checks (56 tests) and integration smoke test suites (29 tests) are passing completely.
 
 ### Completed Milestones
 - Phase 10.1 — AI Engine Interface and Catalog Agent POC
@@ -50,6 +51,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.9 — Multi-Agent Product Workspace Foundation
 - Phase 10.10 — Multi-Agent Workspace Analytics & Operational Visibility
 - Phase 10.11 — MVP End-to-End Merchant Workflow Hardening
+- Phase 10.12 — Production Bulk Operations Foundation
 
 ### Core Architectural Guardrails & Constraints
 - Softify strictly owns runtime execution, permissions, tenant isolation, and integrations.
@@ -81,7 +83,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.12 — Production Bulk Operations Foundation. The goal is to define secure, throttled, and tenant-safe batch operations (batch request-approval, batch dismiss, batch approve, and batch execute) while fully preserving core merchant controls. Implementation must begin by drafting the implementation plan only.
+We are ready to initiate Phase 10.13 — Production Catalog Auto-Optimization. The goal is to design and implement background background catalog optimization engine rules scheduling, safe daily optimization rate-limits, automated pausing on failures, and system-automation logging. Implementation must begin by drafting the implementation plan only.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

@@ -237,4 +237,189 @@ router.post("/proposed-actions/:id/request-approval", async (req: any, res: any)
   }
 });
 
+router.post("/proposed-actions/batch-dismiss", async (req: any, res: any) => {
+  const { ids, organizationId: claimedOrgId, shop } = req.body;
+
+  try {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ ok: false, error: "Missing or invalid ids parameter. Acceptable: array of strings." });
+    }
+    if (ids.length > 10) {
+      return res.status(400).json({ ok: false, error: "Batch size exceeds maximum limit of 10 items." });
+    }
+    if (!shop || typeof shop !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required shop parameter." });
+    }
+
+    const repos = getRepositories();
+    const cleanShop = normalizeShopDomain(shop);
+    const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+    if (!storeConnection) {
+      return res.status(404).json({ ok: false, error: "Store connection not found." });
+    }
+
+    // Claimed vs Authority check
+    if (!claimedOrgId || storeConnection.organizationId !== claimedOrgId) {
+      return res.status(403).json({ ok: false, error: "Access denied. Claimed organizationId does not match shop context authority." });
+    }
+
+    const resolvedOrgId = storeConnection.organizationId;
+    const storeConnectionId = storeConnection.id;
+
+    // Check duplicate IDs
+    const uniqueIds = new Set(ids);
+    if (uniqueIds.size !== ids.length) {
+      return res.status(400).json({ ok: false, error: "Duplicate IDs detected in batch request." });
+    }
+
+    // Phase 1: Preflight Validation (Strict item existence, tenant checks, eligibility)
+    const fetchedItems: ProposedAction[] = [];
+    for (const id of ids) {
+      const act = await repos.proposedActions.getProposedActionById(id);
+      if (!act) {
+        return res.status(404).json({ ok: false, error: `Proposed action '${id}' not found.` });
+      }
+
+      // Cross-tenant boundary check
+      if (act.organizationId !== resolvedOrgId || act.storeConnectionId !== storeConnectionId) {
+        return res.status(403).json({ ok: false, error: `Access denied. Proposed action '${id}' does not belong to this organization or store connection.` });
+      }
+
+      // Eligibility safety check: only draft/non-requested proposed actions may be dismissed
+      if (act.status !== "DRAFT" && act.status !== "APPROVAL_ELIGIBLE") {
+        return res.status(400).json({
+          ok: false,
+          error: `Proposed action '${id}' has status '${act.status}' and cannot be dismissed (already bridged or finalized).`
+        });
+      }
+
+      fetchedItems.push(act);
+    }
+
+    // Phase 2: Sequential execution/operation (after preflight successfully passes)
+    const results: any[] = [];
+    for (const act of fetchedItems) {
+      const updated = await repos.proposedActions.updateProposedAction(act.id, {
+        status: "DISMISSED"
+      });
+
+      await writeAuditEvent({
+        organizationId: resolvedOrgId,
+        storeConnectionId: act.storeConnectionId,
+        initiator: "Shop Owner",
+        event: AuditEventNames.PROPOSED_ACTION_DISMISSED,
+        description: `Dismissed proposed action in batch: '${act.title}'`,
+        decision: "allowed",
+        metadata: {
+          agentId: act.agentId,
+          agentRunId: act.agentRunId,
+          recommendationId: act.recommendationId,
+          proposedActionId: act.id,
+          status: "DISMISSED",
+          decision: "allowed"
+        }
+      });
+
+      results.push({ id: act.id, status: "DISMISSED" });
+    }
+
+    return res.json({
+      ok: true,
+      dismissedCount: results.length,
+      results
+    });
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+router.post("/proposed-actions/batch-request-approval", async (req: any, res: any) => {
+  const { ids, organizationId: claimedOrgId, shop } = req.body;
+
+  try {
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ ok: false, error: "Missing or invalid ids parameter. Acceptable: array of strings." });
+    }
+    if (ids.length > 10) {
+      return res.status(400).json({ ok: false, error: "Batch size exceeds maximum limit of 10 items." });
+    }
+    if (!shop || typeof shop !== "string") {
+      return res.status(400).json({ ok: false, error: "Missing required shop parameter." });
+    }
+
+    const repos = getRepositories();
+    const cleanShop = normalizeShopDomain(shop);
+    const storeConnection = await repos.stores.getStoreConnectionByUrl(cleanShop);
+    if (!storeConnection) {
+      return res.status(404).json({ ok: false, error: "Store connection not found." });
+    }
+
+    // Claimed vs Authority check
+    if (!claimedOrgId || storeConnection.organizationId !== claimedOrgId) {
+      return res.status(403).json({ ok: false, error: "Access denied. Claimed organizationId does not match shop context authority." });
+    }
+
+    const resolvedOrgId = storeConnection.organizationId;
+    const storeConnectionId = storeConnection.id;
+
+    // Check duplicate IDs
+    const uniqueIds = new Set(ids);
+    if (uniqueIds.size !== ids.length) {
+      return res.status(400).json({ ok: false, error: "Duplicate IDs detected in batch request." });
+    }
+
+    // Phase 1: Preflight Validation (Strict item existence & tenant checks)
+    const fetchedItems: ProposedAction[] = [];
+    for (const id of ids) {
+      const act = await repos.proposedActions.getProposedActionById(id);
+      if (!act) {
+        return res.status(404).json({ ok: false, error: `Proposed action '${id}' not found.` });
+      }
+
+      // Cross-tenant boundary check
+      if (act.organizationId !== resolvedOrgId || act.storeConnectionId !== storeConnectionId) {
+        return res.status(403).json({ ok: false, error: `Access denied. Proposed action '${id}' does not belong to this organization or store connection.` });
+      }
+
+      fetchedItems.push(act);
+    }
+
+    // Phase 2: Sequential operation/execution (idempotent bridging)
+    const results: any[] = [];
+    let bridgedCount = 0;
+
+    for (const act of fetchedItems) {
+      // Idempotency check: if already requested, do not recreate approval, report existing APV-id
+      if (act.status === "APPROVAL_REQUESTED" || act.approvalRequestId) {
+        results.push({
+          id: act.id,
+          status: "ALREADY_REQUESTED",
+          approvalId: act.approvalRequestId
+        });
+      } else {
+        const updated = await requestProposedActionApprovalBridge({
+          proposedActionId: act.id,
+          organizationId: resolvedOrgId,
+          storeConnectionId
+        });
+
+        results.push({
+          id: act.id,
+          status: "APPROVAL_REQUESTED",
+          approvalId: updated.approvalRequestId
+        });
+        bridgedCount++;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      bridgedCount,
+      results
+    });
+  } catch (error: any) {
+    return res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
 export default router;

@@ -12,6 +12,11 @@ if (!process.env.TSX_ACTIVE && !process.argv.includes("--child")) {
   process.exit(result.status ?? 1);
 }
 
+// Centralized Test Fixtures (Strictly restricted to test environment context)
+const TEST_ORGANIZATION_ID = "demo-org-id";
+const TEST_SHOP = "yambasurf-co-il.myshopify.com";
+const TEST_STORE_CONNECTION_ID = "store-luminary";
+
 // 2. Offline Static Release Verification Logic
 console.log(`\n\x1b[1m\x1b[36m=== SOFTIFY SAAS PRE-DEPLOYMENT RELEASE VERIFICATION ===\x1b[0m`);
 
@@ -1092,7 +1097,8 @@ async function runVerification() {
 
     // Slice the route blocks
     const resetBlock = routesContent.slice(resetIdx, markIdx);
-    const markBlock = routesContent.slice(markIdx);
+    const nextRouteIdx = routesContent.indexOf("router.post(\"/approvals/batch-", markIdx);
+    const markBlock = nextRouteIdx !== -1 ? routesContent.slice(markIdx, nextRouteIdx) : routesContent.slice(markIdx);
 
     // Verify neither reset-failed nor mark-execution-failed call updateProductAllowedFields or syncProductsForShop
     if (resetBlock.includes("updateProductAllowedFields") || resetBlock.includes("syncProductsForShop")) {
@@ -1365,17 +1371,17 @@ async function runVerification() {
       throw new Error("Phase 10.11 Implementation Plan file is missing.");
     }
 
-    // 2. Validate no forbidden bulk/batch operations routes
+    // 2. Validate no forbidden bulk/batch operations routes inside catalog routes
     const appPath = path.resolve(process.cwd(), "src/server/app.ts");
     const appContent = fs.readFileSync(appPath, "utf8");
     if (appContent.includes("batch-dismiss") || appContent.includes("batch-approve") || appContent.includes("batch-execute")) {
       throw new Error("Security Violation: Batch/bulk routing paths found in app.ts.");
     }
 
-    const approvalsRoutePath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
-    const approvalsRouteContent = fs.readFileSync(approvalsRoutePath, "utf8");
-    if (approvalsRouteContent.includes("batch-dismiss") || approvalsRouteContent.includes("batch-approve") || approvalsRouteContent.includes("batch-execute")) {
-      throw new Error("Security Violation: Batch/bulk routing paths found in approvals routes.");
+    const catalogRoutePath = path.resolve(process.cwd(), "src/server/routes/catalog.routes.ts");
+    const catalogRouteContent = fs.readFileSync(catalogRoutePath, "utf8");
+    if (catalogRouteContent.includes("batch-dismiss") || catalogRouteContent.includes("batch-approve") || catalogRouteContent.includes("batch-execute")) {
+      throw new Error("Security Violation: Batch/bulk routing paths found in catalog routes.");
     }
 
     // 3. Validate explicit approval and explicit execution language in components
@@ -1427,6 +1433,47 @@ async function runVerification() {
     // 8. Verify explicit execution language remains present and is conditional only on APPROVED
     if (!queueContent.includes("selectedItem.status === 'APPROVED'") && !queueContent.includes('selectedItem.status === "APPROVED"')) {
       throw new Error("UX Hardening Violation: Explicit Execute Commit CTA must be conditional on status === APPROVED.");
+    }
+  });
+
+  // Test 56: Phase 10.12 Production Bulk Operations Foundation static guardrails
+  await check("56. Phase 10.12 Production Bulk Operations Foundation static validation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+
+    // 1. Verify batch endpoint files exist and are imported in app.ts
+    const appPath = path.resolve(process.cwd(), "src/server/app.ts");
+    const appContent = fs.readFileSync(appPath, "utf8");
+    if (!appContent.includes("proposed-actions.routes.js") || !appContent.includes("approvals.routes.js")) {
+      throw new Error("Route Mounting Violation: Batch/bulk routing files are missing or not mounted correctly in app.ts.");
+    }
+
+    // 2. Verify that batch execute orchestrates single-item execution by using executeApprovedProductMutation
+    const approvalsRoutePath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    const approvalsRouteContent = fs.readFileSync(approvalsRoutePath, "utf8");
+    if (!approvalsRouteContent.includes("executorService.executeApprovedProductMutation") || !approvalsRouteContent.includes("executeApprovedProductMutation(")) {
+      throw new Error("Executor Service Violation: Batch execute does not orchestrate existing approved single-item mutation executor.");
+    }
+
+    // 3. Verify no duplication of productUpdate logic (no new raw Shopify mutation paths)
+    if (approvalsRouteContent.match(/mutation\s+productUpdate/gi)) {
+      throw new Error("Security Violation: Custom productUpdate GraphQL mutation found in approvals.routes.ts (must reuse executor service).");
+    }
+
+    // 4. Verify no theme tools in proposed action/approval routes
+    if (approvalsRouteContent.includes("read_themes") || approvalsRouteContent.includes("write_themes")) {
+      throw new Error("Security Violation: theme access scopes / tools referenced in approvals.routes.ts.");
+    }
+
+    // 5. Verify batch size cap parameter in routes (restricted to max 10 items)
+    if (!approvalsRouteContent.includes("ids.length > 10")) {
+      throw new Error("Throttling/Safety Violation: Batch approvals execute / decide route lacks strict batch size limit of 10 items.");
+    }
+
+    // 6. Verify tenant validation mismatch checks and 403 response trigger on both approvals batch routes
+    const forbiddenMatches = approvalsRouteContent.match(/res\.status\(403\)/g);
+    if (!forbiddenMatches || forbiddenMatches.length < 2) {
+      throw new Error("Tenant Safety Violation: Missing or weak tenant context validation check in approvals batch routes.");
     }
   });
 
