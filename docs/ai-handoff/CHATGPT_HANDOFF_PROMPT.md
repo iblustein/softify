@@ -79,7 +79,11 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.11 — Workspace Bulk Operations Foundation. The goal is to design the implementation plan detailing batch-dismissals of recommendations and batch optimization approval-bridging.
+We are ready to initiate Phase 10.11 — MVP End-to-End Merchant Workflow Hardening. The goal is to harden the complete core merchant loop end-to-end (Analyze → Recommend → Propose → Approve → Execute safely → Audit) for an internal MVP and pilot-ready demo. Implementation must begin by drafting the implementation plan only.
+
+Softify MVP target is:
+  AI Agent Workspace for Shopify optimization
+  Analyze → Recommend → Propose → Approve → Execute safely → Audit
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

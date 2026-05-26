@@ -15,6 +15,7 @@ This index acts as the central directory for Softify's completed and planned dev
 | **10.8.1** | Embedded Admin Tenant Context Regression Fix | **Completed** | Shopify embedded admin context regression fixed; resolves tenant context from shop safely; no infinite loader; shop context persists after OAuth callback cleanup | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.9** | Multi-Agent Product Workspace Foundation | **Completed** | Multi-agent dashboard workspace, runs registry, diagnostic recommendations, draft actions queue, approval bridging, automated index GHA pipelines | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.10** | Multi-Agent Workspace Analytics & Operational Visibility | **Completed** | Strictly read-only, non-mutating aggregated analytics dashboards, scanned runs and recommendation trend metrics, allowlist-sanitized trace timeline | 100% Passed (Pre-deploy checks & smoke tests) |
+| **10.11** | MVP End-to-End Merchant Workflow Hardening | **Planned** | Core end-to-end merchant loop workflow hardening, error resilient states, demo & pilot readiness | Planned |
 
 ## Ongoing Workflow & Maintenance Rules
 For every future phase, Antigravity must create or update the phase folder before and after implementation.

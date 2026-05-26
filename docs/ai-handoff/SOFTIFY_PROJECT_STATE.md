@@ -52,6 +52,11 @@ This document provides a highly durable and centralized technical reference for 
 - **Multi-Agent Workspace Analytics & Operational Visibility**: Strictly read-only, non-mutating operational analytics endpoints (`/api/workspace/analytics/*`) returning aggregated metric summaries, run trends, recommendation distributions, proposed action types, approval conversion funnels, and chronological trace timelines. Enforces clean `403 Forbidden` tenant mismatch responses with zero side effects or database writes, and strips all developer/internal metadata (such as raw prompts or reasoning) via a strictly-controlled allowlist-only timeline mapper.
 - **CI/CD & Production Smoke Tests**: All static release checks (54 tests) and live local/deployed smoke tests (27 tests) pass cleanly.
 
+## Next Recommended Phase
+- **Phase 10.11 — MVP End-to-End Merchant Workflow Hardening**: Focuses strictly on hardening the core MVP flow (Analyze → Recommend → Propose → Approve → Execute safely → Audit).
+- **Deferred Bulk Operations**: Bulk operations (batch dismiss, batch request approval, batch approve, batch execute) are deferred until after the core MVP workflow is fully verified and stable.
+- **Capped Mutation Scope**: The current safe mutation scope (capping edits strictly to approved text fields: `title`, `vendor`, `productType`, `status`, `tags`) remains unchanged.
+
 ## Current Non-Goals
 - **No Theme Patching / Theme Tools**: Theme layout/CSS patching is entirely out-of-scope and disabled. No theme tools or read/write theme scopes may be used.
 - **No write_themes**: The `write_themes` scope remains strictly unauthorized and forbidden.
