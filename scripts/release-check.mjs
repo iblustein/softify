@@ -1250,6 +1250,51 @@ async function runVerification() {
     }
   });
 
+  // Test 54: Phase 10.10 Multi-Agent Workspace Analytics & Operational Visibility static guardrails
+  await check("54. Phase 10.10 Multi-Agent Workspace Analytics & Operational Visibility static validation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    // 1. Verify that all 6 analytics routes are defined in analytics.routes.ts
+    const routesPath = path.resolve(process.cwd(), "src/server/routes/analytics.routes.ts");
+    const routesContent = fs.readFileSync(routesPath, "utf8");
+    
+    const requiredEndpoints = [
+      "/workspace/analytics/summary",
+      "/workspace/analytics/agent-runs",
+      "/workspace/analytics/recommendations",
+      "/workspace/analytics/proposed-actions",
+      "/workspace/analytics/approval-conversion",
+      "/workspace/analytics/timeline"
+    ];
+    for (const endpoint of requiredEndpoints) {
+      if (!routesContent.includes(endpoint)) {
+        throw new Error(`Static Check Violation: Required analytics endpoint '${endpoint}' is missing in routes.`);
+      }
+    }
+
+    // 2. Verify that there is a route method block for non-GET requests returning 405
+    if (!routesContent.includes("router.all(\"/workspace/analytics/*\"") && !routesContent.includes("router.all('/workspace/analytics/*'")) {
+      throw new Error("Security Violation: Analytics endpoints are missing non-GET block rejections.");
+    }
+
+    // 3. Static verification that no database writes or mutations are initiated by the analytics endpoints
+    const servicePath = path.resolve(process.cwd(), "src/server/services/workspace-analytics.service.ts");
+    const serviceContent = fs.readFileSync(servicePath, "utf8");
+    
+    const mutationKws = ["createProposedAction", "updateProposedAction", "createRecommendation", "updateRecommendation", "createApprovalRequest", "updateApprovalRequest", "delete", "writeAuditEvent"];
+    for (const kw of mutationKws) {
+      if (serviceContent.includes(kw)) {
+        throw new Error(`Security Violation: Workspace Analytics Service invokes mutating operation '${kw}'.`);
+      }
+    }
+
+    // 4. Verify Timeline allowlist security constraints (disallowed fields are completely stripped and not on the return payload object)
+    if (!serviceContent.includes("id: e.id") || !serviceContent.includes("safeSummary")) {
+      throw new Error("Security Violation: Timeline Trace does not enforce strict allowlist-only payload scrub mapping.");
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

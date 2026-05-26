@@ -1593,6 +1593,111 @@ async function runSuite() {
     }
   });
 
+  // Test T: Workspace Analytics & Operational Visibility validation
+  await check("T. Workspace Analytics & Operational Visibility validation", async () => {
+    const timestamp = Date.now();
+
+    // 1. Fetch workspace summary (expect 200)
+    const summaryUrl = `${baseUrl}/api/workspace/analytics/summary?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resSummary = await fetch(summaryUrl);
+    await checkResponse(resSummary);
+    const summaryData = await resSummary.json();
+    scanForForbiddenKeys(summaryData);
+
+    if (summaryData.ok !== true || !summaryData.summary) {
+      throw new Error(`Expected valid summary block, got: ${JSON.stringify(summaryData)}`);
+    }
+
+    const { totalAgentRuns, totalRecommendations, totalProposedActions, approvalConversionRate } = summaryData.summary;
+    if (typeof totalAgentRuns !== "number" || typeof totalRecommendations !== "number" || typeof totalProposedActions !== "number" || typeof approvalConversionRate !== "number") {
+      throw new Error(`Invalid summary metrics types: ${JSON.stringify(summaryData.summary)}`);
+    }
+
+    // 2. Fetch agent runs breakdown
+    const runsUrl = `${baseUrl}/api/workspace/analytics/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resRuns = await fetch(runsUrl);
+    await checkResponse(resRuns);
+    const runsData = await resRuns.json();
+    scanForForbiddenKeys(runsData);
+    if (runsData.ok !== true || !Array.isArray(runsData.runs) || !Array.isArray(runsData.trends)) {
+      throw new Error(`Invalid runs breakdown: ${JSON.stringify(runsData)}`);
+    }
+
+    // 3. Fetch recommendations breakdown
+    const recsUrl = `${baseUrl}/api/workspace/analytics/recommendations?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resRecs = await fetch(recsUrl);
+    await checkResponse(resRecs);
+    const recsData = await resRecs.json();
+    scanForForbiddenKeys(recsData);
+    if (recsData.ok !== true || !recsData.breakdown) {
+      throw new Error(`Invalid recs breakdown: ${JSON.stringify(recsData)}`);
+    }
+
+    // 4. Fetch proposed actions breakdown
+    const actionsUrl = `${baseUrl}/api/workspace/analytics/proposed-actions?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+    const resActions = await fetch(actionsUrl);
+    await checkResponse(resActions);
+    const actionsData = await resActions.json();
+    scanForForbiddenKeys(actionsData);
+    if (actionsData.ok !== true || !actionsData.breakdown) {
+      throw new Error(`Invalid proposed actions breakdown: ${JSON.stringify(actionsData)}`);
+    }
+
+    // 5. Fetch timeline operational trace stepper
+    const timelineUrl = `${baseUrl}/api/workspace/analytics/timeline?shop=${encodeURIComponent(shop)}&limit=10&t=${timestamp}`;
+    const resTimeline = await fetch(timelineUrl);
+    await checkResponse(resTimeline);
+    const timelineData = await resTimeline.json();
+    scanForForbiddenKeys(timelineData);
+
+    if (timelineData.ok !== true || !Array.isArray(timelineData.timeline)) {
+      throw new Error(`Invalid timeline trace response: ${JSON.stringify(timelineData)}`);
+    }
+
+    // Assert strict allowlist formatting for timeline payload
+    for (const e of timelineData.timeline) {
+      if (typeof e.id !== "string") throw new Error("Timeline event is missing clean safe 'id' string.");
+      if (typeof e.timestamp !== "string") throw new Error("Timeline event is missing clean 'timestamp' string.");
+      if (typeof e.eventType !== "string") throw new Error("Timeline event is missing clean 'eventType' string.");
+      if (typeof e.safeSummary !== "string") throw new Error("Timeline event is missing clean 'safeSummary' string.");
+      
+      // Strict allowlist checks (no raw metadata details may exist)
+      const allowedKeys = ["id", "timestamp", "eventType", "agentId", "resourceType", "resourceId", "status", "safeSummary", "counts", "riskLevel", "impactLevel", "correlationId"];
+      for (const key of Object.keys(e)) {
+        if (!allowedKeys.includes(key)) {
+          throw new Error(`Security Violation: Unallowlisted property '${key}' returned in timeline trace object.`);
+        }
+      }
+    }
+
+    // 6. Tenant Context Negative Validation (missing parameter -> 400)
+    const resNoParams = await fetch(`${baseUrl}/api/workspace/analytics/summary?t=${timestamp}`);
+    if (resNoParams.status !== 400) {
+      throw new Error(`Expected HTTP 400 for missing context parameter, got: ${resNoParams.status}`);
+    }
+
+    // Tenant Context Mismatch Validation (mismatched store -> 403)
+    const resMismatch = await fetch(`${baseUrl}/api/workspace/analytics/summary?shop=${encodeURIComponent(shop)}&organizationId=mismatch-org-999&t=${timestamp}`);
+    if (resMismatch.status !== 403) {
+      throw new Error(`Expected HTTP 403 for mismatched tenant connection, got: ${resMismatch.status}`);
+    }
+
+    // 7. GET-only Enforcement (POST request -> 405 Method Not Allowed)
+    const resPost = await fetch(summaryUrl, { method: "POST" });
+    if (resPost.status !== 405) {
+      throw new Error(`Security Violation: Expected HTTP 405 for non-GET analytics route call, got: ${resPost.status}`);
+    }
+
+    // 8. Assert no database mutations or approvals were generated by analytics calls
+    const resApprovals = await fetch(`${baseUrl}/api/approvals?shop=${encodeURIComponent(shop)}&t=${timestamp}`);
+    await checkResponse(resApprovals);
+    const approvals = await resApprovals.json();
+    const mockCreatedApprovals = approvals.filter(a => a.id.startsWith("APV-") && a.requestedAt && new Date(a.requestedAt).getTime() > timestamp);
+    if (mockCreatedApprovals.length > 0) {
+      throw new Error("Security Violation: Calling workspace analytics routes triggered approval creation or execution mutations.");
+    }
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {
