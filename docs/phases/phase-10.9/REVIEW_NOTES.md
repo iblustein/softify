@@ -20,3 +20,13 @@ The `POST /api/proposed-actions/:id/request-approval` router guarantees:
 
 ### 3. Telemetry and Scanned Scrubbing
 All repository models sanitize prompt queries, secrets, and raw Shopify response envelopes before persisting details in DB, guaranteeing complete privacy and zero token leaks.
+
+## Firestore Composite Index Tie-Breakers
+During live integration testing on GCP, Firestore queries sorting by timestamp/creation fields (`startedAt`, `createdAt`) with equality filters on `organizationId` require an explicit index that defines the tie-breaker `__name__` order. 
+
+We updated `firestore.indexes.json` to define:
+* `agent_runs`: `organizationId` ASC, `startedAt` DESC, `__name__` DESC
+* `recommendations`: `organizationId` ASC, `status` ASC, `createdAt` DESC, `__name__` DESC
+* `proposed_actions`: `organizationId` ASC, `status` ASC, `createdAt` DESC, `__name__` DESC
+
+We also hardened the GitHub Actions workflow index deployment step to fall back to the Firebase CLI if the standard `gcloud` composite command fails or skips, avoiding blocked PR/local runs while guaranteeing clear logs.

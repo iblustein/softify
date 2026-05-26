@@ -116,7 +116,18 @@ jobs:
         continue-on-error: true
         run: |
           echo "Deploying Firestore composite indexes..."
-          gcloud firestore indexes import firestore.indexes.json --project="${PROJECT_ID}" --database="softify" || echo "Index deployment skipped or failed (possibly missing permissions/credentials, non-blocking for local/PR workflows)"
+          if [ -z "${PROJECT_ID}" ]; then
+            echo "Skipping index deployment: PROJECT_ID is empty."
+          else
+            gcloud firestore indexes import firestore.indexes.json --project="${PROJECT_ID}" --database="softify" || {
+              echo "gcloud firestore index deployment failed/skipped. Trying firebase CLI..."
+              if command -v firebase >/dev/null 2>&1; then
+                firebase deploy --only firestore:indexes --project "${PROJECT_ID}"
+              else
+                echo "Firebase CLI is not available. Skipping index deployment (non-blocking for local/PR workflows)."
+              fi
+            }
+          fi
 
       # NOTE: The Cloud Run runtime service account must have roles/secretmanager.secretAccessor role on:
       # - SHOPIFY_API_SECRET

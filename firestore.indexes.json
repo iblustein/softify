@@ -75,6 +75,10 @@
         {
           "fieldPath": "startedAt",
           "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -92,6 +96,10 @@
         },
         {
           "fieldPath": "startedAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
           "order": "DESCENDING"
         }
       ]
@@ -111,6 +119,10 @@
         {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "DESCENDING"
         }
       ]
     },
@@ -128,6 +140,10 @@
         },
         {
           "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "__name__",
           "order": "DESCENDING"
         }
       ]
