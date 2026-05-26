@@ -254,7 +254,7 @@ Trace timeline events are constructed from existing sanitized audit lifecycle ev
 ### E. Dashboard UI Plan
 
 We will add a beautiful, interactive **Workspace Analytics Panel** to `src/components/AgentWorkspace.tsx`:
-- **Rich Aesthetics**: Implemented using premium dark/glassmorphic CSS styles with HSL harmonious color tokens.
+- **Rich Aesthetics**: Use the existing AgentWorkspace visual language. Keep the UI clean, practical, responsive, and lightweight. Avoid overbuilding visual effects.
 - **No Heavy Libraries**: We will render clean responsive SVG components and CSS grid bars for trend lines, ensuring fast loading and visual consistency.
 - **Sections**:
   1. **Analytics Summary Row**: 4 glassmorphic metric cards showing active runs, alert volume, pending approvals, and execution conversion rate.
@@ -328,7 +328,7 @@ To ensure performance for date, status, and agent filtering over Firestore, we w
 ```
 
 > [NOTE]
-> Index deployments are automatically triggered via GitHub Actions during Cloud Run builds. However, localized tests will use the in-memory repository fallback immediately without blocking developer flows.
+> Index deployment should be handled by the existing GitHub Actions mechanism where supported, but implementation must verify that the deployment command works. If not, document manual deployment requirements clearly. However, localized tests will use the in-memory repository fallback immediately without blocking developer flows.
 
 ---
 
