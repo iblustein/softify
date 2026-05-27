@@ -6,7 +6,7 @@ This document records the automated verification logs validating the initial age
 
 ## 1. Static Release Verification (Test 58)
 
-We executed the full static suite via `node scripts/release-check.mjs` containing the **Test 58** static guardrails checks:
+We executed the full static suite via `node scripts/release-check.mjs` containing the **Test 58** static guardrails checks, now including strict checks asserting the route files do not contain test fixture strings or simulate endpoints:
 
 ```
 Verifying: 58. Phase 10.14 Initial Agent Set & Merchant Workflows static validation...
@@ -27,7 +27,7 @@ RELEASE VERIFICATION PASSED SUCCESSFULLY!
 
 ## 2. Dynamic Integration Smoke Test (Test X & Test Q)
 
-We executed the full dynamic integration suite using the development server bypass token against a fresh server environment to ensure zero test pollution:
+We executed the full dynamic integration suite using the development server bypass token against a fresh server environment to ensure zero test pollution, leveraging pre-seeded invalid ProposedAction fixtures:
 
 ```
 === SOFTIFY SAAS RELEASE SMOKE TEST SUITE ===

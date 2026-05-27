@@ -54,6 +54,11 @@ In `src/server/tools/tool-gateway.ts` for `catalog.products.propose_update`:
 In `src/server/services/agent-runtime.service.ts`:
 - If a tool call fails completely in the gateway (and does not trigger a merchant approval request), the failed tool call is popped/removed from the returned `toolCalls` list in the chat response.
 
+### H. Complete Cleanliness of Production Routes (Zero Test Backdoors)
+- The entire dynamic test seeding logic has been completely removed from `src/server/routes/agents.routes.ts`.
+- Production-facing route files contain **zero** mock logic, **zero** hidden test-fixture paths, and **zero** test keywords.
+- Test ProposedAction fixtures are safely seeded in the local dev-only memory database during startup inside `src/server/index.ts`.
+
 ---
 
 ## 2. Frontend Workflow and UI Enhancements

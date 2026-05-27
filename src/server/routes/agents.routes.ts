@@ -267,55 +267,6 @@ router.post("/agent-runs", async (req: any, res: any) => {
 
     const savedRun = await repos.agentRuns.createAgentRun(initialRun);
 
-    // Support for smoke-test bridge testing without simulate routes
-    if (scope && scope.resourceId && scope.resourceId.startsWith("test-invalid-bridge-")) {
-      const recId = `REC-${Date.now()}`;
-      const actId = `ACT-TEST-${Date.now()}`;
-      
-      let changesObj = {};
-      let targetAgentId = agentId;
-      if (scope.resourceId === "test-invalid-bridge-seo") {
-        targetAgentId = "agent_product_seo";
-        changesObj = { vendor: "SEO Proposed Vendor" };
-      } else if (scope.resourceId === "test-invalid-bridge-cleanup") {
-        targetAgentId = "agent_catalog_cleanup";
-        changesObj = { title: "Cleanup Proposed Title" };
-      } else if (scope.resourceId === "test-invalid-bridge-readonly") {
-        targetAgentId = "agent_merchandising_insights";
-        changesObj = { title: "Readonly Proposed Title" };
-      }
-
-      const action: ProposedAction = {
-        id: actId,
-        organizationId: resolvedOrgId,
-        storeConnectionId,
-        agentRunId: runId,
-        agentId: targetAgentId,
-        recommendationId: recId,
-        targetType: "PRODUCT",
-        targetId: "sim-product-id",
-        title: "Test Hardening Proposed Action",
-        description: "Simulated invalid proposed action for smoke-testing",
-        actionType: "simulated_action",
-        riskLevel: "LOW",
-        executionMode: "APPROVAL_REQUIRED",
-        changes: changesObj,
-        status: "DRAFT",
-        createdAt: now,
-        updatedAt: now
-      };
-      await repos.proposedActions.createProposedAction(action);
-      
-      const updatedRun = await repos.agentRuns.updateAgentRun(runId, {
-        status: "COMPLETED",
-        finishedAt: new Date().toISOString(),
-        summary: "Workspace scan finished with test simulation.",
-        recommendationCount: 1,
-        proposedActionCount: 1
-      });
-      return res.json(updatedRun || savedRun);
-    }
-
     await writeAuditEvent({
       organizationId: resolvedOrgId,
       storeConnectionId: storeConnectionId,

@@ -1726,6 +1726,22 @@ async function runVerification() {
     if (proposedActionsRouteContent.includes("/proposed-actions/simulate") || proposedActionsRouteContent.includes("proposed-actions/simulate")) {
       throw new Error("Hardening Static Check Violation: /api/proposed-actions/simulate route must not exist in proposed-actions.routes.ts.");
     }
+
+    // 13. Hardening: Assert that production-facing route files do not contain test fixture strings
+    const forbiddenTestFixtureStrings = [
+      "test-invalid-bridge-",
+      "Support for smoke-test",
+      "Simulated invalid proposed action",
+      "ACT-TEST"
+    ];
+    for (const str of forbiddenTestFixtureStrings) {
+      if (routesContent.includes(str)) {
+        throw new Error(`Hardening Static Check Violation: Route file agents.routes.ts contains forbidden test fixture string: "${str}"`);
+      }
+      if (proposedActionsRouteContent.includes(str)) {
+        throw new Error(`Hardening Static Check Violation: Route file proposed-actions.routes.ts contains forbidden test fixture string: "${str}"`);
+      }
+    }
   });
 
   // Print PASS/FAIL Summary

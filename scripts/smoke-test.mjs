@@ -2360,27 +2360,7 @@ async function runSuite() {
     console.log("   [TEST X Hardening] Successfully verified legacy agent runs are blocked with 403.");
 
     // 5. Hardening: Product SEO proposed action with vendor or status must fail bridge
-    const resSeoInvalidRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId: "agent_product_seo",
-        mode: "DRAFT",
-        scope: { type: "PRODUCT", resourceId: "test-invalid-bridge-seo" }
-      })
-    });
-    await checkResponse(resSeoInvalidRun);
-    const seoInvalidRunData = await resSeoInvalidRun.json();
-
-    const resAllDraftsSeo = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&status=DRAFT&t=${timestamp}`);
-    await checkResponse(resAllDraftsSeo);
-    const allDraftsSeo = await resAllDraftsSeo.json();
-    const seoInvalidAct = allDraftsSeo.find(a => a.agentRunId === seoInvalidRunData.id);
-    if (!seoInvalidAct) {
-      throw new Error("Failed to locate simulated invalid SEO proposed action in database.");
-    }
-
-    const resBridgeSeo = await fetch(`${baseUrl}/api/proposed-actions/${seoInvalidAct.id}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+    const resBridgeSeo = await fetch(`${baseUrl}/api/proposed-actions/test-invalid-seo-action/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
       method: "POST"
     });
     if (resBridgeSeo.status !== 500 && resBridgeSeo.status !== 400) {
@@ -2393,27 +2373,7 @@ async function runSuite() {
     console.log("   [TEST X Hardening] Successfully verified invalid SEO proposed action fails bridge.");
 
     // 6. Hardening: Catalog Cleanup proposed action with title must fail bridge
-    const resCleanupInvalidRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId: "agent_catalog_cleanup",
-        mode: "DRAFT",
-        scope: { type: "PRODUCT", resourceId: "test-invalid-bridge-cleanup" }
-      })
-    });
-    await checkResponse(resCleanupInvalidRun);
-    const cleanupInvalidRunData = await resCleanupInvalidRun.json();
-
-    const resAllDraftsCleanup = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&status=DRAFT&t=${timestamp}`);
-    await checkResponse(resAllDraftsCleanup);
-    const allDraftsCleanup = await resAllDraftsCleanup.json();
-    const cleanupInvalidAct = allDraftsCleanup.find(a => a.agentRunId === cleanupInvalidRunData.id);
-    if (!cleanupInvalidAct) {
-      throw new Error("Failed to locate simulated invalid Cleanup proposed action in database.");
-    }
-
-    const resBridgeCleanup = await fetch(`${baseUrl}/api/proposed-actions/${cleanupInvalidAct.id}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+    const resBridgeCleanup = await fetch(`${baseUrl}/api/proposed-actions/test-invalid-cleanup-action/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
       method: "POST"
     });
     if (resBridgeCleanup.status !== 500 && resBridgeCleanup.status !== 400) {
@@ -2426,27 +2386,7 @@ async function runSuite() {
     console.log("   [TEST X Hardening] Successfully verified invalid Cleanup proposed action fails bridge.");
 
     // 7. Hardening: Read-only agent proposed action must fail bridge
-    const resReadonlyInvalidRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        agentId: "agent_merchandising_insights",
-        mode: "DRAFT",
-        scope: { type: "PRODUCT", resourceId: "test-invalid-bridge-readonly" }
-      })
-    });
-    await checkResponse(resReadonlyInvalidRun);
-    const readonlyInvalidRunData = await resReadonlyInvalidRun.json();
-
-    const resAllDraftsReadonly = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&status=DRAFT&t=${timestamp}`);
-    await checkResponse(resAllDraftsReadonly);
-    const allDraftsReadonly = await resAllDraftsReadonly.json();
-    const readonlyInvalidAct = allDraftsReadonly.find(a => a.agentRunId === readonlyInvalidRunData.id);
-    if (!readonlyInvalidAct) {
-      throw new Error("Failed to locate simulated invalid Readonly proposed action in database.");
-    }
-
-    const resBridgeReadonly = await fetch(`${baseUrl}/api/proposed-actions/${readonlyInvalidAct.id}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+    const resBridgeReadonly = await fetch(`${baseUrl}/api/proposed-actions/test-invalid-readonly-action/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
       method: "POST"
     });
     if (resBridgeReadonly.status !== 500 && resBridgeReadonly.status !== 400) {

@@ -120,6 +120,69 @@ async function seedInMemoryDb() {
         lastExecutedBy: "Shop Owner",
         lastExecutionCorrelationId: "exec-active-uuid"
       });
+
+      // Seed invalid proposed action for SEO (contains forbidden vendor changes)
+      await repos.proposedActions.createProposedAction({
+        id: "test-invalid-seo-action",
+        organizationId: "demo-org-id",
+        storeConnectionId: "store-yambasurf",
+        agentRunId: "RUN-SEED-INVALID",
+        agentId: "agent_product_seo",
+        recommendationId: "REC-SEED-INVALID-SEO",
+        targetType: "PRODUCT",
+        targetId: "101",
+        title: "Test SEO Proposed Action with Invalid Fields",
+        description: "Simulated invalid proposed action containing forbidden vendor fields for SEO",
+        actionType: "simulated_action",
+        riskLevel: "LOW",
+        executionMode: "APPROVAL_REQUIRED",
+        changes: { vendor: "SEO Proposed Vendor" },
+        status: "DRAFT",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      // Seed invalid proposed action for Cleanup (contains forbidden title changes)
+      await repos.proposedActions.createProposedAction({
+        id: "test-invalid-cleanup-action",
+        organizationId: "demo-org-id",
+        storeConnectionId: "store-yambasurf",
+        agentRunId: "RUN-SEED-INVALID",
+        agentId: "agent_catalog_cleanup",
+        recommendationId: "REC-SEED-INVALID-CLEANUP",
+        targetType: "PRODUCT",
+        targetId: "101",
+        title: "Test Cleanup Proposed Action with Invalid Fields",
+        description: "Simulated invalid proposed action containing forbidden title fields for Cleanup",
+        actionType: "simulated_action",
+        riskLevel: "LOW",
+        executionMode: "APPROVAL_REQUIRED",
+        changes: { title: "Cleanup Proposed Title" },
+        status: "DRAFT",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      // Seed invalid proposed action for Merchandising Insights (read-only agent has no proposal permissions)
+      await repos.proposedActions.createProposedAction({
+        id: "test-invalid-readonly-action",
+        organizationId: "demo-org-id",
+        storeConnectionId: "store-yambasurf",
+        agentRunId: "RUN-SEED-INVALID",
+        agentId: "agent_merchandising_insights",
+        recommendationId: "REC-SEED-INVALID-READONLY",
+        targetType: "PRODUCT",
+        targetId: "101",
+        title: "Test Readonly Proposed Action",
+        description: "Simulated invalid proposed action for read-only Merchandising Insights agent",
+        actionType: "simulated_action",
+        riskLevel: "LOW",
+        executionMode: "APPROVAL_REQUIRED",
+        changes: { title: "Readonly Proposed Title" },
+        status: "DRAFT",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
       
       console.log("[DATABASE SEED] Seeded mock store connections and recovery approvals in-memory.");
     }
