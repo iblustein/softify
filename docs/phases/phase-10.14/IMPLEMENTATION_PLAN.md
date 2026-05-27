@@ -12,7 +12,7 @@ Prior phases have established a robust, enterprise-grade architecture with rigid
 3. **Centralized Tool Gateway**: Authoritative permission engine that intercepts mutation tools (`catalog.products.propose_update`) and generates approval requests.
 4. **Agent Installations**: Store-level activation registers that provision tools per agent instance.
 5. **Product Intelligence**: Highly tailored heuristic insights calculations (health scoring, tag compliance, top vendors summaries).
-6. **Merchant-in-the-Loop Approvals**: Dynamic proposed action queues allowing merchants to request approvals, decide (approve/reject), and execute commits.
+6. **Merchant-in-the-Loop Approvals**: Proposed action queues allowing merchants to request approvals, decide (approve/reject), and execute commits.
 7. **Explicit Mutation Execution**: Atomic execution claims (`APPROVED` -> `EXECUTING`) mediating live writes strictly through `ApprovedProductMutationExecutorService` on allowed text fields.
 8. **Operator Recovery Utilities**: Stuck-execution timeout monitoring (15-minute defaults) and state-only recovery endpoints.
 9. **Workspace Analytics**: Read-only dashboard analytics summaries and chronological trace timelines.
@@ -23,18 +23,19 @@ Prior phases have established a robust, enterprise-grade architecture with rigid
 
 ## 2. Phase 10.14 Goal
 
-The goal of Phase 10.14 is to **define and deploy the initial production-safe agent catalog MVP and formalize explicit merchant workflows**. 
+The goal of Phase 10.14 is to **define and deploy the initial production-safe agent catalog MVP and formalize explicit merchant workflows**.
 
 ### Important Boundaries
 - **No new mutation scopes**: Core mutator limits remain strictly capped to text fields: `title`, `vendor`, `productType`, `status`, and `tags`.
 - **No automatic execution**: Silent background catalog writes remain strictly forbidden. Every change requires merchant initiation and approval execution.
 - **Merchant clarity first**: Make Softify incredibly intuitive and useful by grouping capabilities into clear, dedicated agent personas with explicit purposes, risk profiles, and disabled/blocked overlays.
+- **Legacy Agent Handling**: Do not physically delete existing agent definitions. Instead, disable, hide, or mark legacy/development agents as unavailable for production catalog display.
 
 ---
 
 ## 3. Initial Agent Set
 
-We replace the old development placeholder agents with five highly-focused, production-safe personas:
+We replace the old development placeholders by exposing exactly five production-safe, highly-focused agent personas:
 
 ### A. Catalog Health Agent
 - **ID**: `agent_catalog_health`
@@ -42,38 +43,31 @@ We replace the old development placeholder agents with five highly-focused, prod
 - **Expected Heuristics**:
   - Scan product snapshots to find missing images, undefined vendors, missing types, or lack of classification tags.
   - Compute overall catalog health score using standardized rule deductions.
-- **Workflow Actions**:
-  - Read-Only Insights: Health scoring metrics and descriptive summaries.
-  - Proposal-Only: Generate tag additions or product classification fixes in proposed actions.
-  - Execution Mode: Approval-gated merchant commit.
-- **Allowed Fields**: `title`, `vendor`, `productType`, `status`, `tags`.
-- **Forbidden**: `price`, `inventory`, `variants`, `media` (direct image uploads), `descriptionHtml`, themes.
+- **Per-Agent Field Policy**:
+  - Propose Title, Vendor, ProductType, and Tags.
+  - **Status is excluded** (not essential for health evaluations).
+- **Forbidden Fields**: `status`, `price`, `inventory`, `variants`, `media` (direct image uploads), `descriptionHtml`, themes.
 
 ### B. Product SEO Agent
 - **ID**: `agent_product_seo`
 - **Purpose**: Improve discoverability and semantic search optimization within current safe mutation bounds.
 - **Expected Heuristics**:
   - Analyze product titles for character length optimization (aiming for 20-70 characters).
-  - Check titles for excessive capitalization or keyword stuffing.
   - Suggest descriptive qualifiers and clean categorization tags.
-- **Workflow Actions**:
-  - Proposal-Only: Suggests SEO-optimized titles and discovery tags to the proposed actions list.
-  - Execution Mode: Approval-gated merchant commit.
-- **Allowed Fields**: `title`, `productType`, `tags`.
-- **Forbidden**: Direct `descriptionHtml` mutations (deferred to avoid complex markup formatting failures), SEO metadata fields (unless standardized in later phases), price, inventory, variants, themes.
+- **Per-Agent Field Policy**:
+  - **Propose Title, ProductType, and Tags only**.
+- **Forbidden Fields**: `vendor`, `status`, `SEO metafields`, `meta title`, `meta description`, `handle / URL`, `descriptionHtml`, `price`, `inventory`, `variants`, `media`, themes.
 
 ### C. Catalog Cleanup Agent
 - **ID**: `agent_catalog_cleanup`
 - **Purpose**: Normalize messy catalog hierarchies, taxonomy, and archiving states.
 - **Expected Heuristics**:
-  - Detect casing inconsistencies (e.g. `nike` vs `Nike`), mismatched vendors, spelling variants, and orphan tags.
+  - Detect casing inconsistencies (e.g. `nike` vs `Adidas`), mismatched vendors, spelling variants, and duplicate-like tags.
   - Identify stale or inactive products that should be transitioned to archived/draft states.
-- **Workflow Actions**:
-  - Read-Only Insights: Detail messy taxomony groups.
-  - Proposal-Only: Recommend vendor casing normalizations and tag cleanups in proposed actions.
-  - Execution Mode: Approval-gated merchant commit.
-- **Allowed Fields**: `vendor`, `productType`, `status`, `tags`.
-- **Forbidden**: `title` (cased individually by SEO), price, inventory, variants, themes.
+- **Per-Agent Field Policy**:
+  - **Propose Vendor, ProductType, Status, and Tags only**.
+  - **Title is strictly excluded** (must not propose titles; SEO agent owns title overrides).
+- **Forbidden Fields**: `title`, `price`, `inventory`, `variants`, `media`, themes.
 
 ### D. Merchandising Insights Agent
 - **ID**: `agent_merchandising_insights`
@@ -81,12 +75,9 @@ We replace the old development placeholder agents with five highly-focused, prod
 - **Expected Heuristics**:
   - Group catalog counts by vendor, productType, and status.
   - Surface products with low data freshness or stale synch histories.
-  - Compute collection readiness matrices (if cached locally).
-- **Workflow Actions**:
-  - **Read-Only Only**: Surfacing metrics, summaries, and structural insights.
-  - **No Proposed Actions**: Does not generate proposals or decisions.
-- **Allowed Fields**: None (Read-only).
-- **Forbidden**: All storefront writes.
+- **Per-Agent Field Policy**:
+  - **Read-Only only**. No proposed actions or catalog mutations.
+- **Forbidden Fields**: All storefront writes.
 
 ### E. Approval Operations Agent
 - **ID**: `agent_approval_operations`
@@ -95,11 +86,9 @@ We replace the old development placeholder agents with five highly-focused, prod
   - Scans active `merchant_approvals` to summarize pending items, approved actions, and execution history.
   - Detects blocked execution states or missing permission scopes (especially `write_products`).
   - Identifies failed or stuck execution attempts and provides manual troubleshooting recovery advice.
-- **Workflow Actions**:
-  - **Read-Only Operational Assistant**: Informative queue analysis and system guidance.
-  - **No Direct Decisions / Execution**: Cannot decide or execute approvals itself.
-- **Allowed Fields**: None (Read-only).
-- **Forbidden**: All storefront writes, approval overrides, or automated resets.
+- **Per-Agent Field Policy**:
+  - **Read-Only operational summaries only**. No proposed actions, decisions, executions, or recovery mutation actions.
+- **Forbidden Routes**: This agent is strictly an assistant and must never invoke decide (`/decide`), execute (`/execute` or `/batch-execute`), or recovery (`/reset-failed` or `/mark-execution-failed`) routes.
 
 ---
 
@@ -116,7 +105,7 @@ The following agents remain deferred to protect storefront integrity and enforce
 | **Customer Support Agent**| Interacting with customer details or orders involves high-exposure PII and direct transactional impact. | `read_customers`, `write_orders` (PII Containment bounds) | Critical |
 | **Auto-Optimization Agent**| Background execution violates the core "manual merchant-in-the-loop" safety constraint. | Unified Auto-Execution framework | High |
 | **Customer Data Agent** | Direct PII manipulation is out-of-scope to prevent compliance leaks. | `read_customers`, `write_customers` | Critical |
-| **Order Mutation Agent** | Order adjustments, returns, or shipping modifications require separate accounting workflows. | `write_orders` | Critical |
+| **Order Mutation Agent** | Order adjustments, mutations, or shipping modifications require separate accounting workflows. | `write_orders` | Critical |
 
 ---
 
@@ -124,11 +113,11 @@ The following agents remain deferred to protect storefront integrity and enforce
 
 | Agent Name | Business Value | Read-Only Tools | Proposal Tools | Execution Capability | Allowed Fields | Required Scopes | Risk Level | Priority |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Catalog Health** | Surfaces data gaps and image holes. | `catalog.insights.health`, `catalog.insights.missing_images` | `catalog.products.propose_update` | Approval-Gated | `title`, `vendor`, `productType`, `status`, `tags` | `read_products` | Medium | **P0 (MVP)** |
+| **Catalog Health** | Surfaces data gaps and image holes. | `catalog.insights.health`, `catalog.insights.missing_images` | `catalog.products.propose_update` | Approval-Gated | `title`, `vendor`, `productType`, `tags` | `read_products` | Medium | **P0 (MVP)** |
 | **Product SEO** | Standardizes catalog naming to boost search metrics. | `catalog.insights.health` | `catalog.products.propose_update` | Approval-Gated | `title`, `productType`, `tags` | `read_products` | Low | **P0 (MVP)** |
 | **Catalog Cleanup**| Normalizes spelling, casing, and tag mess. | `catalog.insights.vendor_summary` | `catalog.products.propose_update` | Approval-Gated | `vendor`, `productType`, `status`, `tags` | `read_products` | Low | **P0 (MVP)** |
 | **Merchandising Insights**| Provides catalog taxonomy structural summaries. | `catalog.insights.vendor_summary` | None | **None (Read-Only)** | None | `read_products` | Low | **P1** |
-| **Approval Operations**| Explains queue states, block exceptions, and errors. | Read-Only Audit / Approvals lists | None | **None (Read-Only)** | None | None | Low | **P1** |
+| **Approval Operations**| Explains queue states, block exceptions, and errors. | Read-Only Audit / Approvals / Analytics summaries | None | **None (Read-Only)** | None | None | Low | **P1** |
 
 ---
 
@@ -146,7 +135,7 @@ The following agents remain deferred to protect storefront integrity and enforce
 
 ### Workflow 2: Catalog Health Scan
 1. Merchant navigates to **Multi-Agent Workspace**, selects the **Catalog Health Agent**, and clicks **"Launch Diagnostic Scan"**.
-2. Agent scans product snapshots, calculates a Catalog Health Score, and writes open recommendations inside the dashboard console.
+2. Agent scans product snapshots, calculates a Catalog Health Score, and writes open recommendations inside the dashboard.
 3. The proposed actions list populates with structured tag improvements and product type normalizations.
 4. Merchant reviews actions side-by-side, clicks **"Request Approval"**, transitioning drafts to the **Merchant Approval Queue**.
 5. Merchant enters the queue, reviews details, approves the items, and clicks **"Execute Live Commit"** (requires explicit write access).
@@ -154,21 +143,22 @@ The following agents remain deferred to protect storefront integrity and enforce
 
 ### Workflow 3: SEO Improvement Review
 1. Merchant launches the **Product SEO Agent** workspace scan.
-2. Agent identifies titles exceeding 70 characters or containing keyword spam.
-3. Proposes optimized title and type options.
+2. Agent identifies titles exceeding 70 characters.
+3. Proposes optimized title and type options (excluding meta title, descriptionHtml, or handle).
 4. Merchant reviews comparisons, approves the updates, and commits the clean titles directly to Shopify.
 
 ### Workflow 4: Catalog Cleanup Review
 1. Merchant launches the **Catalog Cleanup Agent** scan.
-2. Agent groups casing variants (e.g. `adidas` and `Adidas`) and surfaces messy tag structures.
-3. Proposes normalization updates.
-4. Merchant batch-approves the safe taxonomy fixes and triggers explicit execution.
+2. Agent groups casing variants and surfaces messy tag structures.
+3. Proposes normalization updates, which may include archiving state transitions (status to `DRAFT` or `ARCHIVED`).
+4. **Status Change Guard**: Because changing status affects product visibility on the live store, the UI displays a high-impact orange status warning banner during review.
+5. Merchant batch-approves the safe taxonomy/status fixes and triggers explicit execution.
 
 ### Workflow 5: Operational Queue Review
 1. Merchant selects the **Approval Operations Agent** inside the Workspace.
 2. The agent provides a structured analysis of the queue (e.g. 3 PENDING, 1 BLOCKED, 1 FAILED).
 3. If an action is `BLOCKED`, the agent renders an amber-tinted warning explaining: *"This mutation is blocked because your Shopify connection is missing the write_products scope. Re-authorize to enable live commits."*
-4. If an action has `FAILED`, the agent lists operator recovery cues and directs the merchant to safe retry actions.
+4. If an action has `FAILED`, the agent lists operator recovery cues and guides the merchant on troubleshooting retries.
 
 ---
 
@@ -180,11 +170,11 @@ We establish a strict permission scheme mapping agents to allowed tools and scop
 
 | Agent ID | Allowed Tools | Disallowed Tools | Required Scopes | write_products Needed for Execution? | What if write_products is Missing? | Proposed Actions Allowed without write_products? | Execution Blocked? |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `agent_catalog_health` | `catalog.insights.health`, `catalog.insights.missing_images`, `catalog.insights.missing_tags`, `catalog.products.propose_update` | Theme tools, order tools, inventory tools | `read_products` | **Yes** | Displays "Mutations Blocked (Read-Only)" in approval queue. | **Yes** (Drafts & approvals can be created) | **Yes** |
-| `agent_product_seo` | `catalog.insights.health`, `catalog.products.propose_update` | Theme tools, order tools, pricing tools | `read_products` | **Yes** | Execute commits are disabled. | **Yes** | **Yes** |
-| `agent_catalog_cleanup`| `catalog.insights.vendor_summary`, `catalog.products.propose_update` | Theme tools, order tools | `read_products` | **Yes** | Execute commits are disabled. | **Yes** | **Yes** |
+| `agent_catalog_health` | `catalog.insights.health`, `catalog.insights.missing_images`, `catalog.insights.missing_tags`, `catalog.products.propose_update` | Theme tools, order tools, status mutation tools | `read_products` | **Yes** | Displays "Mutations Blocked (Read-Only)" in approval queue. | **Yes** (Drafts & approvals can be created) | **Yes** |
+| `agent_product_seo` | `catalog.insights.health`, `catalog.products.propose_update` | Theme tools, order tools, status mutation tools, SEO metafield tools | `read_products` | **Yes** | Execute commits are disabled. | **Yes** | **Yes** |
+| `agent_catalog_cleanup`| `catalog.insights.vendor_summary`, `catalog.products.propose_update` | Theme tools, order tools, title proposal tools | `read_products` | **Yes** | Execute commits are disabled. | **Yes** | **Yes** |
 | `agent_merchandising_insights`| `catalog.insights.vendor_summary` | `catalog.products.propose_update`, theme/order tools | `read_products` | **No** | Operates normally (insights scan). | **No** (Tool is disallowed) | **N/A** (Cannot execute mutations) |
-| `agent_approval_operations`| None (Read-only database queries) | `catalog.products.propose_update`, all tool executions | None | **No** | Operates normally (reads approvals/audits). | **No** | **N/A** |
+| `agent_approval_operations`| Safe read-only audit/approvals/analytics summary query utilities | `catalog.products.propose_update`, all mutation/decide/execute tools | None | **No** | Operates normally (reads approvals/audits). | **No** | **N/A** |
 
 ---
 
@@ -198,7 +188,9 @@ To ensure ultimate merchant transparency, the frontend UIs in `AgentWorkspace.ts
 3. **Execution Block Warnings**:
    - Instead of displaying a clickable commit button that later fails, the UI replaces the commit button with an amber-tinted **"Mutations Blocked"** warning badge.
    - Displays a tooltip: *"This store connection was authorized with read-only scopes. Real-store catalog updates are disabled. Please re-authorize Softify with write scopes to commit changes."*
-4. **Clear Action Statuses**: Every checklist item explicitly flags its capability profile: `[Insights Scanning]`, `[Proposal Only]`, `[Approval Gated Commit]`, or `[Operational Helper]`.
+4. **Status Change Guard**:
+   - For proposed actions from the `Catalog Cleanup Agent` that transition a product's status, render a prominent orange banner in the list: `[Warning: Shifting Status to ARCHIVED/DRAFT will instantly hide this product from your storefront]`.
+5. **Clear Action Statuses**: Every checklist item explicitly flags its capability profile: `[Insights Scanning]`, `[Proposal Only]`, `[Approval Gated Commit]`, or `[Operational Helper]`.
 
 ---
 
@@ -221,6 +213,7 @@ We break Phase 10.14 implementation into sequential, verifiable steps:
 ### Step 1: Update Agent Registry
 - Modify `src/server/services/agent-registry.service.ts` to replace placeholder agents with the initial production-safe set (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`).
 - Define exact system instructions, allowed tools lists, required scopes, risk levels, and color identifiers.
+- Disable, hide, or mark old placeholder legacy agents as unavailable for production catalog display; **do not physically delete them** from the codebase.
 
 ### Step 2: Integrate UI Component Cards
 - Update `src/components/AgentWorkspace.tsx` to read the new agent set dynamically from the registry API.
@@ -229,6 +222,7 @@ We break Phase 10.14 implementation into sequential, verifiable steps:
 
 ### Step 3: Refine Queue Blocked Warnings
 - Update `src/components/ApprovalQueue.tsx` to handle read-only warning overlays and disabled CTA buttons dynamically based on the active store readiness context.
+- Render high-impact warnings and confirmation prompts for proposals that modify `status` fields.
 
 ### Step 4: Write Automated Pre-Deployment Checks
 - Append Test 58 to `scripts/release-check.mjs` ensuring initial agent registries are correct and no forbidden theme scopes or price/inventory mutations are allowed.
@@ -242,21 +236,28 @@ We break Phase 10.14 implementation into sequential, verifiable steps:
 
 Add static validation assertions in `release-check.mjs`:
 - Confirm that the agent list in `agent-registry.service.ts` contains exactly the five approved initial agents.
-- Assert that deferred agents (Theme, Pricing, Inventory, Customer Support, etc.) do not exist or are disabled in the registry.
-- Verify that `agent_merchandising_insights` and `agent_approval_operations` do not possess the `catalog.products.propose_update` tool.
+- Assert that legacy/development agents are marked disabled/unavailable and are hidden from production display (not physically deleted).
+- Verify that the Product SEO Agent cannot propose `vendor` or `status` fields.
+- Verify that the Catalog Cleanup Agent cannot propose `title` fields.
+- Verify that the Merchandising Insights Agent possesses no proposal tool capability.
+- Verify that the Approval Operations Agent is completely read-only and lacks any `decide`, `execute`, or recovery mutation capabilities.
 - Assert that no theme tools (`theme.assets.*`) or theme scopes (`read_themes`, `write_themes`) are referenced in any agent definition.
 - Confirm that all mutating agents map strictly to approved text mutation fields (`title`, `vendor`, `productType`, `status`, `tags`).
+- Ensure no deferred agents are visible in the production agent catalog.
 
 ---
 
 ## 12. Proposed Smoke-Test Plan (Test X)
 
 Implement dynamic integration checks in `smoke-test.mjs`:
-- Fetch `GET /api/agents` (or registry routes) and verify the response array contains the initial production-safe set with correct schemas and IDs.
-- Verify that selecting a read-only agent (e.g. `agent_merchandising_insights` or `agent_approval_operations`) runs diagnostics successfully even when mock store scopes exclude `write_products`.
-- Verify that a proposal-based agent (e.g. `agent_product_seo`) successfully creates draft proposed actions.
+- Fetch `GET /api/agents` and verify the response array contains the initial production-safe set with correct schemas and IDs, with legacy agents correctly omitted from production display lists.
+- Verify that the Product SEO Agent proposal generation includes only `title`, `productType`, and `tags` (no `vendor` or `status`).
+- Verify that the Catalog Cleanup Agent proposal generation does not include the `title` field.
+- Verify that read-only agents (`Merchandising Insights` and `Approval Operations`) do not and cannot create proposed actions.
+- Verify that attempting to perform a decide, execute, or recovery action through the Approval Operations Agent scope is blocked.
+- Verify that proposals including status changes are flagged with higher-impact warnings inside the API responses.
 - Assert that passing mismatched shop/org contexts returns `403 Forbidden` on agent actions.
-- Confirm that no auto-execution occurs when decision proposals are approved for the new agent set.
+- Confirm that no auto-execution occurs.
 
 ---
 
