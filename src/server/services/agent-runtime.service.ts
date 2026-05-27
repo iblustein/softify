@@ -239,6 +239,9 @@ export async function runAgentChat(params: {
     const gatewayRes = await executeTool(requestedTool, toolArgs, toolExecContext);
 
     if (gatewayRes.status === "failed") {
+      if (!gatewayRes.result?.requires_approval) {
+        toolCalls.pop();
+      }
       const failMsg = "I cannot perform this action because the required tool or access is missing.";
       await writeAuditEvent({
         organizationId: context.currentOrganization.id,

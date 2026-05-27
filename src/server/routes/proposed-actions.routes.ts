@@ -4,6 +4,7 @@ import { writeAuditEvent } from "../services/audit-log.service.js";
 import { normalizeShopDomain } from "../services/shopify-oauth.service.js";
 import { AuditEventNames, ProposedAction, AllowedProductProposalField } from "../domain/types.js";
 import { requestProposedActionApprovalBridge } from "../services/proposed-action-approval-bridge.service.js";
+import { getAllowedFieldsForAgent } from "../services/agent-policy.service.js";
 
 const router = Router();
 
@@ -371,7 +372,6 @@ router.post("/proposed-actions/batch-request-approval", async (req: any, res: an
     // Phase 1: Preflight Validation (Strict item existence, tenant checks, eligibility)
     const fetchedItems: ProposedAction[] = [];
     const classifications = new Map<string, "ALREADY_REQUESTED" | "BRIDGE_REQUIRED">();
-    const allowedFieldsList = ["title", "vendor", "productType", "status", "tags"];
 
     for (const id of ids) {
       const act = await repos.proposedActions.getProposedActionById(id);
@@ -393,6 +393,11 @@ router.post("/proposed-actions/batch-request-approval", async (req: any, res: an
           return res.status(400).json({ ok: false, error: `Proposed action '${id}' has invalid execution mode: '${act.executionMode}'.` });
         }
 
+        const allowedFieldsList = getAllowedFieldsForAgent(act.agentId);
+        if (allowedFieldsList.length === 0) {
+          return res.status(400).json({ ok: false, error: `Proposed action '${id}' has no proposal permissions.` });
+        }
+
         const changes = act.changes || {};
         const payloadKeys = Object.keys(changes);
 
@@ -400,17 +405,17 @@ router.post("/proposed-actions/batch-request-approval", async (req: any, res: an
           return res.status(400).json({ ok: false, error: `Proposed action '${id}' has empty changes payload.` });
         }
 
-        const hasForbidden = payloadKeys.some(k => !allowedFieldsList.includes(k));
+        const hasForbidden = payloadKeys.some(k => !allowedFieldsList.includes(k as any));
         if (hasForbidden) {
           return res.status(400).json({ ok: false, error: `Proposed action '${id}' contains forbidden changes fields.` });
         }
 
         const sanitizedPayload: any = {};
-        if (typeof changes.title === "string") sanitizedPayload.title = changes.title;
-        if (typeof changes.vendor === "string") sanitizedPayload.vendor = changes.vendor;
-        if (typeof changes.productType === "string") sanitizedPayload.productType = changes.productType;
-        if (typeof changes.status === "string") sanitizedPayload.status = changes.status;
-        if (Array.isArray(changes.tags)) {
+        if (allowedFieldsList.includes("title") && typeof changes.title === "string") sanitizedPayload.title = changes.title;
+        if (allowedFieldsList.includes("vendor") && typeof changes.vendor === "string") sanitizedPayload.vendor = changes.vendor;
+        if (allowedFieldsList.includes("productType") && typeof changes.productType === "string") sanitizedPayload.productType = changes.productType;
+        if (allowedFieldsList.includes("status") && typeof changes.status === "string") sanitizedPayload.status = changes.status;
+        if (allowedFieldsList.includes("tags") && Array.isArray(changes.tags)) {
           sanitizedPayload.tags = changes.tags.map((t: any) => String(t));
         }
 

@@ -8,12 +8,19 @@ export class MockAiProvider implements AiProvider {
 
     // Simulation path for testing approvals and gateway write block
     if (msg.includes("simulate tool catalog.products.propose_update")) {
+      let fields: any = { title: "Super Polished Tee" };
+      if (msg.includes("fields:")) {
+        try {
+          const rawFields = msg.slice(msg.indexOf("fields:") + 7).trim();
+          fields = JSON.parse(rawFields);
+        } catch (_) {}
+      }
       return {
         type: "tool_call",
         toolName: "catalog.products.propose_update",
         arguments: {
           productId: "101",
-          fields: { title: "Super Polished Tee" },
+          fields,
           summary: "Overhaul metadata description copy"
         }
       };

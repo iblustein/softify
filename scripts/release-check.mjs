@@ -1685,6 +1685,47 @@ async function runVerification() {
         throw new Error("Security Violation: Theme scopes or theme tools are exposed to active production agents.");
       }
     }
+
+    // 7. Hardening: Verify POST /api/agent-runs rejects legacy/disabled agents
+    if (!routesContent.includes("agent.isLegacy === true || agent.enabledByDefault !== true")) {
+      throw new Error("Hardening Static Check Violation: POST /api/agent-runs must block legacy/disabled agents.");
+    }
+
+    // 8. Hardening: Ensure canExecuteActions is false for all production agents
+    const matches = routesContent.match(/agentId:\s*["'](agent_[a-z0-9_]+)["'][\s\S]*?canExecuteActions:\s*(true|false)/g);
+    if (matches) {
+      for (const m of matches) {
+        if (m.includes("canExecuteActions: true")) {
+          throw new Error(`Hardening Static Check Violation: Agent definition contains canExecuteActions: true in routes.`);
+        }
+      }
+    }
+
+    // 9. Hardening: Ensure proposed-action-approval-bridge.service.ts uses getAllowedFieldsForAgent
+    const bridgePath = path.resolve(process.cwd(), "src/server/services/proposed-action-approval-bridge.service.ts");
+    const bridgeContent = fs.readFileSync(bridgePath, "utf8");
+    if (!bridgeContent.includes("getAllowedFieldsForAgent(act.agentId)")) {
+      throw new Error("Hardening Static Check Violation: proposed-action-approval-bridge.service.ts must use getAllowedFieldsForAgent.");
+    }
+
+    // 10. Hardening: Ensure proposed-actions.routes.ts batch-request-approval uses getAllowedFieldsForAgent
+    const proposedActionsRoutePath = path.resolve(process.cwd(), "src/server/routes/proposed-actions.routes.ts");
+    const proposedActionsRouteContent = fs.readFileSync(proposedActionsRoutePath, "utf8");
+    if (!proposedActionsRouteContent.includes("getAllowedFieldsForAgent(act.agentId)")) {
+      throw new Error("Hardening Static Check Violation: proposed-actions.routes.ts batch-request-approval must use getAllowedFieldsForAgent.");
+    }
+
+    // 11. Hardening: Ensure tool-gateway.ts uses getAllowedFieldsForAgent
+    const gatewayPath = path.resolve(process.cwd(), "src/server/tools/tool-gateway.ts");
+    const gatewayContent = fs.readFileSync(gatewayPath, "utf8");
+    if (!gatewayContent.includes("getAllowedFieldsForAgent(agentId)")) {
+      throw new Error("Hardening Static Check Violation: tool-gateway.ts must use getAllowedFieldsForAgent.");
+    }
+
+    // 12. Hardening: Assert that NO /api/proposed-actions/simulate route exists
+    if (proposedActionsRouteContent.includes("/proposed-actions/simulate") || proposedActionsRouteContent.includes("proposed-actions/simulate")) {
+      throw new Error("Hardening Static Check Violation: /api/proposed-actions/simulate route must not exist in proposed-actions.routes.ts.");
+    }
   });
 
   // Print PASS/FAIL Summary

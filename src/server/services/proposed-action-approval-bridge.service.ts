@@ -1,6 +1,7 @@
 import { getRepositories } from "../repositories/repository-provider.js";
 import { writeAuditEvent } from "./audit-log.service.js";
 import { AuditEventNames, ProposedAction, AllowedProductProposalField } from "../domain/types.js";
+import { getAllowedFieldsForAgent } from "./agent-policy.service.js";
 
 export interface RequestApprovalBridgeInput {
   proposedActionId: string;
@@ -51,7 +52,11 @@ export async function requestProposedActionApprovalBridge(input: RequestApproval
   }
 
   // Strict sanitization payload bridging (allowed taxonomy fields only)
-  const allowedFieldsList: AllowedProductProposalField[] = ["title", "vendor", "productType", "status", "tags"];
+  const allowedFieldsList = getAllowedFieldsForAgent(act.agentId);
+  if (allowedFieldsList.length === 0) {
+    throw new Error("Agent has no proposal permissions.");
+  }
+
   const incomingFields = act.changes || {};
   const sanitizedPayload: {
     title?: string;
@@ -61,11 +66,11 @@ export async function requestProposedActionApprovalBridge(input: RequestApproval
     tags?: string[];
   } = {};
 
-  if (typeof incomingFields.title === "string") sanitizedPayload.title = incomingFields.title;
-  if (typeof incomingFields.vendor === "string") sanitizedPayload.vendor = incomingFields.vendor;
-  if (typeof incomingFields.productType === "string") sanitizedPayload.productType = incomingFields.productType;
-  if (typeof incomingFields.status === "string") sanitizedPayload.status = incomingFields.status;
-  if (Array.isArray(incomingFields.tags)) {
+  if (allowedFieldsList.includes("title") && typeof incomingFields.title === "string") sanitizedPayload.title = incomingFields.title;
+  if (allowedFieldsList.includes("vendor") && typeof incomingFields.vendor === "string") sanitizedPayload.vendor = incomingFields.vendor;
+  if (allowedFieldsList.includes("productType") && typeof incomingFields.productType === "string") sanitizedPayload.productType = incomingFields.productType;
+  if (allowedFieldsList.includes("status") && typeof incomingFields.status === "string") sanitizedPayload.status = incomingFields.status;
+  if (allowedFieldsList.includes("tags") && Array.isArray(incomingFields.tags)) {
     sanitizedPayload.tags = incomingFields.tags.map((t: any) => String(t));
   }
 

@@ -303,7 +303,7 @@ async function runSuite() {
       },
       body: JSON.stringify({
         shop,
-        agentId: "agent_product_intelligence"
+        agentId: "agent_catalog_health"
       })
     });
     
@@ -321,8 +321,8 @@ async function runSuite() {
     if (inst.shopDomain !== shop) {
       throw new Error(`Expected installation.shopDomain to be "${shop}", got: "${inst.shopDomain}"`);
     }
-    if (inst.agentId !== "agent_product_intelligence") {
-      throw new Error(`Expected installation.agentId to be "agent_product_intelligence", got: "${inst.agentId}"`);
+    if (inst.agentId !== "agent_catalog_health") {
+      throw new Error(`Expected installation.agentId to be "agent_catalog_health", got: "${inst.agentId}"`);
     }
     
     // Verify allowedTools contains catalog.products.* and catalog.insights.* tools, and catalog.insights.health is present
@@ -333,7 +333,7 @@ async function runSuite() {
       throw new Error("Expected allowedTools to include 'catalog.insights.health'");
     }
     for (const tool of inst.allowedTools) {
-      if (!tool.startsWith("catalog.products.") && !tool.startsWith("catalog.insights.")) {
+      if (!tool.startsWith("catalog.products.") && !tool.startsWith("catalog.insights.") && tool !== "shopify.products.read") {
         throw new Error(`Agent allowedTools expanded beyond static limits: '${tool}'`);
       }
     }
@@ -349,7 +349,7 @@ async function runSuite() {
 
   // Test H.2: GET /api/agents/installations/status
   await check("H.2. Agent Installation status validation", async () => {
-    const url = `${baseUrl}/api/agents/installations/status?shop=${encodeURIComponent(shop)}&agentId=agent_product_intelligence`;
+    const url = `${baseUrl}/api/agents/installations/status?shop=${encodeURIComponent(shop)}&agentId=agent_catalog_health`;
     const res = await fetch(url, {
       headers: {
         "X-Softify-Dev-Bypass": bypassSecret
@@ -367,7 +367,7 @@ async function runSuite() {
       throw new Error("Expected allowedTools in status response to include 'catalog.insights.health'");
     }
     for (const tool of data.allowedTools) {
-      if (!tool.startsWith("catalog.products.") && !tool.startsWith("catalog.insights.")) {
+      if (!tool.startsWith("catalog.products.") && !tool.startsWith("catalog.insights.") && tool !== "shopify.products.read") {
         throw new Error(`Agent allowedTools expanded beyond static limits: '${tool}'`);
       }
     }
@@ -391,7 +391,7 @@ async function runSuite() {
       },
       body: JSON.stringify({
         shop,
-        agentId: "agent_product_intelligence",
+        agentId: "agent_catalog_health",
         message: "How many products are synced?"
       })
     });
@@ -409,6 +409,21 @@ async function runSuite() {
   // Test I: Agent chat product summary validation
   await check("I. Agent chat product summary validation", async () => {
     const timestamp = Date.now();
+
+    // Pre-install agent_product_intelligence so it doesn't fail with AGENT_NOT_INSTALLED
+    const installRes = await fetch(`${baseUrl}/api/agents/install`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_intelligence"
+      })
+    });
+    await checkResponse(installRes);
+
     const url = `${baseUrl}/api/agents/chat?t=${timestamp}`;
     const res = await fetch(url, {
       method: "POST",
@@ -458,7 +473,7 @@ async function runSuite() {
       },
       body: JSON.stringify({
         shop,
-        agentId: "agent_product_intelligence",
+        agentId: "agent_catalog_health",
         message: "What is the health of my catalog?"
       })
     });
@@ -501,7 +516,7 @@ async function runSuite() {
       },
       body: JSON.stringify({
         shop,
-        agentId: "agent_product_intelligence",
+        agentId: "agent_catalog_health",
         message: "Which products are missing images?"
       })
     });
@@ -587,7 +602,7 @@ async function runSuite() {
       },
       body: JSON.stringify({
         shop,
-        agentId: "agent_product_intelligence",
+        agentId: "agent_catalog_health",
         message: "Update all product titles"
       })
     });
@@ -651,7 +666,7 @@ async function runSuite() {
       },
       body: JSON.stringify({
         shop: "non-existent-shop.myshopify.com",
-        agentId: "agent_product_intelligence",
+        agentId: "agent_catalog_health",
         message: "How many products are synced?"
       })
     });
@@ -775,7 +790,7 @@ async function runSuite() {
       },
       body: JSON.stringify({
         shop,
-        agentId: "agent_product_intelligence",
+        agentId: "agent_catalog_health",
         message: "simulate tool catalog.products.propose_update"
       })
     });
@@ -1041,7 +1056,7 @@ async function runSuite() {
         },
         body: JSON.stringify({
           shop: mismatchShop,
-          agentId: "agent_product_intelligence"
+          agentId: "agent_catalog_health"
         })
       });
       await checkResponse(resInstallMismatch);
@@ -1055,7 +1070,7 @@ async function runSuite() {
         },
         body: JSON.stringify({
           shop: mismatchShop,
-          agentId: "agent_product_intelligence",
+          agentId: "agent_catalog_health",
           message: "simulate tool catalog.products.propose_update"
         })
       });
@@ -1465,31 +1480,31 @@ async function runSuite() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        agentId: "seo_aeo_agent",
+        agentId: "agent_catalog_health",
         mode: "RECOMMEND",
         scope: { type: "SHOP" }
       })
     });
     await checkResponse(resRun);
     const runResult = await resRun.json();
-    if (runResult.agentId !== "seo_aeo_agent" || runResult.status !== "COMPLETED") {
-      throw new Error(`Expected completed run for seo_aeo_agent, got: ${JSON.stringify(runResult)}`);
+    if (runResult.agentId !== "agent_catalog_health" || runResult.status !== "COMPLETED") {
+      throw new Error(`Expected completed run for agent_catalog_health, got: ${JSON.stringify(runResult)}`);
     }
 
-    // 3. Trigger run for content_agent in DRAFT mode to produce proposed actions
+    // 3. Trigger run for agent_catalog_cleanup in DRAFT mode to produce proposed actions
     const resRunDraft = await fetch(runUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        agentId: "content_agent",
+        agentId: "agent_catalog_cleanup",
         mode: "DRAFT",
         scope: { type: "SHOP" }
       })
     });
     await checkResponse(resRunDraft);
     const runDraftResult = await resRunDraft.json();
-    if (runDraftResult.agentId !== "content_agent" || runDraftResult.status !== "COMPLETED") {
-      throw new Error(`Expected completed run for content_agent, got: ${JSON.stringify(runDraftResult)}`);
+    if (runDraftResult.agentId !== "agent_catalog_cleanup" || runDraftResult.status !== "COMPLETED") {
+      throw new Error(`Expected completed run for agent_catalog_cleanup, got: ${JSON.stringify(runDraftResult)}`);
     }
 
     // 4. GET /api/agent-runs?shop=... should list runs
@@ -1718,7 +1733,7 @@ async function runSuite() {
       },
       body: JSON.stringify({
         shop,
-        agentId: "agent_product_intelligence",
+        agentId: "agent_catalog_health",
         message: "simulate tool catalog.products.propose_update"
       })
     });
@@ -1835,7 +1850,7 @@ async function runSuite() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        agentId: "content_agent",
+        agentId: "agent_catalog_cleanup",
         mode: "DRAFT",
         scope: { type: "SHOP" }
       })
@@ -2084,7 +2099,7 @@ async function runSuite() {
         },
         body: JSON.stringify({
           shop: mismatchShop,
-          agentId: "agent_product_intelligence"
+          agentId: "agent_catalog_health"
         })
       });
       await checkResponse(resInstallMismatch);
@@ -2098,7 +2113,7 @@ async function runSuite() {
         },
         body: JSON.stringify({
           shop: mismatchShop,
-          agentId: "agent_product_intelligence",
+          agentId: "agent_catalog_health",
           message: "simulate tool catalog.products.propose_update"
         })
       });
@@ -2174,6 +2189,22 @@ async function runSuite() {
   // Test X: Phase 10.14 Initial Agent Set & Merchant Workflows integration check
   await check("X. Phase 10.14 Initial Agent Set & Merchant Workflows integration check", async () => {
     const timestamp = Date.now();
+
+    // Pre-install all production agents on the test store connection so they don't fail with AGENT_NOT_INSTALLED
+    for (const installAgentId of ["agent_catalog_health", "agent_product_seo", "agent_catalog_cleanup", "agent_merchandising_insights", "agent_approval_operations"]) {
+      const installRes = await fetch(`${baseUrl}/api/agents/install`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Softify-Dev-Bypass": bypassSecret
+        },
+        body: JSON.stringify({
+          shop,
+          agentId: installAgentId
+        })
+      });
+      await checkResponse(installRes);
+    }
 
     // 1. Fetch GET /api/agents/catalog and verify active agents list (legacy omitted, five active present)
     const resCatalog = await fetch(`${baseUrl}/api/agents/catalog?t=${timestamp}`);
@@ -2308,6 +2339,149 @@ async function runSuite() {
     if (resMismatchRun.status !== 403) {
       throw new Error(`Expected HTTP 403 for mismatched org connection in agent run, got: ${resMismatchRun.status}`);
     }
+
+    // 4. Hardening: POST /api/agent-runs with product_intelligence_agent (legacy) must be rejected
+    const resLegacyAgentRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "product_intelligence_agent",
+        mode: "DRAFT",
+        scope: { type: "SHOP" }
+      })
+    });
+    if (resLegacyAgentRun.status !== 403) {
+      throw new Error(`Expected HTTP 403 for legacy agent run execution, got: ${resLegacyAgentRun.status}`);
+    }
+    const legacyAgentRunData = await resLegacyAgentRun.json();
+    if (legacyAgentRunData.error !== "Agent is not available for production execution.") {
+      throw new Error(`Expected 'Agent is not available for production execution.' error message, got: '${legacyAgentRunData.error}'`);
+    }
+    console.log("   [TEST X Hardening] Successfully verified legacy agent runs are blocked with 403.");
+
+    // 5. Hardening: Product SEO proposed action with vendor or status must fail bridge
+    const resSeoInvalidRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent_product_seo",
+        mode: "DRAFT",
+        scope: { type: "PRODUCT", resourceId: "test-invalid-bridge-seo" }
+      })
+    });
+    await checkResponse(resSeoInvalidRun);
+    const seoInvalidRunData = await resSeoInvalidRun.json();
+
+    const resAllDraftsSeo = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&status=DRAFT&t=${timestamp}`);
+    await checkResponse(resAllDraftsSeo);
+    const allDraftsSeo = await resAllDraftsSeo.json();
+    const seoInvalidAct = allDraftsSeo.find(a => a.agentRunId === seoInvalidRunData.id);
+    if (!seoInvalidAct) {
+      throw new Error("Failed to locate simulated invalid SEO proposed action in database.");
+    }
+
+    const resBridgeSeo = await fetch(`${baseUrl}/api/proposed-actions/${seoInvalidAct.id}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST"
+    });
+    if (resBridgeSeo.status !== 500 && resBridgeSeo.status !== 400) {
+      throw new Error(`Expected bridge request to fail with 500 or 400 for invalid SEO changes, got: ${resBridgeSeo.status}`);
+    }
+    const bridgeSeoData = await resBridgeSeo.json();
+    if (!bridgeSeoData.error || (!bridgeSeoData.error.includes("forbidden fields") && !bridgeSeoData.error.includes("permissions"))) {
+      throw new Error(`Expected forbidden fields bridge rejection error message, got: '${bridgeSeoData.error}'`);
+    }
+    console.log("   [TEST X Hardening] Successfully verified invalid SEO proposed action fails bridge.");
+
+    // 6. Hardening: Catalog Cleanup proposed action with title must fail bridge
+    const resCleanupInvalidRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent_catalog_cleanup",
+        mode: "DRAFT",
+        scope: { type: "PRODUCT", resourceId: "test-invalid-bridge-cleanup" }
+      })
+    });
+    await checkResponse(resCleanupInvalidRun);
+    const cleanupInvalidRunData = await resCleanupInvalidRun.json();
+
+    const resAllDraftsCleanup = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&status=DRAFT&t=${timestamp}`);
+    await checkResponse(resAllDraftsCleanup);
+    const allDraftsCleanup = await resAllDraftsCleanup.json();
+    const cleanupInvalidAct = allDraftsCleanup.find(a => a.agentRunId === cleanupInvalidRunData.id);
+    if (!cleanupInvalidAct) {
+      throw new Error("Failed to locate simulated invalid Cleanup proposed action in database.");
+    }
+
+    const resBridgeCleanup = await fetch(`${baseUrl}/api/proposed-actions/${cleanupInvalidAct.id}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST"
+    });
+    if (resBridgeCleanup.status !== 500 && resBridgeCleanup.status !== 400) {
+      throw new Error(`Expected bridge request to fail with 500 or 400 for invalid Cleanup changes, got: ${resBridgeCleanup.status}`);
+    }
+    const bridgeCleanupData = await resBridgeCleanup.json();
+    if (!bridgeCleanupData.error || (!bridgeCleanupData.error.includes("forbidden fields") && !bridgeCleanupData.error.includes("permissions"))) {
+      throw new Error(`Expected forbidden fields bridge rejection error message, got: '${bridgeCleanupData.error}'`);
+    }
+    console.log("   [TEST X Hardening] Successfully verified invalid Cleanup proposed action fails bridge.");
+
+    // 7. Hardening: Read-only agent proposed action must fail bridge
+    const resReadonlyInvalidRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent_merchandising_insights",
+        mode: "DRAFT",
+        scope: { type: "PRODUCT", resourceId: "test-invalid-bridge-readonly" }
+      })
+    });
+    await checkResponse(resReadonlyInvalidRun);
+    const readonlyInvalidRunData = await resReadonlyInvalidRun.json();
+
+    const resAllDraftsReadonly = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&status=DRAFT&t=${timestamp}`);
+    await checkResponse(resAllDraftsReadonly);
+    const allDraftsReadonly = await resAllDraftsReadonly.json();
+    const readonlyInvalidAct = allDraftsReadonly.find(a => a.agentRunId === readonlyInvalidRunData.id);
+    if (!readonlyInvalidAct) {
+      throw new Error("Failed to locate simulated invalid Readonly proposed action in database.");
+    }
+
+    const resBridgeReadonly = await fetch(`${baseUrl}/api/proposed-actions/${readonlyInvalidAct.id}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST"
+    });
+    if (resBridgeReadonly.status !== 500 && resBridgeReadonly.status !== 400) {
+      throw new Error(`Expected bridge request to fail with 500 or 400 for read-only agent changes, got: ${resBridgeReadonly.status}`);
+    }
+    const bridgeReadonlyData = await resBridgeReadonly.json();
+    if (!bridgeReadonlyData.error || !bridgeReadonlyData.error.includes("permissions")) {
+      throw new Error(`Expected proposal permissions bridge rejection error message, got: '${bridgeReadonlyData.error}'`);
+    }
+    console.log("   [TEST X Hardening] Successfully verified read-only agent proposed action fails bridge.");
+
+    // 8. Hardening: Verify Tool Gateway proposal field restrictions via direct agent chat simulation
+    const resChatInvalidFields = await fetch(`${baseUrl}/api/agents/chat?t=${timestamp}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Softify-Dev-Bypass": bypassSecret
+      },
+      body: JSON.stringify({
+        shop,
+        agentId: "agent_product_seo",
+        message: "simulate tool catalog.products.propose_update fields:{\"vendor\":\"BlockedVendor\"}"
+      })
+    });
+    await checkResponse(resChatInvalidFields);
+    const chatInvalidFieldsData = await resChatInvalidFields.json();
+    
+    const failedCall = chatInvalidFieldsData.toolCalls?.find(t => t.toolName === "catalog.products.propose_update");
+    if (failedCall) {
+      throw new Error("Expected Tool Gateway to block invalid fields proposal, but tool call was dispatched.");
+    }
+    if (!chatInvalidFieldsData.message.toLowerCase().includes("cannot") && !chatInvalidFieldsData.message.toLowerCase().includes("only") && !chatInvalidFieldsData.message.toLowerCase().includes("read-only")) {
+      throw new Error(`Expected chat response to explain access block or tool execution failure, got: "${chatInvalidFieldsData.message}"`);
+    }
+    console.log("   [TEST X Hardening] Successfully verified Tool Gateway rejects forbidden fields dynamically.");
 
     console.log("   [TEST X] Successfully verified dynamic GET /api/agents/catalog exclusions, per-agent allowed field schemas, read-only agent mutation immunity, and strict tenant security isolation.");
   });

@@ -6,6 +6,7 @@ import { readShopInfo, readProducts, ShopifyAdminApiError } from "../services/sh
 import { getRepositories } from "../repositories/repository-provider.js";
 import * as insightsService from "../services/catalog-insights.service.js";
 import { AuditEventNames, AllowedProductProposalField } from "../domain/types.js";
+import { getAllowedFieldsForAgent } from "../services/agent-policy.service.js";
 
 export interface ExecuteToolResult {
   toolName: string;
@@ -241,8 +242,20 @@ async function executeToolWithContextRaw(
     const targetId = String(cleanArgs.productId || "");
     const summary = cleanArgs.summary || "AI-suggested catalog attributes/fields description optimization.";
     
-    // Strict union types and allowedFields definition
-    const allowedFieldsList: AllowedProductProposalField[] = ["title", "vendor", "productType", "status", "tags"];
+    // Derive allowed fields from the agent context
+    const agentId = context?.agentDefinition?.id || "";
+    const allowedFieldsList = getAllowedFieldsForAgent(agentId);
+
+    if (allowedFieldsList.length === 0) {
+      return {
+        toolName,
+        args: cleanArgs,
+        status: "failed",
+        result: {
+          error: "Agent does not have permission to propose product mutations."
+        }
+      };
+    }
     
     // Sanitize payload strictly: title, vendor, productType, status, tags
     const incomingFields = cleanArgs.fields || {};
@@ -254,12 +267,26 @@ async function executeToolWithContextRaw(
       tags?: string[];
     } = {};
 
-    if (typeof incomingFields.title === "string") sanitizedPayload.title = incomingFields.title;
-    if (typeof incomingFields.vendor === "string") sanitizedPayload.vendor = incomingFields.vendor;
-    if (typeof incomingFields.productType === "string") sanitizedPayload.productType = incomingFields.productType;
-    if (typeof incomingFields.status === "string") sanitizedPayload.status = incomingFields.status;
-    if (Array.isArray(incomingFields.tags)) {
+    if (allowedFieldsList.includes("title") && typeof incomingFields.title === "string") sanitizedPayload.title = incomingFields.title;
+    if (allowedFieldsList.includes("vendor") && typeof incomingFields.vendor === "string") sanitizedPayload.vendor = incomingFields.vendor;
+    if (allowedFieldsList.includes("productType") && typeof incomingFields.productType === "string") sanitizedPayload.productType = incomingFields.productType;
+    if (allowedFieldsList.includes("status") && typeof incomingFields.status === "string") sanitizedPayload.status = incomingFields.status;
+    if (allowedFieldsList.includes("tags") && Array.isArray(incomingFields.tags)) {
       sanitizedPayload.tags = incomingFields.tags.map((t: any) => String(t));
+    }
+
+    // Strictly validate that there are no forbidden payload keys proposed
+    const payloadKeys = Object.keys(incomingFields);
+    const hasForbidden = payloadKeys.some(k => !allowedFieldsList.includes(k as any));
+    if (hasForbidden || Object.keys(sanitizedPayload).length === 0) {
+      return {
+        toolName,
+        args: cleanArgs,
+        status: "failed",
+        result: {
+          error: "Action contains forbidden fields or empty updates."
+        }
+      };
     }
 
     const proposedChangesSummary = summary;

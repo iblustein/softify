@@ -1,40 +1,58 @@
-# Technical Walkthrough — Phase 10.14: Initial Agent Set & Merchant Workflows
+# Technical Walkthrough — Phase 10.14: Initial Agent Set & Merchant Workflows (Corrective Hardening Pass)
 
-This document details the implementation of Phase 10.14, which hardens the catalog of **active production-safe agents**, enforces **strict per-agent allowed field policies**, hides legacy development agents safely without physical deletion, and refines the merchant-in-the-loop workflow inside the frontend/backend console interface.
+This document details the implementation and verification of Phase 10.14, with a primary focus on the **Phase 10.14 Corrective Hardening Pass** which hardens the catalog of **active production-safe agents**, enforces **strict centralized per-agent allowed field policies**, blocks legacy/disabled agents from run execution, and establishes robust gateway-level schema validations.
 
 ---
 
-## 1. Backend Core Hardening
+## 1. Corrective Hardening Implementation
 
-### A. Extended Types Definition
-The `Agent` interface in `src/types.ts` has been extended to support the following metadata:
-- `purpose?: string`: Clear merchant-facing agent descriptions.
-- `allowedFields?: string[]`: Explicitly scoped permitted proposed mutation fields.
-- `isLegacy?: boolean`: Distinguishes active production agents from deprecated development templates.
+### A. Gating Legacy Agents on Agent Runs Execution
+In `src/server/routes/agents.routes.ts`:
+- Added a production availability check inside `POST /api/agent-runs` right after agent definition lookup:
+  - If `agent.isLegacy === true` or `agent.enabledByDefault !== true`, the execution request is rejected.
+  - Returns `403 Forbidden` with the exact error payload: `{"ok": false, "error": "Agent is not available for production execution."}`.
+- Legacy agents remain physically present in the registry but are completely non-executable and hidden from catalog listings.
 
-### B. Agent Registry Service Setup
-In `src/server/services/agent-registry.service.ts`:
-- Exactly five production-safe initial agent definitions have been activated (`enabled: true`, `isLegacy: false`):
+### B. canExecuteActions Correction for Mutating Agents
+In `src/server/routes/agents.routes.ts`:
+- In `AGENT_CATALOG`, changed `canExecuteActions` to `false` for:
   - `agent_catalog_health`
   - `agent_product_seo`
   - `agent_catalog_cleanup`
-  - `agent_merchandising_insights`
-  - `agent_approval_operations`
-- Old placeholder development agents (`agent_store_setup`, `agent_content`, `agent_analytics`, `agent_theme_dev`, `agent_design`, `agent_customer_support`, `agent_media_digital`) have been disabled (`enabled: false`, `isLegacy: true`) to safely hide them from storefront catalogs without physical code deletions.
+- Keeps `executionMode: "APPROVAL_REQUIRED"` and `canProposeActions: true`. Mutating agents can propose changes but are never permitted to execute mutations directly.
 
-### C. Active Catalog Endpoint Filtration
-In `src/server/routes/agents.routes.ts`:
-- `GET /api/agents/catalog` filters out all legacy/development agents dynamically using `.filter(a => !a.isLegacy)`.
-- Exactly the five production-safe agents are exposed to the UI catalog list.
-- Deferred agents (Theme Agent, Pricing Agent, Inventory Agent, Media Agent, Customer Support Agent, Auto-Optimization Agent, Customer Data Agent, Order Mutation Agent) are completely excluded from the routing definitions.
+### C. Centralized Per-Agent Field Policy Helper
+Created `src/server/services/agent-policy.service.ts` to export:
+- `getAllowedFieldsForAgent(agentId: string): AllowedProductProposalField[]`:
+  - `agent_catalog_health` => `["title", "vendor", "productType", "tags"]`
+  - `agent_product_seo` => `["title", "productType", "tags"]`
+  - `agent_catalog_cleanup` => `["vendor", "productType", "status", "tags"]`
+  - `agent_merchandising_insights` & `agent_approval_operations` => `[]`
+  - Legacy/unknown agents => `[]`
+- `isProductionAgentAllowed(agentId: string): boolean`:
+  - Returns `true` only for non-legacy, enabled production agents.
+- Defines boundaries by string checks to completely avoid circular import issues with `AGENT_CATALOG` router registry modules.
 
-### D. Per-Agent Allowed Field & Simulation Implementation
-In `src/server/routes/agents.routes.ts`, POST `/api/agent-runs` handler was updated to support the five new agents with strict field policies:
-- **`agent_catalog_health`**: Proposes changes containing `title`, `vendor`, `productType`, and `tags` only (explicitly excludes `status`).
-- **`agent_product_seo`**: Proposes changes containing `title`, `productType`, and `tags` only (excludes `vendor`, `status`, `SEO metafields`, `meta title`, `meta description`, `handle`, `descriptionHtml`, variants, inventory).
-- **`agent_catalog_cleanup`**: Proposes changes containing `vendor`, `productType`, `status`, and `tags` only (excludes `title`).
-- **`agent_merchandising_insights`**: Read-only distribution insights matrix. Generates exactly `0` proposed actions.
-- **`agent_approval_operations`**: Read-only operations checklist scanner. Generates exactly `0` proposed actions.
+### D. Hardened Merchant Proposal Bridge
+In `src/server/services/proposed-action-approval-bridge.service.ts`:
+- Replaced the global `allowedFieldsList` with the centralized per-agent `getAllowedFieldsForAgent(act.agentId)`.
+- If the agent has an empty allowed fields list (e.g. read-only/legacy agents), the bridge request is rejected with `"Agent is not permitted to propose actions."`.
+- Strict validation checks incoming `payloadKeys` against the derived policy and rejects the bridge request if any forbidden field is present or if the update payload is empty.
+
+### E. Hardened Batch Approvals Router
+In `src/server/routes/proposed-actions.routes.ts`:
+- In `POST /api/proposed-actions/batch-request-approval`, replaced the global allowlist check with item-level `getAllowedFieldsForAgent(act.agentId)` resolution.
+- Validates each proposed action in the batch independently, early-rejecting the batch request with a `400` status if any item violates its agent's allowed fields list.
+
+### F. Hardened Tool Gateway
+In `src/server/tools/tool-gateway.ts` for `catalog.products.propose_update`:
+- Allowed fields list is derived dynamically via `getAllowedFieldsForAgent(context.agentDefinition.id)`.
+- If the agent is unknown, legacy, or read-only, it receives an empty allowed list and is immediately blocked.
+- Strictly validates proposal arguments against the agent-specific allowed list.
+
+### G. Chat Runtime Popping for Failed Tool Calls
+In `src/server/services/agent-runtime.service.ts`:
+- If a tool call fails completely in the gateway (and does not trigger a merchant approval request), the failed tool call is popped/removed from the returned `toolCalls` list in the chat response.
 
 ---
 
@@ -49,7 +67,12 @@ In `src/components/ApprovalQueue.tsx`:
 
 ---
 
-## 3. Test Coverage
+## 3. Dynamic Verification Outcomes
 
-- **Test 58 (Static Release Verification)**: Added checks in `release-check.mjs` verifying the registry configuration, correct filtration of legacy agents, strict per-agent field allowed lists (no status in Health, no title in Cleanup, no vendor in SEO, zero proposals in Insights/Operations), and absence of forbidden theme assets/scopes.
-- **Test X (Dynamic Integration Smoke Test)**: Added dynamic check in `smoke-test.mjs` performing REST checks against `GET /api/agents/catalog`, verifying that SEO and Cleanup agent runs dynamically conform to field scopes, read-only agents generate exactly `0` proposals, and mismatched tenant context returns `403 Forbidden`.
+All 58 static checks and all 31 dynamic smoke integration tests pass successfully:
+- Legacy gating in `POST /api/agent-runs` has been dynamically proven to block executions for legacy agents (`product_intelligence_agent`) with a `403`.
+- Per-agent field limitations are strictly enforced:
+  - Product SEO proposed action containing `vendor`/`status` fails the bridge.
+  - Catalog Cleanup proposed action containing `title` fails the bridge.
+  - Read-only agents (`agent_merchandising_insights`) are blocked from creating proposals.
+- The Tool Gateway dynamically restricts input fields and rejects invalid proposals.
