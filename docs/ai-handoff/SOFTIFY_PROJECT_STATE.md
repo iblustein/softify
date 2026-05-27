@@ -55,7 +55,7 @@ This document provides a highly durable and centralized technical reference for 
 - **CI/CD & Production Smoke Tests**: All static release checks (56 tests) and live local/deployed smoke tests (29 tests) pass cleanly.
 
 ## Next Recommended Phase
-- **Phase 10.13 — Production Catalog Auto-Optimization**: Introduces opt-in merchant-approved automatic background optimization rules, scheduling engine, and automated execution queue monitoring.
+- **Phase 10.13 — MVP Product Readiness & Pilot Hardening**: Prepare Softify for safe use on a real Shopify store pilot. Focuses on Shopify connection status clarity, scope/permission readiness checks (especially `write_products`), store readiness checklist, merchant-facing error/success/blocked state clarity, bulk UX polish, feature flag recommendations, and pilot checklist first-run flow.
 - **Preserved Mutation Scope**: The current safe mutation scope (capping edits strictly to approved text fields: `title`, `vendor`, `productType`, `status`, `tags`) remains unchanged.
 
 ## Current Non-Goals
