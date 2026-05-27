@@ -1,6 +1,6 @@
 # Implementation Plan — Phase 10.14: Initial Agent Set & Merchant Workflows
 
-This phase prepares **Softify** for its first live store MVP pilot by defining, configuring, and verifying the **initial production-safe agent set** and **merchant workflows**. Rather than expanding raw write/mutation scopes, Phase 10.14 focuses on catalog visibility, informational SEO, clean operational boundaries, and a highly understandable user experience.
+This phase prepares **Softify** for its first real-store product slice by defining, configuring, and verifying the **initial production-safe agent set** and **merchant workflows**. Rather than expanding raw write/mutation scopes, Phase 10.14 focuses on catalog visibility, informational SEO, clean operational boundaries, and a highly understandable user experience.
 
 ---
 
@@ -23,7 +23,7 @@ Prior phases have established a robust, enterprise-grade architecture with rigid
 
 ## 2. Phase 10.14 Goal
 
-The goal of Phase 10.14 is to **define and deploy the initial production-safe agent catalog MVP and formalize explicit merchant workflows**.
+The goal of Phase 10.14 is to **define and deploy the initial production-safe agent catalog for the first production-ready product slice and formalize explicit merchant workflows**.
 
 ### Important Boundaries
 - **No new mutation scopes**: Core mutator limits remain strictly capped to text fields: `title`, `vendor`, `productType`, `status`, and `tags`.
@@ -94,7 +94,7 @@ We replace the old development placeholders by exposing exactly five production-
 
 ## 4. Explicitly Deferred Agents (Out of Scope)
 
-The following agents remain deferred to protect storefront integrity and enforce clear operational MVP bounds:
+The following agents remain deferred to protect storefront integrity and enforce clear operational bounds for the first production-ready product slice:
 
 | Deferred Agent | Reason for Deferral | Missing Prerequisite Scopes / Scopes Blocked | Risk Level |
 | :--- | :--- | :--- | :--- |
@@ -113,9 +113,9 @@ The following agents remain deferred to protect storefront integrity and enforce
 
 | Agent Name | Business Value | Read-Only Tools | Proposal Tools | Execution Capability | Allowed Fields | Required Scopes | Risk Level | Priority |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Catalog Health** | Surfaces data gaps and image holes. | `catalog.insights.health`, `catalog.insights.missing_images` | `catalog.products.propose_update` | Approval-Gated | `title`, `vendor`, `productType`, `tags` | `read_products` | Medium | **P0 (MVP)** |
-| **Product SEO** | Standardizes catalog naming to boost search metrics. | `catalog.insights.health` | `catalog.products.propose_update` | Approval-Gated | `title`, `productType`, `tags` | `read_products` | Low | **P0 (MVP)** |
-| **Catalog Cleanup**| Normalizes spelling, casing, and tag mess. | `catalog.insights.vendor_summary` | `catalog.products.propose_update` | Approval-Gated | `vendor`, `productType`, `status`, `tags` | `read_products` | Low | **P0 (MVP)** |
+| **Catalog Health** | Surfaces data gaps and image holes. | `catalog.insights.health`, `catalog.insights.missing_images` | `catalog.products.propose_update` | Approval-Gated | `title`, `vendor`, `productType`, `tags` | `read_products` | Medium | **P0 (First Real-Store Product Slice)** |
+| **Product SEO** | Standardizes catalog naming to boost search metrics. | `catalog.insights.health` | `catalog.products.propose_update` | Approval-Gated | `title`, `productType`, `tags` | `read_products` | Low | **P0 (First Real-Store Product Slice)** |
+| **Catalog Cleanup**| Normalizes spelling, casing, and tag mess. | `catalog.insights.vendor_summary` | `catalog.products.propose_update` | Approval-Gated | `vendor`, `productType`, `status`, `tags` | `read_products` | Low | **P0 (First Real-Store Product Slice)** |
 | **Merchandising Insights**| Provides catalog taxonomy structural summaries. | `catalog.insights.vendor_summary` | None | **None (Read-Only)** | None | `read_products` | Low | **P1** |
 | **Approval Operations**| Explains queue states, block exceptions, and errors. | Read-Only Audit / Approvals / Analytics summaries | None | **None (Read-Only)** | None | None | Low | **P1** |
 
@@ -198,7 +198,7 @@ To ensure ultimate merchant transparency, the frontend UIs in `AgentWorkspace.ts
 
 We strictly enforce all architectural boundaries:
 - **No direct AI-to-Shopify path**: AI providers never invoke writes directly.
-- **No direct AI-to-tool execution path**: All tool invocations map to merchant proposed actions and approvals.
+- **No direct AI-to-tool execution path**: AI providers do not invoke tools directly. All tool access must pass through Softify’s controlled runtime / Tool Gateway boundaries. Mutation/proposal tools may only create proposed actions and approval-gated workflows. Read-only tools may return sanitized insights or operational summaries without creating approvals, provided they remain tenant-safe and do not expose raw payloads, secrets, prompts, provider output, model reasoning, tokens, or PII.
 - **Stateless AI Engines**: AI models remain recommendation engines without storefront write capability.
 - **Tenant Isolation Assertions**: Every route checks, locks, and asserts organization context. Mismatched tenant IDs trigger `403 Forbidden` early.
 - **No Secrets Exposure**: Zero raw decrypted tokens, OAuth client secrets, raw tool arguments, prompts, or model reasoning are returned in APIs or logged audits.
