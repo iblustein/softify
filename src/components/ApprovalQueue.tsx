@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FileCheck, 
   Check, 
@@ -46,6 +46,22 @@ export default function ApprovalQueue({
   const [isConfirmingDecide, setIsConfirmingDecide] = useState<'APPROVE' | 'REJECT' | null>(null);
   const [isConfirmingExecute, setIsConfirmingExecute] = useState<boolean>(false);
   const [executionProgress, setExecutionProgress] = useState<any | null>(null);
+  const [readiness, setReadiness] = useState<any>(null);
+
+  useEffect(() => {
+    const shopParam = new URLSearchParams(window.location.search).get('shop') || '';
+    const orgParam = new URLSearchParams(window.location.search).get('organizationId') || '';
+    const query = `?shop=${encodeURIComponent(shopParam)}&organizationId=${encodeURIComponent(orgParam)}`;
+
+    fetch(`/api/shop/readiness${query}`)
+      .then(res => {
+        if (res.ok) return res.json();
+      })
+      .then(data => {
+        if (data) setReadiness(data);
+      })
+      .catch(err => console.error('Failed to fetch readiness inside ApprovalQueue:', err));
+  }, [approvals]);
 
   const selectedItem = approvals.find(a => a.id === selectedId) || null;
 
@@ -219,20 +235,22 @@ export default function ApprovalQueue({
                         : 'bg-white border-slate-200 hover:border-slate-300 hover:shadow-2xs'
                     }`}
                   >
-                    <input
-                      type="checkbox"
-                      checked={selectedApprovalIds.includes(item.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        if (e.target.checked) {
-                          setSelectedApprovalIds(prev => [...prev, item.id]);
-                        } else {
-                          setSelectedApprovalIds(prev => prev.filter(id => id !== item.id));
-                        }
-                      }}
-                      className="mt-1 w-4 h-4 rounded border-slate-350 text-indigo-650 accent-indigo-650 focus:ring-indigo-500 cursor-pointer shrink-0"
-                    />
+                    {(import.meta as any).env.VITE_SOFTIFY_ALLOW_BULK_EXECUTE === 'true' && (
+                      <input
+                        type="checkbox"
+                        checked={selectedApprovalIds.includes(item.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          if (e.target.checked) {
+                            setSelectedApprovalIds(prev => [...prev, item.id]);
+                          } else {
+                            setSelectedApprovalIds(prev => prev.filter(id => id !== item.id));
+                          }
+                        }}
+                        className="mt-1 w-4 h-4 rounded border-slate-350 text-indigo-650 accent-indigo-650 focus:ring-indigo-500 cursor-pointer shrink-0"
+                      />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start font-mono">
                         <span className="font-bold text-slate-800 text-[10px]">{item.id}</span>
@@ -373,27 +391,46 @@ export default function ApprovalQueue({
 
               {selectedItem.status === 'APPROVED' && (
                 <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
-                  <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-3xs text-indigo-850 flex items-start gap-2 leading-relaxed">
-                    <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold text-indigo-950 uppercase block text-[9px] mb-0.5">Authorization Finalized (State-Only)</span>
-                      This proposed update has been approved by the merchant. No data has been committed to your Shopify catalog yet. Click the button below to explicitly execute this commit.
+                  {readiness && !readiness.hasWriteProducts ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-850 flex items-start gap-2 leading-relaxed font-sans">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-amber-950 uppercase block text-[9px] mb-0.5">Mutations Blocked (Read-Only Mode)</span>
+                        This proposed update has been approved, but live store commits are disabled because the Shopify store connection is missing the <code>write_products</code> scope. Please re-authorize the integration with full permissions to execute this commit.
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-3xs text-indigo-850 flex items-start gap-2 leading-relaxed">
+                      <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-indigo-950 uppercase block text-[9px] mb-0.5">Authorization Finalized (State-Only)</span>
+                        This proposed update has been approved by the merchant. No data has been committed to your Shopify catalog yet. Click the button below to explicitly execute this commit.
+                      </div>
+                    </div>
+                  )}
                   
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-3xs text-slate-400 font-mono font-bold uppercase">
                       Status: AUTHORIZED
                     </span>
                     
-                    <button
-                      onClick={() => onExecute(selectedItem.id)}
-                      disabled={isLoading}
-                      className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                      Execute Commit to Shopify
-                    </button>
+                    {readiness && !readiness.hasWriteProducts ? (
+                      <button
+                        disabled
+                        className="px-5 py-2.5 text-xs font-bold text-slate-400 bg-slate-100 rounded-xl border border-slate-205 flex items-center gap-1.5 cursor-not-allowed opacity-60"
+                      >
+                        Mutations Blocked
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onExecute(selectedItem.id)}
+                        disabled={isLoading}
+                        className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+                        Execute Commit to Shopify
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -507,7 +544,7 @@ export default function ApprovalQueue({
         </div>
 
       </div>
-      {selectedApprovalIds.length > 0 && (
+      {(import.meta as any).env.VITE_SOFTIFY_ALLOW_BULK_EXECUTE === 'true' && selectedApprovalIds.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-955/95 bg-slate-950/90 backdrop-blur-md text-slate-100 border border-slate-800 rounded-2xl shadow-2xl px-6 py-4 flex items-center justify-between gap-6 max-w-lg w-full max-w-[90vw] animate-in fade-in slide-in-from-bottom-5 duration-300">
           <div className="flex flex-col">
             <span className="text-[10px] font-mono font-bold text-indigo-400 uppercase tracking-wider">Queue Bulk Actions</span>
@@ -536,18 +573,18 @@ export default function ApprovalQueue({
             ) : (
               <button
                 onClick={() => setIsConfirmingExecute(true)}
-                disabled={isLoading || !selectedApprovalIds.every(id => {
+                disabled={isLoading || (readiness && !readiness.hasWriteProducts) || !selectedApprovalIds.every(id => {
                   const item = approvals.find(a => a.id === id);
                   return item?.status === 'APPROVED' || item?.status === 'FAILED';
                 })}
-                className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 disabled:bg-slate-900 disabled:text-slate-500 disabled:border-slate-850 disabled:opacity-50 text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer shadow-sm transition flex items-center gap-1.5"
-                title={selectedApprovalIds.every(id => {
+                className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 disabled:bg-slate-900 disabled:text-slate-505 disabled:text-slate-500 disabled:border-slate-850 disabled:opacity-50 text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer shadow-sm transition flex items-center gap-1.5"
+                title={readiness && !readiness.hasWriteProducts ? 'Mutations Blocked (Read-Only Mode)' : selectedApprovalIds.every(id => {
                   const item = approvals.find(a => a.id === id);
                   return item?.status === 'APPROVED' || item?.status === 'FAILED';
                 }) ? 'Execute selected items' : 'Some selected items are not eligible (only APPROVED or FAILED can be executed)'}
               >
                 <RefreshCw className="w-3 h-3" />
-                Execute Commits
+                {readiness && !readiness.hasWriteProducts ? 'Mutations Blocked' : 'Execute Commits'}
               </button>
             )}
           </div>

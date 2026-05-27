@@ -412,9 +412,17 @@ router.post("/approvals/:id/execute", async (req: any, res: any) => {
       approval: buildLegacyApprovalShape(executedApproval)
     });
   } catch (error: any) {
+    if (error.code === "EXECUTION_BLOCKED") {
+      return res.status(400).json({
+        ok: false,
+        code: "EXECUTION_BLOCKED",
+        status: "BLOCKED",
+        error: "Store connection is missing write_products scope. Mutations are disabled for this connection."
+      });
+    }
     const isNotFound = error.code === "APPROVAL_NOT_FOUND" || error.message === "Approval request not found";
     const isTenantViolation = error.code === "TENANT_ISOLATION_VIOLATION" || error.message?.includes("Access denied");
-    const isBlocked = error.code === "EXECUTION_BLOCKED" || error.code === "INVALID_APPROVAL_STATE";
+    const isBlocked = error.code === "INVALID_APPROVAL_STATE";
     const isConflict = error.code === "CONCURRENCY_CONFLICT";
 
     const statusCode = isNotFound ? 404 : (isTenantViolation ? 403 : (isBlocked || isConflict ? 400 : 500));

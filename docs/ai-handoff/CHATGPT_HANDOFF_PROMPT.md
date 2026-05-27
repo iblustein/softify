@@ -36,7 +36,8 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Strictly read-only, non-mutating workspace analytics endpoints and allowlist-sanitized trace timeline steppers are fully implemented, stabilized, and verified (Phase 10.10).
 - Complete core merchant workflow hardening with premium spinner overlays, allowlisted side-by-side comparison cards, safety alerts, and dynamic local synchronization (Phase 10.11).
 - Production Bulk Operations Foundation (Phase 10.12) is complete, establishing secure multi-select bulk proposed actions and merchant approvals, dynamic fail-fast tenant preflight validations, 500ms safety delays, sequential claim locks, and live stepper UI checklists.
-- Robust pre-deployment static checks (56 tests) and integration smoke test suites (29 tests) are passing completely.
+- Real-Store Product Readiness (Phase 10.13) is complete, delivering a sanitized connection diagnostics & readiness API, premium store setup dashboard checklist card, explicit execute button overrides and amber-tinted "Mutations Blocked" banners on write scope deficiency, and frontend UX bulk execute gating.
+- Robust pre-deployment static checks (57 tests) and integration smoke test suites (30 tests) are passing completely.
 
 ### Completed Milestones
 - Phase 10.1 — AI Engine Interface and Catalog Agent POC
@@ -52,6 +53,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.10 — Multi-Agent Workspace Analytics & Operational Visibility
 - Phase 10.11 — MVP End-to-End Merchant Workflow Hardening
 - Phase 10.12 — Production Bulk Operations Foundation
+- Phase 10.13 — Real-Store Product Readiness
 
 ### Core Architectural Guardrails & Constraints
 - Softify strictly owns runtime execution, permissions, tenant isolation, and integrations.
@@ -83,7 +85,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.13 — Real-Store Product Readiness. The goal is to prepare Softify for safe, stable use on a real Shopify store pilot by building connection status indicators, scope authorization checkers (especially `write_products`), store readiness checklists, user-friendly state mapping, bulk UX polish, feature flagging, and pilot first-run onboarding guides. Implementation must begin by drafting the implementation plan only.
+We are ready to initiate Phase 10.14 — Initial Agent Set & Merchant Workflows. The goal is to define and configure the first production-safe multi-agent catalog MVP pilot set, mapping exact purposes, tool permissions, and merchant control interfaces (e.g., Catalog Health, Product SEO, Catalog Cleanup, Merchandising, Approvals agents). Implementation must begin by drafting the implementation plan only.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

@@ -1998,6 +1998,153 @@ async function runSuite() {
     console.log("   [TEST V] Successfully verified sequential batch request, batch decide deferred approvals, sequential batch execute, and strict preflight tenant isolation checks.");
   });
 
+  // Test W: Phase 10.13 Real-Store Product Readiness integration check
+  await check("W. Phase 10.13 Real-Store Product Readiness integration check", async () => {
+    const timestamp = Date.now();
+
+    // 1. Verify readiness endpoint loads correct schema and fields for primary shop
+    const resReadiness = await fetch(`${baseUrl}/api/shop/readiness?shop=${encodeURIComponent(shop)}&t=${timestamp}`);
+    await checkResponse(resReadiness);
+    const dataReadiness = await resReadiness.json();
+    scanForForbiddenKeys(dataReadiness);
+
+    const requiredFields = [
+      "hasReadProducts",
+      "hasWriteProducts",
+      "canRunInsights",
+      "canExecuteMutations",
+      "missingRequiredScopes",
+      "connectionStatus",
+      "syncFreshness",
+      "snapshotCount",
+      "agentReadiness"
+    ];
+
+    for (const f of requiredFields) {
+      if (dataReadiness[f] === undefined) {
+        throw new Error(`Readiness check failed: field "${f}" is missing in the readiness endpoint response.`);
+      }
+    }
+
+    if (dataReadiness.connectionStatus !== "CONNECTED") {
+      throw new Error(`Expected connectionStatus to be CONNECTED, got: ${dataReadiness.connectionStatus}`);
+    }
+
+    // 2. Verify readiness endpoint for scope-mismatch connection specifically
+    if (isInMemory) {
+      const mismatchShop = "scope-mismatch.myshopify.com";
+      const resMismatchReadiness = await fetch(`${baseUrl}/api/shop/readiness?shop=${encodeURIComponent(mismatchShop)}&t=${timestamp}`);
+      await checkResponse(resMismatchReadiness);
+      const dataMismatchReadiness = await resMismatchReadiness.json();
+      scanForForbiddenKeys(dataMismatchReadiness);
+
+      if (dataMismatchReadiness.hasWriteProducts !== false) {
+        throw new Error("Expected hasWriteProducts to be false for scope-mismatch connection.");
+      }
+      if (dataMismatchReadiness.canExecuteMutations !== false) {
+        throw new Error("Expected canExecuteMutations to be false for scope-mismatch connection.");
+      }
+      if (!dataMismatchReadiness.missingRequiredScopes.includes("write_products")) {
+        throw new Error("Expected missingRequiredScopes to contain 'write_products'.");
+      }
+
+      // 3. Verify safe execution block response mapping when missing write scope
+      // Install agent on scope-mismatch connection
+      const resInstallMismatch = await fetch(`${baseUrl}/api/agents/install`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Softify-Dev-Bypass": bypassSecret
+        },
+        body: JSON.stringify({
+          shop: mismatchShop,
+          agentId: "agent_product_intelligence"
+        })
+      });
+      await checkResponse(resInstallMismatch);
+
+      // Trigger proposal creation on scope-mismatch
+      const resChatMismatch = await fetch(`${baseUrl}/api/agents/chat?t=${timestamp}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Softify-Dev-Bypass": bypassSecret
+        },
+        body: JSON.stringify({
+          shop: mismatchShop,
+          agentId: "agent_product_intelligence",
+          message: "simulate tool catalog.products.propose_update"
+        })
+      });
+      await checkResponse(resChatMismatch);
+
+      // Fetch approvals and find mismatch approval
+      const resApprovalsMismatch = await fetch(`${baseUrl}/api/approvals?organizationId=demo-org-id&t=${timestamp}`);
+      await checkResponse(resApprovalsMismatch);
+      const approvalsMismatch = await resApprovalsMismatch.json();
+      
+      const pendingMismatch = approvalsMismatch.find(
+        a => a.status === "PENDING" && a.toolName === "catalog.products.propose_update" && a.storeConnectionId === "store-scope-mismatch"
+      );
+      if (!pendingMismatch) {
+        throw new Error("Expected to find a PENDING approval request for scope-mismatch connection in Test W.");
+      }
+      const mismatchApprovalId = pendingMismatch.id;
+
+      // Approve the request (state-only)
+      const resDecideMismatch = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/decide?t=${timestamp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision: "APPROVE",
+          organizationId: "demo-org-id",
+          shop: mismatchShop
+        })
+      });
+      await checkResponse(resDecideMismatch);
+
+      // Attempt execution (expect the improved custom response payload mapping)
+      const resExecMismatch = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/execute?t=${timestamp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: "demo-org-id",
+          shop: mismatchShop,
+          performer: "Readiness Auditor"
+        })
+      });
+
+      if (resExecMismatch.status !== 400) {
+        throw new Error(`Expected HTTP 400 Bad Request for execution with missing write scope in Test W, got: ${resExecMismatch.status}`);
+      }
+      const mismatchExecData = await resExecMismatch.json();
+      scanForForbiddenKeys(mismatchExecData);
+
+      if (mismatchExecData.ok !== false || mismatchExecData.code !== "EXECUTION_BLOCKED" || mismatchExecData.status !== "BLOCKED") {
+        throw new Error(`Expected customized EXECUTION_BLOCKED response payload mapping, got: ${JSON.stringify(mismatchExecData)}`);
+      }
+      if (mismatchExecData.error !== "Store connection is missing write_products scope. Mutations are disabled for this connection.") {
+        throw new Error(`Expected exact customized block error message, got: "${mismatchExecData.error}"`);
+      }
+
+      // 4. Verify tenant isolation in execution route (mismatched orgId returns 403)
+      const resMismatched = await fetch(`${baseUrl}/api/approvals/${mismatchApprovalId}/execute?t=${timestamp}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: "wrong-org-id",
+          shop: mismatchShop,
+          performer: "Intruder"
+        })
+      });
+      if (resMismatched.status !== 403) {
+        throw new Error(`Expected HTTP 403 Forbidden for mismatched tenant execute, got: ${resMismatched.status}`);
+      }
+    }
+
+    console.log("   [TEST W] Successfully verified readiness diagnostics GET endpoint schema, state-only decision execution immunity, blocked execute gating response mapping, and tenant isolation locks.");
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {

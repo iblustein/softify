@@ -4,38 +4,14 @@ This document outlines the goals, requirements, and scope definitions for the ne
 
 ---
 
-## 1. Next Milestone: Phase 10.13 — Real-Store Product Readiness
+## 1. Completed Milestone: Phase 10.13 — Real-Store Product Readiness
 
 ### Goal
-Prepare Softify for safe, stable use on a real Shopify store pilot. Focus on clear tenant/oauth/scope visibility, permission checks, storefront write warnings, bulk execution flags, and comprehensive merchant diagnostics.
-
-### Scope & Requirements
-1. **Shopify Connection & Scope Clarity**:
-   - Make connection health, installation states, and authorized OAuth scopes clearly visible on the dashboard interface.
-2. **Scope/Permission Readiness Checks**:
-   - Introduce proactive check logic that clearly alerts the merchant if their store is missing the `write_products` scope (which restricts live mutations but still permits read-only insights).
-3. **Store Readiness Dashboard / Checklist**:
-   - Build a visual, interactive onboarding checklist in the frontend that guides the merchant through:
-     - Active Shopify OAuth connection check.
-     - Scope authorization check (`read_products`, `write_products`).
-     - Product catalog sync completeness status.
-     - Agent installation configuration.
-4. **Merchant-Facing State Clarity**:
-   - Revise all error, success, and `BLOCKED` (safe-blocked scope) states across workspace components. Ensure user-friendly guidance instead of raw technical codes.
-5. **Bulk Action UX Polish**:
-   - Refine the floating bulk actions bar, confirmation overlays, and sequential stepper checklists to ensure smooth UI responsiveness during high-volume operations.
-6. **Feature Flags for High-Impact Actions**:
-   - Implement simple, safe feature flag logic to enable/disable bulk execute buttons, ensuring this high-impact capability is selectively toggled during pilot testing.
-7. **Pilot Checklist & First-Run Flow**:
-   - Construct a dedicated pilot onboarding walkthrough showing merchants how Softify keeps them in control via the approvals pipeline.
-
-### Explicit Boundaries
-- **No New Mutation Scope**: The allowlisted product mutation fields remain strictly: `title`, `vendor`, `productType`, `status`, and `tags`.
-- **No Auto-Execution**: Execution must remain strictly manual and merchant-gated.
+Successfully prepared Softify for safe, stable use on a real Shopify store connection. Completed the sanitized readiness diagnostics API, premium dashboard checklist onboarding UI, blocked write warnings, bulk execution flags, and dynamic integration smoke tests.
 
 ---
 
-## 2. Next Planned Milestone: Phase 10.14 — Initial Agent Set & Merchant Workflows
+## 2. Next Milestone: Phase 10.14 — Initial Agent Set & Merchant Workflows
 
 ### Goal
 Define and configure the first production-safe multi-agent catalog MVP pilot set, mapping exact purposes, tool permissions, and merchant control interfaces.

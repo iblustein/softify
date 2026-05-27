@@ -1495,6 +1495,62 @@ async function runVerification() {
     }
   });
 
+  // Test 57: Phase 10.13 Real-Store Product Readiness static validation
+  await check("57. Phase 10.13 Real-Store Product Readiness static validation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+
+    // 1. Verify naming consistency in roadmaps
+    const phaseIndex = path.resolve(process.cwd(), "docs/PHASE_INDEX.md");
+    const phaseContent = fs.readFileSync(phaseIndex, "utf8");
+    if (!phaseContent.includes("Real-Store Product Readiness")) {
+      throw new Error("Naming Consistency Violation: Phase 10.13 is not named 'Real-Store Product Readiness' in PHASE_INDEX.md.");
+    }
+
+    // 2. Verify no theme scopes referenced in approvals route or executor
+    const executorPath = path.resolve(process.cwd(), "src/server/services/approved-product-mutation-executor.service.ts");
+    const executorContent = fs.readFileSync(executorPath, "utf8");
+    if (executorContent.includes("read_themes") || executorContent.includes("write_themes")) {
+      throw new Error("Security Violation: Theme scopes referenced in executor service.");
+    }
+
+    // 3. Verify allowed product mutations strictly capped
+    const disallowedFields = ["price", "inventory", "variants", "descriptionHtml"];
+    for (const field of disallowedFields) {
+      if (executorContent.includes(`sanitizedFields.${field}`)) {
+        throw new Error(`Security Violation: Capped field mutation for '${field}' is not blocked.`);
+      }
+    }
+
+    // 4. Verify approvals route has logic handling EXECUTION_BLOCKED and maps it to BLOCKED
+    const approvalsPath = path.resolve(process.cwd(), "src/server/routes/approvals.routes.ts");
+    const approvalsContent = fs.readFileSync(approvalsPath, "utf8");
+    if (!approvalsContent.includes("EXECUTION_BLOCKED") || !approvalsContent.includes("Mutations are disabled for this connection")) {
+      throw new Error("Safe Block Mapping Violation: approvals execute route does not map execution block to 'BLOCKED' status with correct message.");
+    }
+
+    // 5. Verify GET /api/shop/readiness route exists and is mounted
+    const readinessPath = path.resolve(process.cwd(), "src/server/routes/readiness.routes.ts");
+    if (!fs.existsSync(readinessPath)) {
+      throw new Error("Route Mounting Violation: readiness.routes.ts file is missing.");
+    }
+
+    const appPath = path.resolve(process.cwd(), "src/server/app.ts");
+    const appContent = fs.readFileSync(appPath, "utf8");
+    if (!appContent.includes("readinessRoutes") || !appContent.includes("readiness.routes.js")) {
+      throw new Error("Route Mounting Violation: readiness routes are not imported or mounted in app.ts.");
+    }
+
+    // 6. Verify GET /api/shop/readiness does not expose raw tokens/secrets
+    const readinessContent = fs.readFileSync(readinessPath, "utf8");
+    const forbiddenExposures = ["accessToken", "accessTokenEncrypted", "apiSecret", "client_secret", "clientSecret"];
+    for (const exp of forbiddenExposures) {
+      if (readinessContent.includes(`res.json({ ...`) || readinessContent.includes(`connection.${exp}`) || readinessContent.includes(`connectionStatus: connection.${exp}`)) {
+        throw new Error(`Security Violation: Potential token/secret exposure inside readiness.routes.ts for '${exp}'.`);
+      }
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

@@ -94,6 +94,8 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
   const [runs, setRuns] = useState<AgentRun[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [proposedActions, setProposedActions] = useState<ProposedAction[]>([]);
+  const [readiness, setReadiness] = useState<any>(null);
+  const [readinessLoading, setReadinessLoading] = useState<boolean>(false);
   
   // UI Controls
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
@@ -117,6 +119,20 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
   // Analytics Filter States
   const [agentFilter, setAgentFilter] = useState<string>('');
   const [dateRange, setDateRange] = useState<string>('30d');
+
+  const fetchReadiness = async () => {
+    setReadinessLoading(true);
+    try {
+      const res = await fetch(`/api/shop/readiness${shopQuery}`);
+      if (res.ok) {
+        setReadiness(await res.json());
+      }
+    } catch (err) {
+      console.error('Failed to fetch store readiness:', err);
+    } finally {
+      setReadinessLoading(false);
+    }
+  };
 
   const fetchCatalogAndWorkspaceData = async () => {
     setErrorText(null);
@@ -187,6 +203,7 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
 
   useEffect(() => {
     fetchCatalogAndWorkspaceData();
+    fetchReadiness();
   }, [shopQuery]);
 
   useEffect(() => {
@@ -391,11 +408,18 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
             </button>
           </div>
           <button
-            onClick={activeTab === 'analytics' ? fetchAnalyticsData : fetchCatalogAndWorkspaceData}
+            onClick={async () => {
+              if (activeTab === 'analytics') {
+                await fetchAnalyticsData();
+              } else {
+                await fetchCatalogAndWorkspaceData();
+                await fetchReadiness();
+              }
+            }}
             disabled={activeTab === 'analytics' && analyticsLoading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-3xs font-bold shadow-2xs transition cursor-pointer disabled:opacity-50"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${activeTab === 'analytics' && analyticsLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${(activeTab === 'analytics' && analyticsLoading) || readinessLoading ? 'animate-spin' : ''}`} />
             Sync
           </button>
         </div>
@@ -414,6 +438,107 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
           </p>
         </div>
       </div>
+
+      {/* Store Connection & Readiness Checklist */}
+      {readiness && (
+        <div className="bg-white border border-slate-205 rounded-2xl p-4 shadow-3xs space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+            <div>
+              <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-indigo-650" />
+                Store Connection & Readiness Checklist
+              </h3>
+              <p className="text-[10px] text-slate-500 mt-0.5 font-sans leading-relaxed">
+                Review setup readiness parameters for safe storefront commits on real stores.
+              </p>
+            </div>
+            <div>
+              {readiness.connectionStatus === 'CONNECTED' && readiness.hasWriteProducts ? (
+                <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-100 text-emerald-700 font-extrabold text-[9px] uppercase tracking-wider rounded-xl">
+                  Ready (Full Access)
+                </span>
+              ) : readiness.connectionStatus === 'CONNECTED' ? (
+                <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-705 text-amber-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
+                  Ready (Read-Only Insights)
+                </span>
+              ) : (
+                <span className="px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
+                  Not Ready
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs font-sans">
+            {/* Column 1: Connection & Scopes */}
+            <div className="space-y-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                Connection & Permissions
+              </span>
+              <div className="space-y-2 pt-1 font-sans">
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">OAuth Status</span>
+                  <span className={`font-bold ${readiness.connectionStatus === 'CONNECTED' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {readiness.connectionStatus === 'CONNECTED' ? 'CONNECTED' : readiness.connectionStatus || 'DISCONNECTED'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">Read Scope</span>
+                  <span className={`font-bold ${readiness.hasReadProducts ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {readiness.hasReadProducts ? 'ACTIVE' : 'MISSING'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">Write Scope</span>
+                  <span className={`font-bold ${readiness.hasWriteProducts ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {readiness.hasWriteProducts ? 'ACTIVE' : 'DISABLED'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2: Data & Freshness */}
+            <div className="space-y-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                Catalog & Synchronization
+              </span>
+              <div className="space-y-2 pt-1 font-sans">
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">Cached Snapshots</span>
+                  <span className="font-bold text-slate-800">{readiness.snapshotCount} products</span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">Sync Freshness</span>
+                  <span className="font-bold text-slate-800 text-[10px] truncate max-w-[130px]" title={readiness.syncFreshness}>
+                    {readiness.syncFreshness ? new Date(readiness.syncFreshness).toLocaleString() : 'Never'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Column 3: Agents */}
+            <div className="space-y-3 p-3 bg-slate-50 border border-slate-100 rounded-xl">
+              <span className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                Agent Status & Options
+              </span>
+              <div className="space-y-2 pt-1 font-sans">
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">Active Agents</span>
+                  <span className={`font-bold ${readiness.agentReadiness === 'READY' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {readiness.agentReadiness === 'READY' ? 'ACTIVE' : 'NOT_READY'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">Bulk Executable</span>
+                  <span className="font-bold text-slate-650 text-slate-700 font-mono text-[9px]">
+                    {(import.meta as any).env.VITE_SOFTIFY_ALLOW_BULK_EXECUTE === 'true' ? 'ENABLED' : 'UX_DISABLED'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {errorText && (
         <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2">

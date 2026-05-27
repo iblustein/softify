@@ -1,5 +1,6 @@
 import express from "express";
 import shopRoutes from "./routes/shop.routes.js";
+import readinessRoutes from "./routes/readiness.routes.js";
 import agentsRoutes from "./routes/agents.routes.js";
 import productsRoutes from "./routes/products.routes.js";
 import ordersRoutes from "./routes/orders.routes.js";
@@ -26,6 +27,7 @@ app.use("/api/shopify/admin", shopifyAdminRoutes);
 app.use("/api/catalog", catalogRoutes);
 app.use("/api/agents", agentChatRoutes);
 app.use("/api", shopRoutes);
+app.use("/api", readinessRoutes);
 app.use("/api", agentInstallationsRoutes);
 app.use("/api", agentsRoutes);
 app.use("/api", productsRoutes);
