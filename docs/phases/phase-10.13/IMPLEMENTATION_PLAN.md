@@ -1,6 +1,6 @@
 # Implementation Plan — Phase 10.13: Real-Store Product Readiness
 
-This phase prepares **Softify** for safe, stable, and transparent use on a real Shopify store pilot. Rather than introducing background automation, Phase 10.13 hardens operational readiness, permission check diagnostics, store connection status visibility, and bulk safety gates.
+This phase prepares **Softify** for safe, stable, and transparent use on a real Shopify store. Rather than introducing background automation, Phase 10.13 hardens operational readiness, permission check diagnostics, store connection status visibility, and bulk safety gates. All implementations are designed to support a clear "real-store readiness" posture and ensure we deliver a highly secure, reliable, and first production-ready product slice.
 
 ---
 
@@ -9,7 +9,7 @@ This phase prepares **Softify** for safe, stable, and transparent use on a real 
 ### Completed Platform Capabilities (Through Phase 10.12)
 1. **OAuth Status & Synchronizations**: Basic OAuth connection flows, token storage, and REST/GraphQL product snaps.
 2. **Stateless AI Provider**: Gemini and Mock AI providers that recommend metadata updates but have zero direct store access.
-3. **centralized Tool Gateway**: AUTHORITATIVE sandbox gating that checks agent definitions and sanitizes credentials/audits.
+3. **Centralized Tool Gateway**: AUTHORITATIVE sandbox gating that checks agent definitions and sanitizes credentials/audits.
 4. **Sanitized Firestore Audits**: Deep operational telemetry capturing agent chat requests, gateway decisions, and execution outcomes.
 5. **Merchant-in-the-Loop Approvals**: Bridgeless gateway interceptions that register proposal tools as PENDING approvals.
 6. **Authoritative GraphQL Executor**: Safe transactional storefront writes limited strictly to approved text attributes (`title`, `vendor`, `productType`, `status`, `tags`).
@@ -17,13 +17,13 @@ This phase prepares **Softify** for safe, stable, and transparent use on a real 
 8. **Production Bulk Operations Foundation**: Dynamic preflight tenant isolation checks, 500ms safety throttle delays, sequential claim locks, and bulk decide/execute endpoints.
 
 ### Why Phase 10.13 Focuses on Real-Store Readiness
-Softify is moving to a real Shopify store pilot environment. In real-store usage, we must guarantee that:
+Softify is moving to a real Shopify store readiness environment. In real-store usage, we must guarantee that:
 - Merchants understand *exactly* which operations are safe, pending, executing, or blocked.
 - We do not run any silent modifications or auto-execution rules (preserving the manual merchant-in-the-loop posture).
 - Any missing OAuth permissions (especially the crucial `write_products` scope) are handled gracefully as a safe blocked state instead of a generic system crash.
 
 ### Main Real-Store Readiness Risks
-1. **Scope Deficiencies**: If a pilot merchant connects a store with only `read_products` access, trying to trigger a GraphQL execute mutation will fail. We need a clear permission check layer to intercept this.
+1. **Scope Deficiencies**: If a merchant connects a store with only `read_products` access, trying to trigger a GraphQL execute mutation will fail. We need a clear permission check layer to intercept this.
 2. **Operational Ambiguity**: Merchants may feel anxious about what a bulk operation does. The UI must clearly articulate live write warnings and separate state decisions from storefront commits.
 3. **Failed Snap Syncs**: Stale snapshot databases could cause recommended actions to modify outdated storefront parameters.
 
@@ -31,60 +31,84 @@ Softify is moving to a real Shopify store pilot environment. In real-store usage
 
 ## 2. Store Readiness Model
 
-We will build a dedicated **Store Readiness Dashboard Card / Checklist** in the frontend and support it with a backend status API `GET /api/shop/readiness`:
+We will build a dedicated **Store Readiness Dashboard Card / Checklist** in the frontend, supported by a sanitized, backend diagnostic status API `GET /api/shop/readiness`.
+
+### Backend Diagnostic status API: `GET /api/shop/readiness`
+To drive the frontend checklists, the backend will expose a read-only endpoint that returns **only** sanitized readiness indicators and user-safe status data. 
+
+#### Sanitized API Response Contract
+Under no circumstances shall the readiness endpoint expose raw credentials, decrypted access tokens, secrets, OAuth internal keys, raw Shopify HTTP response headers/bodies, or internal system metadata. 
+
+The endpoint will return a clean, allowlisted JSON payload:
+```json
+{
+  "hasReadProducts": true,
+  "hasWriteProducts": false,
+  "canRunInsights": true,
+  "canExecuteMutations": false,
+  "missingRequiredScopes": ["write_products"],
+  "connectionStatus": "CONNECTED",
+  "syncFreshness": "2026-05-27T12:00:00Z",
+  "snapshotCount": 142,
+  "agentReadiness": "READY"
+}
+```
+*Note: Returning scope names like `read_products` or `write_products` is acceptable, but strictly as sanitized permission indicators.*
 
 ### Frontend Store Readiness Dashboard Card
-We will display a structured checklist panel detailing:
+The frontend will display a structured checklist panel utilizing the response from `GET /api/shop/readiness`:
 - **Shop Domain**: Authoritative normalized URL (e.g. `glowthread-apparel.myshopify.com`).
-- **Store Connection ID**: Encoded database reference (e.g. `store-luminary`).
-- **OAuth Status**: Explicitly badges the connection as `Connected` or `Disconnected`.
-- **Product Sync Freshness**: Timestamps showing the last completed snapshot sync along with a sync freshness warning if older than 24 hours.
-- **Catalog Snapshot Availability**: Reports the total count of product snapshots cached in Firestore.
-- **Agent Installation Readiness**: Verifies if at least one agent is active and provisioned with authorized tools.
+- **OAuth Status**: Explicitly badges the connection based on `connectionStatus` as `Connected` or `Disconnected`.
+- **Product Sync Freshness**: Timestamps showing `syncFreshness` along with a prominent warning if the last snapshot sync is older than 24 hours.
+- **Catalog Snapshot Availability**: Reports the total count of product snapshots cached in Firestore (`snapshotCount`).
+- **Agent Installation Readiness**: Verifies `agentReadiness` to ensure at least one agent is active and provisioned with authorized tools.
 - **Approval/Execution Readiness**: A central master readiness indicator displaying:
-  - `Ready (Full Access)`: Connected with both `read_products` and `write_products` scopes.
-  - `Ready (Read-Only Insights)`: Connected but missing `write_products` scope (mutations disabled).
+  - `Ready (Full Access)`: Both `hasReadProducts` and `hasWriteProducts` are `true`.
+  - `Ready (Read-Only Insights)`: `hasReadProducts` is `true` but `hasWriteProducts` is `false` (mutations disabled).
   - `Not Ready`: Disconnected or invalid connection.
 
 ---
 
 ## 3. Scope and Permission Readiness
 
-We will introduce a dynamic permissions checker inside the backend resolver and shop context middleware:
+To ensure the highest level of security and architectural integrity, we enforce a strict separation between read-only diagnostics and live storefront execution:
 
-### Scope Detection Rules
-1. **`read_products` validation**:
-   - Asserts `read_products` scope is present in the database store connection record.
-   - If missing, the store connection is marked as `INCOMPLETE` (cannot run diagnostic scans).
-2. **`write_products` validation**:
-   - Detects if `write_products` scope is absent in the database record.
-   - If absent:
-     - The store connection is marked as `READ_ONLY_PILOT`.
-     - Approvals decision (`APPROVE` / `REJECT`) remains fully functional (since this is state-only).
-     - Execution endpoints (`/execute` or `/batch-execute`) immediately intercept requests and return a safe, custom blocked code:
-       ```json
-       {
-         "ok": false,
-         "code": "EXECUTION_BLOCKED",
-         "status": "BLOCKED",
-         "error": "Store connection is missing write_products scope. Pilot operations are strictly read-only."
-       }
-       ```
-3. **No Forbidden Scopes**:
-   - Softify **must never** request or reference `read_themes` or `write_themes`.
-4. **No Forbidden Mutation Fields**:
-   - Storefront mutations remain capped strictly to allowlisted text parameters: `title`, `vendor`, `productType`, `status`, `tags`. All other product mutations (e.g. prices, variants, inventory, media, HTML description) remain completely blocked.
+### 1. Authoritative Execution Guardrails
+- **`ApprovedProductMutationExecutorService` remains the sole, authoritative source of truth for all live Shopify execution checks.**
+- The executor pipeline remains the exclusive gateway to communicate with Shopify's GraphQL API. It is solely responsible for performing:
+  - `write_products` scope validation
+  - Tenant and store validation
+  - Sequential claim locking
+  - Structured audit logging
+  - Safe `BLOCKED` / `FAILED` state transitions
+- **No execution preflight path will be introduced on the API routes that bypasses or duplicates these executor checks.** Bypassing `ApprovedProductMutationExecutorService` is strictly prohibited.
+
+### 2. Improved Route Response Mapping
+- The frontend readiness checks (e.g., `GET /api/shop/readiness`) may expose permission indicators to the frontend to warn the merchant or disable UI actions, but backend execution must still go through the executor pipeline.
+- When `/execute` or `/batch-execute` is called, the executor service executes the mutation. If the executor encounters a missing `write_products` scope or throws an `EXECUTION_BLOCKED` error, the route handler maps this outcome in a sanitized, user-safe way to a `BLOCKED` state:
+  ```json
+  {
+    "ok": false,
+    "code": "EXECUTION_BLOCKED",
+    "status": "BLOCKED",
+    "error": "Store connection is missing write_products scope. Mutations are disabled for this connection."
+  }
+  ```
+
+### 3. Absolute Scope Restrictions
+- **No Forbidden Scopes**: Softify **must never** request, store, or reference `read_themes` or `write_themes`.
+- **No Forbidden Mutation Fields**: Storefront mutations remain capped strictly to allowlisted text parameters: `title`, `vendor`, `productType`, `status`, `tags`. All other product mutations (e.g. prices, variants, inventory, media, HTML description) remain completely blocked inside `ApprovedProductMutationExecutorService`.
 
 ---
 
 ## 4. Merchant-Facing UX Readiness
 
-We will refine `src/App.tsx`, `src/components/AgentWorkspace.tsx`, and `src/components/ApprovalQueue.tsx` to elevate merchant confidence:
+We will refine `src/App.tsx`, `src/components/AgentWorkspace.tsx`, and `src/components/ApprovalQueue.tsx` to elevate merchant confidence and support our first production-ready product slice:
 
 1. **Dashboard Onboarding Guide / Checklist**:
    - Render a premium visual checklist showing green checkmarks for completed setups (OAuth, Sync, Scopes) and yellow warnings for incomplete steps.
 2. **Safe Blocked Execution UX**:
-   - If `write_products` is missing, the Execute buttons in the Approval Queue are safely replaced with a premium, amber-tinted **"Mutations Blocked (Read-Only Mode)"** banner explaining that they can authorized decisions but commits are disabled due to missing write access.
+   - If `hasWriteProducts` is `false`, the Execute buttons in the Approval Queue are safely replaced with a premium, amber-tinted **"Mutations Blocked (Read-Only Mode)"** banner explaining that they can authorize decisions but commits are disabled due to missing write access.
 3. **Clear CTA Hierarchy**:
    - Enhance visible contrast differences between safe actions ("Request Merchant Approval" / "Approve State") and storefront commit actions ("Execute Live Commit").
 4. **No Technical Leakage**:
@@ -92,13 +116,14 @@ We will refine `src/App.tsx`, `src/components/AgentWorkspace.tsx`, and `src/comp
 
 ---
 
-## 5. Bulk Operations Pilot Control
+## 5. Bulk Operations Real-Store Control
 
-During the first real-store MVP pilot, we enforce high-impact safety controls:
+During the first real-store readiness deployment, we enforce high-impact safety controls:
 
 1. **Bulk Execute Feature Flag / Toggle**:
-   - Introduce a simple environment-based feature flag (`SOFTIFY_ALLOW_BULK_EXECUTE=true`) to control bulk executes.
-   - If disabled, the bulk execute checkbox controls remain disabled or hidden, requiring merchants to review and execute items one-by-one for maximum caution.
+   - **Frontend UX Gating**: Introduce a Vite environment variable `VITE_SOFTIFY_ALLOW_BULK_EXECUTE` to control the bulk execution UI features in the React frontend. If set to `false`, bulk execute checkboxes and actions are hidden or disabled.
+   - **Backend Guard (Optional)**: If needed for global server-side staging, define a backend environment variable `SOFTIFY_ALLOW_BULK_EXECUTE`.
+   - **Authoritative Boundary**: The frontend flag `VITE_SOFTIFY_ALLOW_BULK_EXECUTE` is strictly for UX-gating (UX controls only). It is **never** relied upon as a security boundary. The backend tenant isolation checks and authorized scope checks inside `ApprovedProductMutationExecutorService` remain the sole authoritative security boundary.
 2. **No Decide-to-Execute Bypasses**:
    - Batch approvals decision (`/batch-decide`) must strictly remain in-memory and state-only. Auto-execution during bulk approvals remains strictly prohibited.
 3. **Explicit Stepper Checklist Visibility**:
@@ -108,7 +133,7 @@ During the first real-store MVP pilot, we enforce high-impact safety controls:
 
 ## 6. Real-Store Safety Checklist
 
-Before any pilot store is authorized to execute its first live write, a multi-stage **Pre-Execution Safety Preflight** must pass on the backend:
+Execution of any storefront mutation must go through the unified `ApprovedProductMutationExecutorService` pipeline, which enforces the following authoritative checklist:
 - [ ] **Auth Active**: Shopify OAuth connection status is verified as `CONNECTED`.
 - [ ] **Scopes Verified**: `read_products` scope is authorized (and `write_products` for execution commits).
 - [ ] **Fresh Data**: Product snapshots have been successfully synced within the last 24 hours.
@@ -135,13 +160,18 @@ For system operators and Cloud Run administrators, we introduce comprehensive vi
 
 ## 8. Security and Guardrail Preservation
 
-We strictly preserve all established architectural guardrails:
-- **No Direct AI Mutations**: Stateless AI providers must never interact with Shopify, write tools, or credentials.
-- **Authoritative Gateway**: The centralized `Tool Gateway` is the single entrance for all tools, intercepting modifications and converting them to approval requests.
+We strictly preserve all established architectural guardrails at all times:
+- **No Auto-Execution**: Automatic optimization or background execution of proposals is strictly prohibited. All storefront commits require explicit, manual merchant execution.
+- **No New Mutation Scope**: Allowed product mutation fields remain strictly capped at `title`, `vendor`, `productType`, `status`, and `tags`.
+- **No Theme Tools**: No theme-related tools or read/write pathways are permitted.
+- **No `read_themes` / `write_themes`**: Theme authorization scopes are completely blocked.
+- **No Forbidden Field Mutations**: No mutations to price, inventory, variants, media, or `descriptionHtml` are allowed.
+- **No Direct AI-to-Shopify Path**: AI models/providers have zero access to storefront APIs or raw mutations.
+- **No Direct AI-to-Tool Execution Path**: Tool execution goes through a centralized gateway that converts mutations into merchant approval requests.
+- **Recovery Endpoints Remain State-Only**: Operator recovery pathways (e.g., `/reset-failed`) only alter database state and never invoke storefront writes.
+- **Analytics Remain Read-Only**: Analytical features remain strictly read-only and cannot trigger mutation workflows.
 - **Tenant Isolation**: Every API endpoint asserts and locks tenant context via authoritative shop domain lookups.
 - **Scrubbed Logs**: Zero raw prompts, token decryption keys, or raw JSON payloads are exposed in telemetry or database audits.
-- **No Theme Tools**: All theme-related write and read routes remain strictly disabled.
-- **Price/Inventory Blocked**: All monetary, inventory, or variants mutations remain completely out-of-scope.
 
 ---
 
