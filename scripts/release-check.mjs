@@ -1577,6 +1577,116 @@ async function runVerification() {
     }
   });
 
+  // Test 58: Phase 10.14 Initial Agent Set & Merchant Workflows static validation and guardrails
+  await check("58. Phase 10.14 Initial Agent Set & Merchant Workflows static validation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+
+    const registryPath = path.resolve(process.cwd(), "src/server/services/agent-registry.service.ts");
+    const registryContent = fs.readFileSync(registryPath, "utf8");
+
+    const routesPath = path.resolve(process.cwd(), "src/server/routes/agents.routes.ts");
+    const routesContent = fs.readFileSync(routesPath, "utf8");
+
+    // 1. Verify exactly the five production-safe active agents are configured in agent registry
+    const initialAgents = [
+      "agent_catalog_health",
+      "agent_product_seo",
+      "agent_catalog_cleanup",
+      "agent_merchandising_insights",
+      "agent_approval_operations"
+    ];
+
+    for (const agentId of initialAgents) {
+      if (!registryContent.includes(`id: "${agentId}"`) && !registryContent.includes(`id: '${agentId}'`)) {
+        throw new Error(`Static Check Violation: Production-safe agent '${agentId}' is missing from registry.`);
+      }
+      if (!routesContent.includes(`agentId: "${agentId}"`) && !routesContent.includes(`agentId: '${agentId}'`)) {
+        throw new Error(`Static Check Violation: Production-safe agent '${agentId}' is missing from routes AGENT_CATALOG.`);
+      }
+    }
+
+    // 2. Assert that legacy/development agents are hidden from display but preserved (not physically deleted)
+    const legacyAgents = [
+      "agent_store_setup",
+      "agent_content",
+      "agent_analytics",
+      "agent_theme_dev",
+      "agent_design",
+      "agent_customer_support",
+      "agent_media_digital"
+    ];
+    for (const legacyId of legacyAgents) {
+      if (!registryContent.includes(legacyId)) {
+        throw new Error(`Static Check Violation: Legacy agent '${legacyId}' must be preserved in registry.`);
+      }
+    }
+
+    // 3. Verify routes catalog filters out legacy/development agents
+    if (!routesContent.includes("filter(a => !(a as any).isLegacy)") && !routesContent.includes("filter(a => !a.isLegacy)")) {
+      throw new Error("Sanitization Shape Violation: Routes AGENT_CATALOG API must filter out legacy agents from public display.");
+    }
+
+    // 4. Verify per-agent field policies in registry
+    // Catalog Health allowed fields: title, vendor, productType, tags. No status.
+    const healthIndex = registryContent.indexOf("id: \"agent_catalog_health\"");
+    const healthSlice = registryContent.slice(healthIndex, registryContent.indexOf("}", healthIndex));
+    const healthFieldsLine = healthSlice.split("\n").find(line => line.includes("allowedFields"));
+    if (healthFieldsLine && healthFieldsLine.includes("status")) {
+      throw new Error("Per-Agent Field Policy Violation: Catalog Health Agent cannot propose status changes.");
+    }
+
+    // Product SEO allowed fields: title, productType, tags. No vendor, status, SEO fields.
+    const seoIndex = registryContent.indexOf("id: \"agent_product_seo\"");
+    const seoSlice = registryContent.slice(seoIndex, registryContent.indexOf("}", seoIndex));
+    const seoFieldsLine = seoSlice.split("\n").find(line => line.includes("allowedFields"));
+    if (seoFieldsLine && (seoFieldsLine.includes("vendor") || seoFieldsLine.includes("status"))) {
+      throw new Error("Per-Agent Field Policy Violation: Product SEO Agent cannot propose vendor or status.");
+    }
+
+    // Catalog Cleanup allowed fields: vendor, productType, status, tags. No title.
+    const cleanupIndex = registryContent.indexOf("id: \"agent_catalog_cleanup\"");
+    const cleanupSlice = registryContent.slice(cleanupIndex, registryContent.indexOf("}", cleanupIndex));
+    const cleanupFieldsLine = cleanupSlice.split("\n").find(line => line.includes("allowedFields"));
+    if (cleanupFieldsLine && (cleanupFieldsLine.includes("title") || cleanupFieldsLine.includes("\"title\"") || cleanupFieldsLine.includes("'title'"))) {
+      throw new Error("Per-Agent Field Policy Violation: Catalog Cleanup Agent cannot propose titles.");
+    }
+
+    // Merchandising Insights: allowedFields is empty and lacks propose tool
+    const merchandisingIndex = registryContent.indexOf("id: \"agent_merchandising_insights\"");
+    const merchandisingSlice = registryContent.slice(merchandisingIndex, registryContent.indexOf("}", merchandisingIndex));
+    if (merchandisingSlice.includes("propose_update")) {
+      throw new Error("Security Violation: Merchandising Insights Agent is read-only and must not have propose tools.");
+    }
+
+    // Approval Operations: lacks propose/decide/execute/recovery tools
+    const operationsIndex = registryContent.indexOf("id: \"agent_approval_operations\"");
+    const operationsSlice = registryContent.slice(operationsIndex, registryContent.indexOf("}", operationsIndex));
+    if (operationsSlice.includes("propose_update")) {
+      throw new Error("Security Violation: Approval Operations Agent is read-only and must not have propose tools.");
+    }
+
+    // 5. Ensure no deferred agents are visible in routes AGENT_CATALOG
+    const deferredAgents = [
+      "Theme Agent", "Pricing Agent", "Inventory Agent", "Media Agent",
+      "Customer Support Agent", "Auto-Optimization Agent", "Customer Data Agent", "Order Mutation Agent"
+    ];
+    for (const term of deferredAgents) {
+      if (routesContent.includes(`name: "${term}"`) || routesContent.includes(`name: '${term}'`)) {
+        throw new Error(`Security Violation: Deferred agent '${term}' is visible in production AGENT_CATALOG.`);
+      }
+    }
+
+    // 6. Ensure no theme scopes or theme tools in agent registry
+    if (registryContent.includes("theme.assets") || registryContent.includes("read_themes") || registryContent.includes("write_themes")) {
+      // Legacy theme dev agents have them in their definitions (disabled), but let's make sure no ACTIVE production agents have them
+      const activeContent = registryContent.slice(registryContent.indexOf("Production-Safe Initial Agent Set"));
+      if (activeContent.includes("read_themes") || activeContent.includes("write_themes") || activeContent.includes("theme.")) {
+        throw new Error("Security Violation: Theme scopes or theme tools are exposed to active production agents.");
+      }
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {

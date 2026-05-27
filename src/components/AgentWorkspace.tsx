@@ -556,29 +556,51 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
             </span>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {catalog.map(agent => {
-                const isTheme = agent.agentId === 'design_review_agent';
+                const isReadOnlyStore = readiness && !readiness.hasWriteProducts;
+                const isMutatingAgent = agent.executionMode !== 'NOT_EXECUTABLE';
                 return (
-                  <div key={agent.agentId} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-2xs flex flex-col justify-between relative overflow-hidden">
+                  <div key={agent.agentId} className="bg-white border border-slate-205 rounded-2xl p-4 shadow-3xs flex flex-col justify-between relative overflow-hidden">
                     <div className="space-y-3">
                       <div className="flex justify-between items-start">
                         <div className="p-2 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-xl">
                           <Cpu className="w-4 h-4" />
                         </div>
                         <span className={`px-2 py-0.5 rounded-full font-mono text-[8px] font-bold uppercase tracking-wider ${
-                          isTheme 
-                            ? 'bg-rose-50 text-rose-700 border border-rose-100' 
+                          !isMutatingAgent 
+                            ? 'bg-amber-50 text-amber-700 border border-amber-100' 
                             : 'bg-indigo-50 text-indigo-700 border border-indigo-100'
                         }`}>
-                          {agent.executionMode}
+                          {!isMutatingAgent ? 'READ ONLY' : 'APPROVAL GATED'}
                         </span>
                       </div>
                       <div>
                         <h3 className="text-xs font-bold text-slate-900">{agent.name}</h3>
-                        <p className="text-3xs text-slate-400 font-mono mt-0.5">v{agent.version} • Scopes: {agent.requiredPermissions.join(', ') || 'none'}</p>
+                        {agent.purpose && (
+                          <p className="text-[10px] font-semibold text-indigo-650 text-indigo-600 mt-0.5">{agent.purpose}</p>
+                        )}
+                        <p className="text-[9px] text-slate-400 font-mono mt-0.5">v{agent.version || '1.0.0'} • Scopes: {agent.requiredPermissions?.join(', ') || 'none'}</p>
                       </div>
                       <p className="text-3xs text-slate-500 leading-snug line-clamp-3">
                         {agent.description}
                       </p>
+                      {agent.allowedFields && agent.allowedFields.length > 0 && (
+                        <div className="space-y-1 pt-1">
+                          <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">Field Policy:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {agent.allowedFields.map(f => (
+                              <span key={f} className="text-[8px] px-1.5 py-0.5 bg-slate-50 border border-slate-200 text-slate-600 font-mono rounded">
+                                {f}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {isReadOnlyStore && isMutatingAgent && (
+                        <div className="px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-[8px] font-semibold font-sans flex items-center gap-1.5 leading-tight">
+                          <AlertCircle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Read-Only Insights Mode Active</span>
+                        </div>
+                      )}
                     </div>
                     <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-[9px] text-slate-400 font-mono mt-3">
                       <span className="flex items-center gap-1 font-bold">
@@ -696,20 +718,21 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
               <div className="flex justify-between items-center border-b border-slate-800 pb-2 text-[10px] text-slate-400">
                 <span className="font-bold flex items-center gap-1.5 uppercase">
                   <Terminal className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                  Diagnostic Logs Monitor
+                  Merchant Workspace Activity & Results Monitor
                 </span>
                 <span className="px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-400 border border-indigo-900/40 font-bold uppercase text-[8px]">
-                  WORKSPACE_SCANNER
+                  WORKSPACE_ACTIVITY
                 </span>
               </div>
               <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-3 text-[10px] text-slate-300 leading-normal my-3 overflow-y-auto max-h-48 whitespace-pre-wrap">
                 {activeConsoleLog}
               </div>
               <div className="text-[9px] text-slate-500 text-right uppercase tracking-wider">
-                Sandboxed Telemetry Scrubber active
+                Sandboxed Safety Telemetry active
               </div>
             </div>
-          </div>          {/* Grid 3: Active Recommendations and Proposed Actions lists */}
+          </div>
+          {/* Grid 3: Active Recommendations and Proposed Actions lists */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* Recommendations block */}
             <div className="space-y-3">

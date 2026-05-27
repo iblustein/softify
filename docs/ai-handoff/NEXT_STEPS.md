@@ -4,56 +4,26 @@ This document outlines the goals, requirements, and scope definitions for the ne
 
 ---
 
-## 1. Completed Milestone: Phase 10.13 — Real-Store Product Readiness
+## 1. Completed Milestone: Phase 10.14 — Initial Agent Set & Merchant Workflows
 
 ### Goal
-Successfully prepared Softify for safe, stable use on a real Shopify store connection. Completed the sanitized readiness diagnostics API, premium dashboard checklist onboarding UI, blocked write warnings, bulk execution flags, and dynamic integration smoke tests.
+Defined and configured the initial active production-safe multi-agent catalog MVP pilot set (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`), enforcing strict allowed fields, hiding legacy development agents, and rendering status change warnings.
 
 ---
 
-## 2. Next Milestone: Phase 10.14 — Initial Agent Set & Merchant Workflows
+## 2. Next Milestone: Phase 10.15 — Production Deployment & Pilot Readiness Checklist
 
 ### Goal
-Define and configure the first production-safe multi-agent catalog MVP pilot set, mapping exact purposes, tool permissions, and merchant control interfaces.
+Deploy Phase 10.14 compiled assets to Google Cloud Run, execute end-to-end merchant workspace validations against a real Shopify store connection, and harden production telemetry and error recovery logs.
 
-### Production-Safe Agent Catalog Mappings
+### Scope
+- **Google Cloud Run Deployment**: Build and push the production Docker container, provision Cloud Run environment variables (API Key, Dev Bypass Secret), and run deployment verification checks.
+- **End-to-End Workspace Validations**: Connect a real Shopify store sandbox, run agent scans, approve proposed actions, and verify live storefront commits.
+- **Hardened Error Recovery Logs**: Refine operational logs for stuck or timeout executions.
 
-#### A. Catalog Health Agent
-- **Purpose**: Scans catalog product snapshots to identify metadata completeness warnings and compute store health scores.
-- **Allowed Tools**: `catalog.insights.health`, `catalog.insights.missing_images`, `catalog.insights.missing_tags`.
-- **Read/Write Behavior**: Read-Only.
-- **Mutation Scope**: None.
-- **Pilot Value**: Instantly exposes catalog taxonomy weaknesses to merchants without storefront modifications.
+---
 
-#### B. Product SEO Agent
-- **Purpose**: Evaluates product title lengths and suggests descriptive qualifiers for semantic discoverability.
-- **Allowed Tools**: `catalog.insights.health` (read-only).
-- **Read/Write Behavior**: Proposal-Only (blocked executable proposed actions).
-- **Mutation Scope**: Capped to safe informational SEO tag/title qualified recommendations inside the database. No live Shopify mutations.
-- **Pilot Value**: Safely highlights search visibility optimization opportunities.
-
-#### C. Catalog Cleanup Agent
-- **Purpose**: Proposes standardized categorization text and appends metadata compliance tags.
-- **Allowed Tools**: `catalog.products.propose_update`.
-- **Read/Write Behavior**: Approval-Gated Execution.
-- **Mutation Scope**: `title`, `vendor`, `productType`, `status`, `tags`.
-- **Pilot Value**: Merchant authorizes taxonomy fixes through the sequential approvals stepper.
-
-#### D. Merchandising Insights Agent
-- **Purpose**: Aggregates catalog stats, listing missing product types or top vendor distributions to identify sales gaps.
-- **Allowed Tools**: `catalog.insights.vendor_summary`.
-- **Read/Write Behavior**: Read-Only.
-- **Mutation Scope**: None.
-- **Pilot Value**: Provides high-level operational metrics for catalog layout planning.
-
-#### E. Approval Operations Agent
-- **Purpose**: Scans historical merchant approvals, providing operational analysis of approved, rejected, and recovered executions.
-- **Allowed Tools**: Read-only access to audit logs and approval history logs.
-- **Read/Write Behavior**: Read-Only.
-- **Mutation Scope**: None.
-- **Pilot Value**: Provides merchants with an aggregated overview of their workflow velocity.
-
-### Explicitly Deferred Agent Scopes (Out-of-Scope)
+## 3. Explicitly Deferred Agent Scopes (Out-of-Scope)
 - **Theme Agent**: (No storefront assets modifications).
 - **Pricing Agent**: (No price mutations).
 - **Inventory Agent**: (No inventory tracking).

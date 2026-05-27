@@ -53,11 +53,11 @@ This document provides a highly durable and centralized technical reference for 
 - **MVP End-to-End Merchant Workflow Hardening**: Complete, robust merchant optimization pipeline (Select Agent → Scan → Propose Revision → Request Approval → Approve → Explicit execution → Live catalog refresh) fully hardened with premium spinner state masks, allowlisted comparison cards, dedicated error recoveries, and dynamic local synchronization.
 - **Production Bulk Operations Foundation**: Multi-select bulk workflows on proposed actions (batch request-approval, batch dismiss) and merchant approvals (batch-decide, batch-execute). Implements strict Phase 1 preflight tenant assertions, 500ms safety throttle delays, sequential dispatch via ApprovedProductMutationExecutorService, individual claim locks, and live sequential progress checklist stepper UX.
 - **Real-Store Product Readiness**: A sanitized, read-only connection diagnostics & readiness API (`GET /api/shop/readiness`), premium store setup readiness dashboard card (`AgentWorkspace.tsx`), explicit execute button overrides and amber-tinted "Mutations Blocked" banners on write scope deficiency (`ApprovalQueue.tsx`), and frontend UX bulk execute gating via `VITE_SOFTIFY_ALLOW_BULK_EXECUTE`.
-- **CI/CD & Production Smoke Tests**: All static release checks (57 tests) and live local/deployed smoke tests (30 tests) pass cleanly.
+- **Initial Agent Set & Merchant Workflows**: Formally defined and configured the initial active production-safe multi-agent catalog (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`), enforcing strict allowed fields, hiding legacy development agents from public display, rendering prominent status change warnings inside left-card badges and drawer panels.
+- **CI/CD & Production Smoke Tests**: All static release checks (58 tests) and live local/deployed smoke tests (31 tests) pass cleanly.
 
 ## Next Recommended Phase
-- **Phase 10.14 — Initial Agent Set & Merchant Workflows**: Define and configure the first production-safe multi-agent catalog MVP pilot set, mapping exact purposes, tool permissions, and merchant control interfaces (e.g., Catalog Health, Product SEO, Catalog Cleanup, Merchandising, Approvals agents).
-- **Preserved Mutation Scope**: The current safe mutation scope (capping edits strictly to approved text fields: `title`, `vendor`, `productType`, `status`, `tags`) remains unchanged.
+- **Phase 10.15 — Production Deployment & Pilot Readiness Checklist**: Deploy Phase 10.14 to Google Cloud Run, execute end-to-end merchant workspace validations against a real Shopify store connection, and harden production telemetry and error recovery logs.
 
 ## Current Non-Goals
 - **No Theme Patching / Theme Tools**: Theme layout/CSS patching is entirely out-of-scope and disabled. No theme tools or read/write theme scopes may be used.

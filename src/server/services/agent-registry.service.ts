@@ -4,6 +4,7 @@ import { writeLog } from "./audit-log.service.js";
 // TODO: Integrate with Gemini Managed Agents API (e.g. creating/configuring persistent remote agents)
 // TODO: Migrate agentsList, getAgents, getAgentById, and updateAgent to AgentInstallationRepository under src/server/repositories/agent-installation.repository.ts
 export let agentsList: Agent[] = [
+  // Legacy / Development Agents (Disabled and Hidden from Catalog Display)
   {
     id: "agent_store_setup",
     name: "Store Setup Agent",
@@ -11,7 +12,8 @@ export let agentsList: Agent[] = [
     allowedTools: ["shopify.getShopInfo", "catalog.products.propose_update", "shopify.shop.read", "shopify.products.read"],
     requiredScopes: ["read_content", "write_content", "read_products"],
     riskLevel: "Medium",
-    enabled: true,
+    enabled: false,
+    isLegacy: true,
     avatarColor: "bg-blue-600 text-white"
   },
   {
@@ -21,7 +23,8 @@ export let agentsList: Agent[] = [
     allowedTools: ["shopify.getProducts", "catalog.products.propose_update", "shopify.products.read"],
     requiredScopes: ["write_products", "read_products"],
     riskLevel: "Low",
-    enabled: true,
+    enabled: false,
+    isLegacy: true,
     avatarColor: "bg-emerald-600 text-white"
   },
   {
@@ -31,7 +34,8 @@ export let agentsList: Agent[] = [
     allowedTools: ["shopify.getOrders", "shopify.getSalesSummary", "shopify.shop.read", "shopify.products.read"],
     requiredScopes: ["read_orders", "read_analytics"],
     riskLevel: "Low",
-    enabled: true,
+    enabled: false,
+    isLegacy: true,
     avatarColor: "bg-violet-600 text-white"
   },
   {
@@ -41,7 +45,8 @@ export let agentsList: Agent[] = [
     allowedTools: ["shopify.getShopInfo"],
     requiredScopes: ["read_themes", "write_themes"],
     riskLevel: "High",
-    enabled: true,
+    enabled: false,
+    isLegacy: true,
     avatarColor: "bg-indigo-600 text-white"
   },
   {
@@ -51,7 +56,8 @@ export let agentsList: Agent[] = [
     allowedTools: ["shopify.getShopInfo"],
     requiredScopes: ["read_themes", "write_themes"],
     riskLevel: "High",
-    enabled: true,
+    enabled: false,
+    isLegacy: true,
     avatarColor: "bg-amber-600 text-white"
   },
   {
@@ -61,7 +67,8 @@ export let agentsList: Agent[] = [
     allowedTools: ["shopify.getOrders", "shopify.getProducts", "shopify.shop.read"],
     requiredScopes: ["read_orders", "read_customers"],
     riskLevel: "Low",
-    enabled: true,
+    enabled: false,
+    isLegacy: true,
     avatarColor: "bg-sky-600 text-white"
   },
   {
@@ -71,8 +78,76 @@ export let agentsList: Agent[] = [
     allowedTools: ["shopify.getProducts", "catalog.products.propose_update"],
     requiredScopes: ["read_products", "write_products"],
     riskLevel: "Medium",
-    enabled: true,
+    enabled: false,
+    isLegacy: true,
     avatarColor: "bg-rose-600 text-white"
+  },
+
+  // Production-Safe Initial Agent Set
+  {
+    id: "agent_catalog_health",
+    name: "Catalog Health Agent",
+    systemInstruction: "You are the Catalog Health Agent. You identify catalog quality issues, missing images, missing vendors, or missing product data. You propose title, vendor, productType, and tags updates only (no status changes).",
+    allowedTools: ["catalog.insights.health", "catalog.insights.missing_images", "catalog.products.propose_update", "shopify.products.read"],
+    requiredScopes: ["read_products"],
+    riskLevel: "Medium",
+    enabled: true,
+    isLegacy: false,
+    purpose: "Identify catalog quality issues and missing product data.",
+    allowedFields: ["title", "vendor", "productType", "tags"],
+    avatarColor: "bg-blue-600 text-white"
+  },
+  {
+    id: "agent_product_seo",
+    name: "Product SEO Agent",
+    systemInstruction: "You are the Product SEO Agent. You improve product discoverability and metadata quality by proposing title, productType, and tags updates only. You must not write or propose SEO metafields, meta title, meta description, handle/URL, or descriptionHtml.",
+    allowedTools: ["catalog.insights.health", "catalog.products.propose_update", "shopify.products.read"],
+    requiredScopes: ["read_products"],
+    riskLevel: "Low",
+    enabled: true,
+    isLegacy: false,
+    purpose: "Improve product discoverability and metadata quality.",
+    allowedFields: ["title", "productType", "tags"],
+    avatarColor: "bg-emerald-600 text-white"
+  },
+  {
+    id: "agent_catalog_cleanup",
+    name: "Catalog Cleanup Agent",
+    systemInstruction: "You are the Catalog Cleanup Agent. You normalize messy catalog hierarchies, casing, spelling, and archiving status tags. You can propose vendor, productType, status, and tags updates only (no titles). Status changes require high-impact merchant warning flags.",
+    allowedTools: ["catalog.insights.vendor_summary", "catalog.products.propose_update", "shopify.products.read"],
+    requiredScopes: ["read_products"],
+    riskLevel: "Low",
+    enabled: true,
+    isLegacy: false,
+    purpose: "Normalize catalog structure and reduce messy taxonomy.",
+    allowedFields: ["vendor", "productType", "status", "tags"],
+    avatarColor: "bg-violet-600 text-white"
+  },
+  {
+    id: "agent_merchandising_insights",
+    name: "Merchandising Insights Agent",
+    systemInstruction: "You are the Merchandising Insights Agent. You provide read-only catalog summaries, vendor distributions, and catalog health matrices. You have zero mutation tools and cannot propose updates.",
+    allowedTools: ["catalog.insights.vendor_summary", "shopify.products.read"],
+    requiredScopes: ["read_products"],
+    riskLevel: "Low",
+    enabled: true,
+    isLegacy: false,
+    purpose: "Provide read-only business and catalog insights.",
+    allowedFields: [],
+    avatarColor: "bg-amber-600 text-white"
+  },
+  {
+    id: "agent_approval_operations",
+    name: "Approval Operations Agent",
+    systemInstruction: "You are the Approval Operations Agent. You fetch audit logs, merchant approvals, and analytics summaries to help merchants manage workflows, retry failed executions, and understand execution blocks.",
+    allowedTools: ["shopify.products.read"],
+    requiredScopes: [],
+    riskLevel: "Low",
+    enabled: true,
+    isLegacy: false,
+    purpose: "Help merchants understand approval queues, execution blocks, and retry steps.",
+    allowedFields: [],
+    avatarColor: "bg-sky-600 text-white"
   }
 ];
 

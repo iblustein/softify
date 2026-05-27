@@ -1455,8 +1455,8 @@ async function runSuite() {
     const resCat = await fetch(catUrl);
     await checkResponse(resCat);
     const catalog = await resCat.json();
-    if (!Array.isArray(catalog) || catalog.length !== 4) {
-      throw new Error(`Expected catalog to be an array of 4 agents, got: ${JSON.stringify(catalog)}`);
+    if (!Array.isArray(catalog) || catalog.length !== 5) {
+      throw new Error(`Expected catalog to be an array of 5 agents, got: ${JSON.stringify(catalog)}`);
     }
 
     // 2. Trigger run for seo_aeo_agent in RECOMMEND mode
@@ -2169,6 +2169,147 @@ async function runSuite() {
     }
 
     console.log("   [TEST W] Successfully verified readiness diagnostics GET endpoint schema, state-only decision execution immunity, blocked execute gating response mapping, and tenant isolation locks.");
+  });
+
+  // Test X: Phase 10.14 Initial Agent Set & Merchant Workflows integration check
+  await check("X. Phase 10.14 Initial Agent Set & Merchant Workflows integration check", async () => {
+    const timestamp = Date.now();
+
+    // 1. Fetch GET /api/agents/catalog and verify active agents list (legacy omitted, five active present)
+    const resCatalog = await fetch(`${baseUrl}/api/agents/catalog?t=${timestamp}`);
+    await checkResponse(resCatalog);
+    const catalog = await resCatalog.json();
+
+    const expectedActive = [
+      "agent_catalog_health",
+      "agent_product_seo",
+      "agent_catalog_cleanup",
+      "agent_merchandising_insights",
+      "agent_approval_operations"
+    ];
+
+    for (const id of expectedActive) {
+      const match = catalog.find(a => a.agentId === id);
+      if (!match) {
+        throw new Error(`Expected agent '${id}' to be active and visible in the production catalog response.`);
+      }
+      if (match.isLegacy === true) {
+        throw new Error(`Expected active agent '${id}' to not be marked as legacy in the response.`);
+      }
+    }
+
+    const legacyAgents = [
+      "agent_store_setup", "agent_content", "agent_analytics", "agent_theme_dev", "agent_design", "agent_customer_support", "agent_media_digital", "product_intelligence_agent", "seo_aeo_agent", "content_agent", "design_review_agent"
+    ];
+    for (const legacy of legacyAgents) {
+      if (catalog.some(a => a.agentId === legacy)) {
+        throw new Error(`Security Violation: Legacy agent '${legacy}' is visible in production catalog response.`);
+      }
+    }
+
+    // 2. Trigger dynamic simulation runs for mutating agents and check per-agent field policies
+    // A. Product SEO Agent: allowedFields: title, productType, tags only (no vendor/status)
+    const resSeoRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent_product_seo",
+        mode: "DRAFT",
+        scope: { type: "SHOP" }
+      })
+    });
+    await checkResponse(resSeoRun);
+    const seoRun = await resSeoRun.json();
+
+    const resSeoActs = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&agentId=agent_product_seo&t=${timestamp}`);
+    await checkResponse(resSeoActs);
+    const seoActs = await resSeoActs.json();
+    const activeSeoActs = seoActs.filter(a => a.agentRunId === seoRun.id);
+
+    for (const act of activeSeoActs) {
+      const changes = act.changes || {};
+      if (changes.vendor !== undefined || changes.status !== undefined) {
+        throw new Error(`Per-Agent Field Policy Violation: Product SEO Agent proposed vendor or status fields: ${JSON.stringify(changes)}`);
+      }
+      if (changes.title === undefined && changes.productType === undefined && changes.tags === undefined) {
+        throw new Error("Expected Product SEO Agent proposed changes to contain title, productType or tags.");
+      }
+    }
+
+    // B. Catalog Cleanup Agent: allowedFields: vendor, productType, status, tags only (no title)
+    const resCleanupRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent_catalog_cleanup",
+        mode: "DRAFT",
+        scope: { type: "SHOP" }
+      })
+    });
+    await checkResponse(resCleanupRun);
+    const cleanupRun = await resCleanupRun.json();
+
+    const resCleanupActs = await fetch(`${baseUrl}/api/proposed-actions?shop=${encodeURIComponent(shop)}&agentId=agent_catalog_cleanup&t=${timestamp}`);
+    await checkResponse(resCleanupActs);
+    const cleanupActs = await resCleanupActs.json();
+    const activeCleanupActs = cleanupActs.filter(a => a.agentRunId === cleanupRun.id);
+
+    for (const act of activeCleanupActs) {
+      const changes = act.changes || {};
+      if (changes.title !== undefined) {
+        throw new Error(`Per-Agent Field Policy Violation: Catalog Cleanup Agent proposed title field: ${JSON.stringify(changes)}`);
+      }
+      if (changes.vendor === undefined && changes.productType === undefined && changes.status === undefined && changes.tags === undefined) {
+        throw new Error("Expected Catalog Cleanup Agent proposed changes to contain vendor, productType, status, or tags.");
+      }
+    }
+
+    // C. Merchandising Insights & Approval Operations: Read-only, no proposals
+    const resInsightsRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent_merchandising_insights",
+        mode: "DRAFT",
+        scope: { type: "SHOP" }
+      })
+    });
+    await checkResponse(resInsightsRun);
+    const insightsRun = await resInsightsRun.json();
+    if (insightsRun.proposedActionCount !== 0) {
+      throw new Error(`Security Violation: Read-only Merchandising Insights Agent generated proposed actions: ${insightsRun.proposedActionCount}`);
+    }
+
+    const resOpsRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent_approval_operations",
+        mode: "DRAFT",
+        scope: { type: "SHOP" }
+      })
+    });
+    await checkResponse(resOpsRun);
+    const opsRun = await resOpsRun.json();
+    if (opsRun.proposedActionCount !== 0) {
+      throw new Error(`Security Violation: Read-only Approval Operations Agent generated proposed actions: ${opsRun.proposedActionCount}`);
+    }
+
+    // 3. Mismatched tenant contexts on agent runs post request returns 403 Forbidden
+    const resMismatchRun = await fetch(`${baseUrl}/api/agent-runs?shop=${encodeURIComponent(shop)}&organizationId=mismatch-org-999&t=${timestamp}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        agentId: "agent_product_seo",
+        mode: "DRAFT",
+        scope: { type: "SHOP" }
+      })
+    });
+    if (resMismatchRun.status !== 403) {
+      throw new Error(`Expected HTTP 403 for mismatched org connection in agent run, got: ${resMismatchRun.status}`);
+    }
+
+    console.log("   [TEST X] Successfully verified dynamic GET /api/agents/catalog exclusions, per-agent allowed field schemas, read-only agent mutation immunity, and strict tenant security isolation.");
   });
 
   // Summary Printing

@@ -21,6 +21,9 @@ export interface Agent {
   riskLevel: RiskLevel;
   enabled: boolean;
   avatarColor: string;
+  purpose?: string;
+  allowedFields?: string[];
+  isLegacy?: boolean;
 }
 
 export interface ToolDefinition {

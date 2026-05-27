@@ -18,7 +18,7 @@ This index acts as the central directory for Softify's completed and planned dev
 | **10.11** | MVP End-to-End Merchant Workflow Hardening | **Completed** | Hardened manual optimization loop, onboarding empty states, launcher overlays, allowlisted compare panels, explicit manual execution pipeline, operator recovery cues | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.12** | Production Bulk Operations Foundation | **Completed** | Throttled bulk approvals, workspace batch dismissals, batch request approvals, sequential execution with 500ms safety delays, preflight tenant checks | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.13** | Real-Store Product Readiness | **Completed** | Sanitized shop readiness API, premium checklist onboarding UI, amber blocked banners, bulk UX feature flags, and e2e integration smoke validation | 100% Passed (Pre-deploy checks & smoke tests) |
-| **10.14** | Initial Agent Set & Merchant Workflows | **Planned** | Core production-safe agents (Health, SEO, Cleanup, Merchandising, Approvals), behavior mappings, and allowed tools | Planned |
+| **10.14** | Initial Agent Set & Merchant Workflows | **Completed** | Defined five active production-safe agents in registry/catalog, hid legacy agents, enforced strict per-agent field allowed lists, added status change card badges & warnings | 100% Passed (Pre-deploy checks & smoke tests) |
 
 ## Ongoing Workflow & Maintenance Rules
 For every future phase, Antigravity must create or update the phase folder before and after implementation.

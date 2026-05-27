@@ -269,8 +269,13 @@ export default function ApprovalQueue({
                         </span>
                       </div>
 
-                      <h3 className="font-bold text-slate-700 mt-2 line-clamp-1">
+                      <h3 className="font-bold text-slate-700 mt-2 line-clamp-1 flex flex-wrap items-center gap-1">
                         {item.details.title}
+                        {item.details?.fields?.status && (
+                          <span className="inline-flex items-center text-[7px] font-mono px-1 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 uppercase font-bold tracking-wider shrink-0">
+                            Status Change Warning
+                          </span>
+                        )}
                       </h3>
 
                       <div className="flex items-center justify-between border-t border-slate-100 mt-3 pt-2 text-4xs text-slate-400">
@@ -318,6 +323,16 @@ export default function ApprovalQueue({
                     "{selectedItem.details.summary}"
                   </p>
                 </div>
+
+                {selectedItem.details?.fields?.status && (
+                  <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-3xs text-amber-900 flex items-start gap-2 leading-relaxed shadow-3xs">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-amber-950 uppercase block text-[9px] mb-0.5">High-Impact Storefront Visibility Action</span>
+                      Warning: Shifting Status to <strong>{selectedItem.details.fields.status}</strong> will instantly alter visibility on your storefront and live checkout interfaces.
+                    </div>
+                  </div>
+                )}
 
                 {/* Side by side visual code diff comparison */}
                 <div className="space-y-2">
