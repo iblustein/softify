@@ -1,4 +1,4 @@
-# Implementation Plan — Phase 10.14: Initial Agent Set & Merchant Workflows
+# Implementation Plan — Phase 10.14: Initial Agent Set & Merchant Workflows (Refined)
 
 This phase prepares **Softify** for its first real-store product slice by defining, configuring, and verifying the **initial production-safe agent set** and **merchant workflows**. Rather than expanding raw write/mutation scopes, Phase 10.14 focuses on catalog visibility, informational SEO, clean operational boundaries, and a highly understandable user experience.
 
@@ -210,25 +210,23 @@ We strictly enforce all architectural boundaries:
 
 We break Phase 10.14 implementation into sequential, verifiable steps:
 
-### Step 1: Update Agent Registry
+### Step 1: Update Agent Registry & Gating
 - Modify `src/server/services/agent-registry.service.ts` to replace placeholder agents with the initial production-safe set (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`).
-- Define exact system instructions, allowed tools lists, required scopes, risk levels, and color identifiers.
-- Disable, hide, or mark old placeholder legacy agents as unavailable for production catalog display; **do not physically delete them** from the codebase.
+- Mark placeholder legacy agents disabled and filter them from display; **do not physically delete them**.
+- Strictly enforce `agent.isLegacy` blocking in `POST /api/agent-runs` inside `src/server/routes/agents.routes.ts`.
 
 ### Step 2: Integrate UI Component Cards
-- Update `src/components/AgentWorkspace.tsx` to read the new agent set dynamically from the registry API.
-- Render tailored badge layouts showcasing each agent's purpose, risk level, and mode (`Read-Only`, `Proposal-Only`, or `Approval-Gated`).
-- Implement connection-aware badge displays disabling mutating actions and rendering re-authorization recovery cues if missing `write_products`.
+- Update `src/components/AgentWorkspace.tsx` to read the new agent set dynamically and render tailored badges.
+- Disable mutating actions and render re-authorization cta if missing `write_products` scope.
 
 ### Step 3: Refine Queue Blocked Warnings
-- Update `src/components/ApprovalQueue.tsx` to handle read-only warning overlays and disabled CTA buttons dynamically based on the active store readiness context.
-- Render high-impact warnings and confirmation prompts for proposals that modify `status` fields.
+- Update `src/components/ApprovalQueue.tsx` to disable buttons and display mutations blocked overlays.
 
 ### Step 4: Write Automated Pre-Deployment Checks
 - Append Test 58 to `scripts/release-check.mjs` ensuring initial agent registries are correct and no forbidden theme scopes or price/inventory mutations are allowed.
 
 ### Step 5: Add Smoke Test Assertions
-- Append Test X to `scripts/smoke-test.mjs` validating that the `/api/agents` endpoint serves the safe catalog, that read-only agents require no write scopes, and that tenant-level mismatches are locked correctly.
+- Append Test X to `scripts/smoke-test.mjs` validating `/api/agents` and gating.
 
 ---
 
@@ -236,28 +234,38 @@ We break Phase 10.14 implementation into sequential, verifiable steps:
 
 Add static validation assertions in `release-check.mjs`:
 - Confirm that the agent list in `agent-registry.service.ts` contains exactly the five approved initial agents.
-- Assert that legacy/development agents are marked disabled/unavailable and are hidden from production display (not physically deleted).
+- Assert that legacy/development agents are marked disabled and are hidden.
 - Verify that the Product SEO Agent cannot propose `vendor` or `status` fields.
 - Verify that the Catalog Cleanup Agent cannot propose `title` fields.
 - Verify that the Merchandising Insights Agent possesses no proposal tool capability.
-- Verify that the Approval Operations Agent is completely read-only and lacks any `decide`, `execute`, or recovery mutation capabilities.
-- Assert that no theme tools (`theme.assets.*`) or theme scopes (`read_themes`, `write_themes`) are referenced in any agent definition.
+- Verify that the Approval Operations Agent is completely read-only.
 - Confirm that all mutating agents map strictly to approved text mutation fields (`title`, `vendor`, `productType`, `status`, `tags`).
 - Ensure no deferred agents are visible in the production agent catalog.
+- **Hardening Assertions**: Statically verify that `src/server/index.ts`, `src/server/routes/agents.routes.ts`, and `src/server/routes/proposed-actions.routes.ts` contain absolutely NO test fixture strings or testing backdoors.
 
 ---
 
-## 12. Proposed Smoke-Test Plan (Test X)
+## 12. Proposed Smoke-Test Plan (Test X & Ephemeral Isolation)
 
 Implement dynamic integration checks in `smoke-test.mjs`:
-- Fetch `GET /api/agents` and verify the response array contains the initial production-safe set with correct schemas and IDs, with legacy agents correctly omitted from production display lists.
-- Verify that the Product SEO Agent proposal generation includes only `title`, `productType`, and `tags` (no `vendor` or `status`).
-- Verify that the Catalog Cleanup Agent proposal generation does not include the `title` field.
-- Verify that read-only agents (`Merchandising Insights` and `Approval Operations`) do not and cannot create proposed actions.
-- Verify that attempting to perform a decide, execute, or recovery action through the Approval Operations Agent scope is blocked.
-- Verify that proposals including status changes are flagged with higher-impact warnings inside the API responses.
-- Assert that passing mismatched shop/org contexts returns `403 Forbidden` on agent actions.
-- Confirm that no auto-execution occurs.
+- **Module Imports Isolation**:
+  - The script will import `src/server/app.ts` and repository provider/helpers.
+  - It will **not** import `src/server/index.ts`, avoiding standard runtime bootstrap.
+- **Dynamic Ephemeral In-Process Server (Memory Mode)**:
+  - If in memory mode, boot the Express `app` directly in-process on an ephemeral port (`app.listen(0)`).
+  - Dynamically read the port using `server.address().port` and update `baseUrl = "http://127.0.0.1:<assignedPort>"`.
+  - Seed the database (mock connections, recovery approvals, and uniquely generated invalid proposed action fixtures) in-process using `getRepositories()`.
+  - Clean up and shutdown the in-process server in a `finally` block.
+- **Strict Firestore Seeding Guardrails**:
+  - Seeding invalid test fixtures directly into Firestore is explicitly **opt-in** and strictly test-environment guarded.
+  - To enable, require setting `SOFTIFY_ALLOW_FIRESTORE_SMOKE_FIXTURES=true`, checking that the target is a test sandbox, generating unique keys, and cleaning up in a `finally` block.
+  - If these are not met, skip Firestore fixture seeding with a clean warning message.
+- **Assertions**:
+  - Verify that the Product SEO Agent proposal fails bridge validation when it includes `vendor` or `status`.
+  - Verify that the Catalog Cleanup Agent proposal fails bridge validation when it includes `title`.
+  - Verify that read-only agents proposed actions fail bridge validation.
+  - Confirm that legacy agent run execution is blocked with 403.
+  - Confirm that mismatched shop/org contexts return `403 Forbidden` on agent actions.
 
 ---
 
