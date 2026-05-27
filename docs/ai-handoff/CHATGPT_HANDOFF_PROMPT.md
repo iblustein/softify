@@ -83,7 +83,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.13 — MVP Product Readiness & Pilot Hardening. The goal is to prepare Softify for safe, stable use on a real Shopify store pilot by building connection status indicators, scope authorization checkers (especially `write_products`), store readiness checklists, user-friendly state mapping, bulk UX polish, feature flagging, and pilot first-run onboarding guides. Implementation must begin by drafting the implementation plan only.
+We are ready to initiate Phase 10.13 — Real-Store Product Readiness. The goal is to prepare Softify for safe, stable use on a real Shopify store pilot by building connection status indicators, scope authorization checkers (especially `write_products`), store readiness checklists, user-friendly state mapping, bulk UX polish, feature flagging, and pilot first-run onboarding guides. Implementation must begin by drafting the implementation plan only.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

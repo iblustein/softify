@@ -4,7 +4,7 @@ This document outlines the goals, requirements, and scope definitions for the ne
 
 ---
 
-## 1. Next Milestone: Phase 10.13 — MVP Product Readiness & Pilot Hardening
+## 1. Next Milestone: Phase 10.13 — Real-Store Product Readiness
 
 ### Goal
 Prepare Softify for safe, stable use on a real Shopify store pilot. Focus on clear tenant/oauth/scope visibility, permission checks, storefront write warnings, bulk execution flags, and comprehensive merchant diagnostics.
