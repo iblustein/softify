@@ -8,7 +8,10 @@ This document provides a detailed technical walk-through of the features impleme
 
 ### 1. Connection Diagnostics & Readiness API
 - **Sanitized Diagnostics endpoint**: Added `GET /api/shop/readiness` inside a new route file [readiness.routes.ts](file:///c:/Projects/softify/softify/src/server/routes/readiness.routes.ts) mounted under `/api` in `app.ts`.
-- **Allowlisted Response Schema**: The endpoint returns a fully sanitized, allowlisted JSON payload strictly driving frontend readiness checklists without exposing any sensitive tokens, secrets, or internal OAuth keys.
+- **Tenant-Safe Context Resolution**: Resolves store connection safely using query parameters (`shop` and `organizationId`). Contains no hardcoded demo tenant fallbacks. Returns `400 Bad Request` on empty parameters, `403 Forbidden` early reject if there is an organization mismatch, and a safe, non-crashing disconnected default if the shop is not found.
+- **Allowlisted Response Schema**: The endpoint returns a fully sanitized, allowlisted JSON payload strictly driving frontend readiness checklists without exposing any sensitive tokens, secrets, decrypted credentials, or internal OAuth keys.
+  - `shopDomain` (string)
+  - `storeConnectionId` (string)
   - `hasReadProducts` (boolean)
   - `hasWriteProducts` (boolean)
   - `canRunInsights` (boolean)

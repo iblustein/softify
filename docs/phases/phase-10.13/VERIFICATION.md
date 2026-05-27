@@ -12,6 +12,7 @@ This document outlines the testing and validation procedures used to verify the 
   - Asserted zero theme scopes (`read_themes`, `write_themes`) or unallowlisted mutation fields (`price`, `inventory`, `variants`, `descriptionHtml`) exist in the executor pipeline.
   - Validated that approvals route cleanly handles `EXECUTION_BLOCKED` errors and returns the customized, sanitized response body.
   - Verified `GET /api/shop/readiness` route exists, is mounted, and is fully scrubbed of secrets/tokens.
+  - Verified that readiness route code contains zero hardcoded `demo-org-id` or `store-luminary` IDs, implements strict 403 Access Denied organizational mismatch checking, remains entirely read-only, and references no theme scopes.
 
 *Verification command:*
 ```bash
@@ -23,10 +24,13 @@ node scripts/release-check.mjs
 
 ### Dynamic Integration Smoke Tests (`scripts/smoke-test.mjs`)
 - **Test W: Phase 10.13 Real-Store Product Readiness integration check** was successfully added and verified:
-  - Verified `/api/shop/readiness` returns all required sanitized checklist fields and connectionStatus.
+  - Verified `/api/shop/readiness` returns all required sanitized checklist fields (including `shopDomain` and `storeConnectionId`) and connectionStatus.
+  - Verified that requesting readiness diagnostics with a mismatched organizationId returns `403 Forbidden`.
+  - Verified that requesting readiness without providing shop or organizationId returns `400 Bad Request` with `MISSING_TENANT_CONTEXT`.
   - Confirmed that trying to execute storefront commits on connections lacking `write_products` (e.g. `store-scope-mismatch`) returns a HTTP `400 Bad Request` with `code: "EXECUTION_BLOCKED"` and status `"BLOCKED"`.
   - Asserted that state-only decisions (`/decide`) and diagnostic scans still function flawlessly even on write-deficient store connections.
   - Validated strict tenant isolation blocks (`403 Forbidden`) on execution endpoints when organizationId is mismatched.
+  - Confirmed that missing `write_products` is represented as a safe, non-crashing readiness state and read-only insights continue to function when `read_products` exists.
 
 *Verification command:*
 ```bash

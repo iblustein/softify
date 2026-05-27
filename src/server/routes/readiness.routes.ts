@@ -7,37 +7,49 @@ const router = Router();
 
 router.get("/shop/readiness", async (req, res) => {
   try {
-    const { shop } = req.query;
-    const shopDomain = typeof shop === "string" ? shop : undefined;
+    const { shop, organizationId } = req.query;
+    const shopDomain = typeof shop === "string" && shop.trim() !== "" ? shop.trim() : undefined;
+    const orgId = typeof organizationId === "string" && organizationId.trim() !== "" ? organizationId.trim() : undefined;
     
+    if (!shopDomain && !orgId) {
+      return res.status(400).json({
+        error: "Missing tenant context: either 'shop' or 'organizationId' must be provided.",
+        code: "MISSING_TENANT_CONTEXT"
+      });
+    }
+
     const repos = getRepositories();
     let connection = null;
 
     if (shopDomain) {
       const cleanShop = normalizeShopDomain(shopDomain);
       connection = await repos.stores.getStoreConnectionByUrl(cleanShop);
-    }
 
-    if (!connection) {
-      // Fallback similar to shop.service.ts
-      const connections = await repos.stores.getStoreConnectionsByOrganizationId("demo-org-id");
-      connection = connections.find(c => c.status === "CONNECTED") || 
-                   connections.find(c => c.status === "REAUTH_REQUIRED") ||
-                   connections.find(c => c.status === "DISCONNECTED") ||
-                   connections[0] || null;
-    }
+      if (!connection) {
+        return res.json({
+          hasReadProducts: false,
+          hasWriteProducts: false,
+          canRunInsights: false,
+          canExecuteMutations: false,
+          missingRequiredScopes: ["read_products", "write_products"],
+          connectionStatus: "DISCONNECTED",
+          syncFreshness: null,
+          snapshotCount: 0,
+          agentReadiness: "NOT_READY"
+        });
+      }
 
-    if (!connection) {
-      return res.json({
-        hasReadProducts: false,
-        hasWriteProducts: false,
-        canRunInsights: false,
-        canExecuteMutations: false,
-        missingRequiredScopes: ["read_products", "write_products"],
-        connectionStatus: "DISCONNECTED",
-        syncFreshness: null,
-        snapshotCount: 0,
-        agentReadiness: "NOT_READY"
+      if (orgId && connection.organizationId !== orgId) {
+        return res.status(403).json({
+          error: "Access denied. Tenant context mismatch.",
+          code: "ACCESS_DENIED"
+        });
+      }
+    } else {
+      // organizationId provided without shop
+      return res.status(400).json({
+        error: "Missing shop context. Cannot resolve store readiness diagnostics.",
+        code: "MISSING_SHOP_CONTEXT"
       });
     }
 
@@ -59,6 +71,8 @@ router.get("/shop/readiness", async (req, res) => {
 
     // Strictly sanitised and allowlisted JSON payload
     res.json({
+      shopDomain: connection.storeUrl,
+      storeConnectionId: connection.id,
       hasReadProducts,
       hasWriteProducts,
       canRunInsights,
@@ -70,7 +84,11 @@ router.get("/shop/readiness", async (req, res) => {
       agentReadiness
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Avoid returning raw error.message directly to merchant-facing clients
+    res.status(500).json({
+      error: "An internal server error occurred while retrieving readiness status.",
+      code: "INTERNAL_SERVER_ERROR"
+    });
   }
 });
 

@@ -2030,6 +2030,26 @@ async function runSuite() {
       throw new Error(`Expected connectionStatus to be CONNECTED, got: ${dataReadiness.connectionStatus}`);
     }
 
+    // 1.1 Verify GET /api/shop/readiness with shop + mismatched organizationId returns 403
+    const resReadinessMismatch = await fetch(`${baseUrl}/api/shop/readiness?shop=${encodeURIComponent(shop)}&organizationId=wrong-org-id&t=${timestamp}`);
+    if (resReadinessMismatch.status !== 403) {
+      throw new Error(`Expected HTTP 403 for mismatched tenant context on readiness route, got: ${resReadinessMismatch.status}`);
+    }
+    const readinessMismatchData = await resReadinessMismatch.json();
+    if (readinessMismatchData.code !== "ACCESS_DENIED") {
+      throw new Error(`Expected code ACCESS_DENIED on mismatched tenant, got: ${readinessMismatchData.code}`);
+    }
+
+    // 1.2 Verify GET /api/shop/readiness without shop and without organizationId returns 400
+    const resReadinessEmpty = await fetch(`${baseUrl}/api/shop/readiness?t=${timestamp}`);
+    if (resReadinessEmpty.status !== 400) {
+      throw new Error(`Expected HTTP 400 for empty request on readiness route, got: ${resReadinessEmpty.status}`);
+    }
+    const readinessEmptyData = await resReadinessEmpty.json();
+    if (readinessEmptyData.code !== "MISSING_TENANT_CONTEXT") {
+      throw new Error(`Expected code MISSING_TENANT_CONTEXT, got: ${readinessEmptyData.code}`);
+    }
+
     // 2. Verify readiness endpoint for scope-mismatch connection specifically
     if (isInMemory) {
       const mismatchShop = "scope-mismatch.myshopify.com";
@@ -2038,6 +2058,7 @@ async function runSuite() {
       const dataMismatchReadiness = await resMismatchReadiness.json();
       scanForForbiddenKeys(dataMismatchReadiness);
 
+      // Verify missing write_products is represented as safe readiness state (not crashing)
       if (dataMismatchReadiness.hasWriteProducts !== false) {
         throw new Error("Expected hasWriteProducts to be false for scope-mismatch connection.");
       }
@@ -2046,6 +2067,11 @@ async function runSuite() {
       }
       if (!dataMismatchReadiness.missingRequiredScopes.includes("write_products")) {
         throw new Error("Expected missingRequiredScopes to contain 'write_products'.");
+      }
+      
+      // Verify read-only insights remain allowed when read_products exists
+      if (dataMismatchReadiness.canRunInsights !== true) {
+        throw new Error("Expected canRunInsights to be true for scope-mismatch connection (since read_products scope exists).");
       }
 
       // 3. Verify safe execution block response mapping when missing write scope

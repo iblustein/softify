@@ -13,7 +13,8 @@ These notes provide security and architectural review parameters for the Lead Ar
 
 ### 2. Read-Only Diagnostic Gating
 - The readiness diagnostics endpoint `GET /api/shop/readiness` is strictly read-only and has zero ability to perform or alter storefront state.
-- All returned payload parameters are sanitized and allowlisted: no raw OAuth access tokens, decryption keys, secrets, raw Shopify API headers/bodies, or internal system metadata are exposed.
+- **Tenant Isolation Safety**: Contains zero hardcoded demo-org-id or test store fallbacks in production runtime paths. Requires valid `shop` and/or `organizationId` parameter context, enforcing absolute tenant boundary validation and returning `403 Forbidden` early on organizational mismatches.
+- All returned payload parameters are sanitized and allowlisted: no raw OAuth access tokens, decryption keys, secrets, raw Shopify API headers/bodies, or internal system metadata are exposed. Raw catch errors are fully sanitized before being returned.
 
 ### 3. Bulk Operations UX Gating
 - The Vite environment variable `VITE_SOFTIFY_ALLOW_BULK_EXECUTE` gates the visual rendering of bulk controls in the React frontend.

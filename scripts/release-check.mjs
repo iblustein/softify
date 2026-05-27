@@ -1549,6 +1549,32 @@ async function runVerification() {
         throw new Error(`Security Violation: Potential token/secret exposure inside readiness.routes.ts for '${exp}'.`);
       }
     }
+
+    // 7. Verify GET /api/shop/readiness does not contain hardcoded demo tenant/store credentials
+    if (readinessContent.includes("demo-org-id")) {
+      throw new Error("Tenant Safety Violation: 'demo-org-id' hardcoded inside readiness.routes.ts.");
+    }
+    if (readinessContent.includes("store-luminary")) {
+      throw new Error("Tenant Safety Violation: 'store-luminary' hardcoded inside readiness.routes.ts.");
+    }
+
+    // 8. Verify GET /api/shop/readiness contains 403 mismatch handling
+    if (!readinessContent.includes("403") || !readinessContent.includes("ACCESS_DENIED")) {
+      throw new Error("Tenant Safety Violation: Missing access denied 403 mismatch handling inside readiness.routes.ts.");
+    }
+
+    // 9. Verify GET /api/shop/readiness remains read-only
+    const writeCalls = [".create", ".update", ".delete", ".mutate", "claimApproval", "executeApproved"];
+    for (const wc of writeCalls) {
+      if (readinessContent.includes(wc)) {
+        throw new Error(`Read-Only Violation: Potential mutating call '${wc}' detected inside readiness.routes.ts.`);
+      }
+    }
+
+    // 10. Verify no forbidden scopes are introduced in readiness route
+    if (readinessContent.includes("read_themes") || readinessContent.includes("write_themes")) {
+      throw new Error("Security Violation: Theme scopes referenced inside readiness.routes.ts.");
+    }
   });
 
   // Print PASS/FAIL Summary
