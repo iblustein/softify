@@ -38,6 +38,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Production Bulk Operations Foundation (Phase 10.12) is complete, establishing secure multi-select bulk proposed actions and merchant approvals, dynamic fail-fast tenant preflight validations, 500ms safety delays, sequential claim locks, and live stepper UI checklists.
 - Real-Store Product Readiness (Phase 10.13) is complete, delivering a sanitized connection diagnostics & readiness API, premium store setup dashboard checklist card, explicit execute button overrides and amber-tinted "Mutations Blocked" banners on write scope deficiency, and frontend UX bulk execute gating.
 - Initial Agent Set & Merchant Workflows (Phase 10.14) is complete, defining exactly the five active production-safe agents, hiding legacy agents, enforcing strict allowed fields per agent, and rendering status change warnings.
+- Production Deployment & Pilot Readiness (Phase 10.15) is complete, validating compiled production Cloud Run serverless deployment workflows, Workload Identity Federation (WIF) OIDC authentication, environment variables separation (32-byte AES keys, public `SHOPIFY_API_KEY`), required operational database gates (blocking memory backend in prod), and sandboxed ephemeral testing ports with dynamic negative-path validation.
 - Robust pre-deployment static checks (58 tests) and integration smoke test suites (31 tests) are passing completely.
 
 ### Completed Milestones
@@ -56,6 +57,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.12 — Production Bulk Operations Foundation
 - Phase 10.13 — Real-Store Product Readiness
 - Phase 10.14 — Initial Agent Set & Merchant Workflows
+- Phase 10.15 — Production Deployment & Pilot Readiness Checklist
 
 ### Core Architectural Guardrails & Constraints
 - Softify strictly owns runtime execution, permissions, tenant isolation, and integrations.
@@ -87,7 +89,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.15 — Production Deployment & Pilot Readiness Checklist. The goal is to deploy the compiled Phase 10.14 bundle to Google Cloud Run, execute end-to-end merchant workspace validations against a real Shopify store connection, and harden production telemetry and error recovery logs. Implementation must begin by drafting the implementation plan only.
+We are ready to launch the live MVP Pilot and onboard initial pilot merchants under strict safety gates, monitoring live agent runs and audit trails, and collecting real storefront operational feedback.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

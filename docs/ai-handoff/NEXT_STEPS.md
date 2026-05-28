@@ -4,22 +4,25 @@ This document outlines the goals, requirements, and scope definitions for the ne
 
 ---
 
-## 1. Completed Milestone: Phase 10.14 — Initial Agent Set & Merchant Workflows
+## 1. Completed Milestones
 
-### Goal
-Defined and configured the initial active production-safe multi-agent catalog MVP pilot set (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`), enforcing strict allowed fields, hiding legacy development agents, and rendering status change warnings.
+### Phase 10.14 — Initial Agent Set & Merchant Workflows
+- **Goal**: Defined and configured the active production-safe agent catalog MVP set, enforcing allowed field policies, hiding legacy agents, and rendering status change warnings.
+
+### Phase 10.15 — Production Deployment & Pilot Readiness Checklist
+- **Goal**: Formally validated the compiled production deployment pipeline, Cloud Run source-based serverless builds, Workload Identity Federation, secrets architecture (e.g., cryptographically strong 32-byte AES keys, public `SHOPIFY_API_KEY` mapping), and operational database gates to transition Softify safely into a production-ready pilot state.
 
 ---
 
-## 2. Next Milestone: Phase 10.15 — Production Deployment & Pilot Readiness Checklist
+## 2. Next Milestone: Live MVP Pilot Onboarding & Launch
 
 ### Goal
-Deploy Phase 10.14 compiled assets to Google Cloud Run, execute end-to-end merchant workspace validations against a real Shopify store connection, and harden production telemetry and error recovery logs.
+Onboard initial pilot merchants to the live Softify SaaS platform, verify active shop connections, monitor agent diagnostic scans and approvals, and gather real storefront telemetry for optimization rules.
 
 ### Scope
-- **Google Cloud Run Deployment**: Build and push the production Docker container, provision Cloud Run environment variables (API Key, Dev Bypass Secret), and run deployment verification checks.
-- **End-to-End Workspace Validations**: Connect a real Shopify store sandbox, run agent scans, approve proposed actions, and verify live storefront commits.
-- **Hardened Error Recovery Logs**: Refine operational logs for stuck or timeout executions.
+- **Merchant Provisioning**: Safely trigger standard OAuth scopes (`read_products`, `read_orders`, `read_customers`) on real sandbox/live storefronts and install production-approved agents.
+- **Audit Monitoring**: Inspect tenant-isolated audit logs (`agent_audit_logs`) to verify strict credential containment and trace sanitization under active pilot operations.
+- **Feedback & Backlog Prioritization**: Gather feedback on recommendation accuracies to prioritize proposal-only auto-rules and additional storefront mutation capabilities.
 
 ---
 
