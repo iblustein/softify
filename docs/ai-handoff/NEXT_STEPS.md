@@ -9,21 +9,17 @@ This document outlines the goals, requirements, and scope definitions for the ne
 ### Phase 10.14 — Initial Agent Set & Merchant Workflows
 - **Goal**: Defined and configured the active production-safe agent catalog MVP set, enforcing allowed field policies, hiding legacy agents, and rendering status change warnings.
 
-### Phase 10.15 — Production Deployment & Pilot Readiness Checklist
-- **Goal**: Formally validated the compiled production deployment pipeline, Cloud Run source-based serverless builds, Workload Identity Federation, secrets architecture (e.g., cryptographically strong 32-byte AES keys, public `SHOPIFY_API_KEY` mapping), and operational database gates to transition Softify safely into a production-ready pilot state.
-
 ---
 
-## 2. Next Milestone: Live MVP Pilot Onboarding & Launch
+## 2. Next Active Milestone: Phase 10.15 — Production Deployment & Pilot Readiness Checklist (In Review)
 
 ### Goal
-Onboard initial pilot merchants to the live Softify SaaS platform, verify active shop connections, monitor agent diagnostic scans and approvals, and gather real storefront telemetry for optimization rules.
+Validate compiled production assets under Cloud Run, map environment configurations, configure zero-trust OIDC WIF credentials, and execute deployed integration smoke validation targeting the spawned service revision following PR merger.
 
 ### Scope
-- **Merchant Provisioning**: Safely trigger standard OAuth scopes (`read_products`, `read_orders`, `read_customers`) on real sandbox/live storefronts and install production-approved agents.
-- **Audit Monitoring**: Inspect tenant-isolated audit logs (`agent_audit_logs`) to verify strict credential containment and trace sanitization under active pilot operations.
-- **Feedback & Backlog Prioritization**: Gather feedback on recommendation accuracies to prioritize proposal-only auto-rules and additional storefront mutation capabilities.
-
+- **Deployment Review Walkthrough**: Map dynamic service, region, and project variables cleanly to the existing workflow source of truth, and record public/secret variables mapping (such as `SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, and `SOFTIFY_AGENT_DEV_BYPASS_SECRET`).
+- **Draft Security Review Notes**: Audit tenant isolation, scopes limit, and database isolation in draft form pending final reviewer feedback.
+- **CI/CD Smoke Validation**: Execute GitHub Actions deployment pipeline (using google-github-actions/auth@v3) and dynamic deployed smoke tests once branch merger is finalized.
 ---
 
 ## 3. Explicitly Deferred Agent Scopes (Out-of-Scope)

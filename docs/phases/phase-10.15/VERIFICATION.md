@@ -184,10 +184,26 @@ SMOKE TEST COMPLETED SUCCESSFULLY!
 
 ---
 
-## 4. Production Cloud Run Audit Logs Verification
+## 4. Simulated Production Integration Checks (Local Firestore Simulated Mode)
 
-We verified that in a simulated production environment (with `REPOSITORY_BACKEND=firestore` and Firestore diagnostics active):
+We ran automated integration smoke checks locally with `REPOSITORY_BACKEND=firestore` simulated environments (using the Firestore repository provider wireframes and diagnostics payloads) to verify database routing behaviors:
+- **Sandbox Test Fixture Isolation**: Standard invalid proposed-action test fixtures are skipped and isolated if `SOFTIFY_ALLOW_FIRESTORE_SMOKE_FIXTURES` is not enabled, protecting live/production databases from data pollution.
+- **Connection Diagnostics**: The `/api/shop/readiness` route correctly yields green `CONNECTED` status, flags synced scopes, and maps database sync warning structures cleanly under simulated Firestore persistence.
+- **Trace Containment**: Scanned audit logging records successfully map execution triggers without leaking sensitive credentials or raw token encryption keys.
 
-1. Standard mock or invalid proposed-action test fixtures are skipped and isolated, ensuring zero data pollution in merchant databases.
-2. The endpoint `GET /api/shop/readiness` yields full `CONNECTED` signals, valid scopes, and sync gap warning counts without leakages or exposing token secrets.
-3. Telemetry audit traces successfully map to centralized constants (`AUDIT_CREATED`, `MUTATION_EXECUTING`, etc.), maintaining complete data containment and security isolation.
+---
+
+## 5. Deployed Cloud Run & CI/CD Pipeline Smoke Tests (PENDING Verification)
+
+> [!IMPORTANT]
+> **DEPLOYED VERIFICATION STATUS: PENDING / GATED ON PR MERGE**
+> The final deployment validation targeting the live Cloud Run instance is **PENDING** branch merger into the production release stream (`main`).
+
+### Deployment Pipeline Checklist
+- `[ ]` **GitHub Actions Build and Lint**: `npm run lint` and `npm run build` must run on clean GitHub virtual environments.
+- `[ ]` **GCP Secret Manager Verification**: Workflow execution must confirm active enabled versions of `SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, and `SOFTIFY_AGENT_DEV_BYPASS_SECRET`.
+- `[ ]` **Firestore Index Deployments**: Automation must deploy updated composite indexes in sandbox environments (`softify` database).
+- `[ ]` **Source-Based Cloud Run Deployment**: The workflow must successfully execute the serverless source build deploying to Cloud Run (`softify` service under `europe-west1` region in the `softify-dev` project).
+- `[ ]` **Deployed Integration Smoke Tests**: The deployed service must pass dynamic smoke tests targeting the generated Cloud Run URL via `npm run smoke:prod`.
+
+*Verification logs for the deployed pipeline will be appended to this document following successful deployment review and branch merge.*

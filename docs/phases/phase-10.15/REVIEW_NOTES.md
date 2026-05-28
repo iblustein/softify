@@ -1,6 +1,10 @@
-# Security & Gatekeeper Review Notes — Phase 10.15: Production Deployment & Pilot Readiness Checklist
+# Security & Gatekeeper Review Notes — Phase 10.15: Production Deployment & Pilot Readiness Checklist (DRAFT)
 
-This document serves as the formal Security Review and Audit Report for **Phase 10.15: Production Deployment & Pilot Readiness Checklist**. It outlines the strict security guardrails, sandbox containment strategies, zero-trust cloud configuration, and tenant-safe isolation checks enforced prior to Softify's live production pilot launch.
+> [!WARNING]
+> **DRAFT / PENDING ARCHITECTURE & SECURITY REVIEW**
+> This security review document is currently in a **DRAFT** state and is pending formal audit, validation, and approval by the external Architecture Supervisor & Security Gatekeeper (ChatGPT) prior to final pilot sign-off.
+
+This document serves as the draft Security Review and Audit Report for **Phase 10.15: Production Deployment & Pilot Readiness Checklist**. It outlines the strict security guardrails, sandbox containment strategies, zero-trust cloud configuration, and tenant-safe isolation checks configured prior to Softify's live production pilot launch.
 
 ---
 
