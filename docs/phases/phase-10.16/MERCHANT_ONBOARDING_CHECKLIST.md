@@ -16,8 +16,8 @@ This checklist guides pilot merchants and onboarding operators through the onboa
 - [ ] **Step 3: Verify Minimum Scopes Gating**
   - Check the OAuth handshake list and confirm scopes are strictly read-only:
     - `read_products` (Required to fetch catalog metadata snapshots)
-    - `read_orders` (Required to fetch read-only merchandising metrics)
-    - `read_customers` (Required to fetch read-only buyer diagnostics)
+    - `read_orders` (Included in the current read-oriented scope posture; Phase 10.16 does not introduce new order analytics behavior or expose order PII)
+    - `read_customers` (Included in the current read-oriented scope posture; Phase 10.16 does not introduce customer diagnostics or expose buyer PII)
   - Verify that **no theme scopes** (`read_themes` or `write_themes`) are requested.
 
 ### B. Readiness & Workspace Verification

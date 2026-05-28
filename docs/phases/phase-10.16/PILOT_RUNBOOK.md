@@ -53,7 +53,7 @@ Before starting onboarding, the operator must verify the following preflight che
 ### Step 3.3: Verifying Product Metadata Sync
 1. Direct the merchant to click "Synchronize Catalog Now" on the setup dashboard.
 2. The UI triggers a `POST /api/catalog/products/sync` call.
-3. In the console logs, verify the sync fetches products in chunks, formats snapshots cleanly, and upserts metadata snapshots securely into the `product_snapshots` Firestore collection.
+3. Verify through sanitized operational logs and Firestore snapshot counts that product metadata sync completed successfully. Do not inspect or expose raw Shopify payloads.
 4. Verify that the UI setup checklists update snapshot count totals (e.g. `Catalog Synchronized: 5 products`).
 
 ### Step 3.4: Verifying the Five Production-Safe Agents
@@ -120,7 +120,7 @@ If the merchant has explicitly approved sandbox mutation testing, execute the fo
 2. Navigate to Cloud Run revision dashboards.
 3. Locate the previous, stable, pre-deployment revision.
 4. Click **"Route 100% of traffic to this revision"** to instantly restore the preceding container state.
-5. Disable the pilot store connection in Secret Manager/IAM environments if required to prevent unauthorized routing.
+5. Disable or revoke the pilot store connection using the approved application/admin procedure, and only rotate or revoke secrets if a credential exposure is suspected.
 
 ---
 
