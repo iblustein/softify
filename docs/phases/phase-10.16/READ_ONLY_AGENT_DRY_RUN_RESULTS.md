@@ -135,7 +135,7 @@ All five agents were triggered sequentially via `POST /api/agent-runs` in `"DRAF
 * **Bridge State**: **PENDING** (HTTP 200).
 * **Decide Transition**: The merchant decided **APPROVE** (HTTP 200) via `/api/approvals/:id/decide`.
 * **Target State**: **APPROVED** (status transition only, with deferred execution).
-* **Auto-Execution Isolation**: **Verified**. State successfully transitioned to `APPROVED` in Firestore without dispatching automatic write operations to Shopify.
+* **Auto-Execution Isolation**: **Verified**. State successfully transitioned to `APPROVED` in Firestore; no successful Shopify mutation was observed; execution was blocked before mutation because write_products is missing.
 
 ---
 
@@ -152,7 +152,7 @@ All five agents were triggered sequentially via `POST /api/agent-runs` in `"DRAF
   "error": "Store connection is missing write_products scope. Mutations are disabled for this connection."
 }
 ```
-* **Storefront Integrity**: The storefront remains completely untouched. Softify's Approved Product Mutation Executor successfully identified the missing `write_products` scope and aborted the execution, maintaining absolute read-only containment.
+* **Storefront Integrity**: No successful Shopify mutation was observed; execution was blocked before mutation because write_products is missing. Softify's Approved Product Mutation Executor successfully identified the missing `write_products` scope and aborted the execution, maintaining absolute read-only containment.
 
 ---
 
@@ -160,12 +160,21 @@ All five agents were triggered sequentially via `POST /api/agent-runs` in `"DRAF
 
 * **Total Audit Entries**: `4,338` logged events.
 * **Audit Trail Cleanliness**:
-  - Confirmed all audit records (e.g. `RECOMMENDATION_CREATED`, `PROPOSED_ACTION_CREATED`, `APPROVAL_APPROVED`, etc.) are thoroughly sanitized.
-  - Verified no raw prompts, model chains-of-thought, access tokens, decryptor credentials, raw Shopify responses, or buyer PII are present in logged payloads.
+  - Sanitized telemetry/audit endpoint review did not expose tokens, secrets, raw prompts, raw provider output, raw Shopify payloads, or PII in the inspected results.
 
 ---
 
 ## 8. Blockers & Recommended Next Step
 
-* **Blockers**: **None**. All systems are highly stable and the containment boundaries function flawlessly.
+* **Blockers**: **None**. All systems are highly stable and the containment boundaries function safely.
 * **Recommended Next Step**: Sign off on the Phase 10.16 read-only pilot plan and transition to subsequent validation reviews.
+
+---
+
+## 9. External Review Clarification
+
+In response to the Gatekeeper / Supervisor review checklist:
+* **No Additional Actions**: No additional dry-run actions or API runs were performed during this clarification step.
+* **Scope Separation**: The validation records have been corrected to strictly separate executed validation tests from source-code-only reviews (such as the Theme Scopes and Operator Recovery endpoint analysis).
+* **Phase Open Status**: Phase 10.16 remains open and is **not** completed yet.
+
