@@ -54,10 +54,12 @@ In `src/server/tools/tool-gateway.ts` for `catalog.products.propose_update`:
 In `src/server/services/agent-runtime.service.ts`:
 - If a tool call fails completely in the gateway (and does not trigger a merchant approval request), the failed tool call is popped/removed from the returned `toolCalls` list in the chat response.
 
-### H. Complete Cleanliness of Production Routes (Zero Test Backdoors)
-- The entire dynamic test seeding logic has been completely removed from `src/server/routes/agents.routes.ts`.
-- Production-facing route files contain **zero** mock logic, **zero** hidden test-fixture paths, and **zero** test keywords.
-- Test ProposedAction fixtures are safely seeded in the local dev-only memory database during startup inside `src/server/index.ts`.
+### H. Complete Cleanliness of Runtime Server Code (Zero Test Backdoors)
+- The entire dynamic test seeding logic has been completely removed from `src/server/routes/agents.routes.ts` and `src/server/routes/proposed-actions.routes.ts`.
+- `src/server/index.ts` has been completely cleaned and contains **zero** mock proposed action fixtures, **zero** backdoor test logic, and **zero** test-only strings.
+- All policy-violation test fixtures (`test-invalid-seo-action`, `test-invalid-cleanup-action`, and `test-invalid-readonly-action`) are created exclusively within the test environment context:
+  - **In-Memory Mode**: Booted in-process on ephemeral port `0` (`app.listen(0)`), dynamically capturing the assigned port to set the local `baseUrl` and seeding the test fixtures directly via `getRepositories()` inside the shared memory space of the same Node process.
+  - **Firestore Mode**: Strictly gated behind `SOFTIFY_ALLOW_FIRESTORE_SMOKE_FIXTURES=true` and sandbox check, seeded uniquely and deleted automatically inside a `finally` teardown block.
 
 ---
 
@@ -81,3 +83,5 @@ All 58 static checks and all 31 dynamic smoke integration tests pass successfull
   - Catalog Cleanup proposed action containing `title` fails the bridge.
   - Read-only agents (`agent_merchandising_insights`) are blocked from creating proposals.
 - The Tool Gateway dynamically restricts input fields and rejects invalid proposals.
+- **Zero backdoors or test strings** are leaked in route or server index files, as validated statically by release check Test 58.
+

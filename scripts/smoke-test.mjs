@@ -1,6 +1,23 @@
+import { spawnSync } from "child_process";
+import { fileURLToPath } from "url";
+import process from "process";
+
+// 1. Re-spawn self under tsx loader if not already active to enable direct TS imports
+if (!process.env.TSX_ACTIVE && !process.argv.includes("--child")) {
+  const scriptPath = fileURLToPath(import.meta.url);
+  const result = spawnSync("node", ["--import", "tsx", scriptPath, "--child", ...process.argv.slice(2)], {
+    stdio: "inherit",
+    env: { ...process.env, TSX_ACTIVE: "1" }
+  });
+  process.exit(result.status ?? 1);
+}
+
+import dotenv from "dotenv";
+dotenv.config();
+
 import { URL } from "url";
 
-const baseUrl = process.env.SOFTIFY_BASE_URL || "https://softify-595151907767.europe-west1.run.app";
+let baseUrl = process.env.SOFTIFY_BASE_URL || "https://softify-595151907767.europe-west1.run.app";
 const shop = process.env.SOFTIFY_TEST_SHOP || "yambasurf-co-il.myshopify.com";
 const defaultLimit = process.env.SMOKE_PRODUCTS_LIMIT ? parseInt(process.env.SMOKE_PRODUCTS_LIMIT, 10) : 5;
 
@@ -11,12 +28,18 @@ const TEST_STORE_CONNECTION_ID = "store-luminary";
 const TEST_AGENT_INSTALLATION_ID = "inst-mock";
 
 let isInMemory = false;
+let localServerInstance = null;
+let hasSeededFirestoreFixtures = false;
+let uniqueSeoActionId = "test-invalid-seo-action";
+let uniqueCleanupActionId = "test-invalid-cleanup-action";
+let uniqueReadonlyActionId = "test-invalid-readonly-action";
 
 const isLocalBaseUrl =
   baseUrl.includes("localhost") ||
   baseUrl.includes("127.0.0.1");
 
 const bypassSecretEnv = process.env.SOFTIFY_AGENT_DEV_BYPASS_SECRET;
+
 
 if (!bypassSecretEnv && !isLocalBaseUrl) {
   throw new Error("SOFTIFY_AGENT_DEV_BYPASS_SECRET is required for non-local agent chat smoke tests.");
@@ -73,55 +96,320 @@ async function checkResponse(res) {
   return res;
 }
 
-async function runSuite() {
-  // 0. Pre-smoke runtime diagnostics check
-  await check("0. Pre-smoke runtime diagnostics check", async () => {
-    const timestamp = Date.now();
-    const url = `${baseUrl}/api/diagnostics?t=${timestamp}`;
-    const res = await fetch(url);
-    await checkResponse(res);
-    const data = await res.json();
-    scanForForbiddenKeys(data);
-
-    if (data.ok !== true || !data.diagnostics) {
-      throw new Error(`Diagnostics returned failure status: ${JSON.stringify(data)}`);
-    }
-
-    const {
-      shopifyOAuthConfigured,
-      repositoryBackend,
-      firestoreDatabaseConfigured,
-      agentDevBypassAllowed,
-      agentDevBypassSecretConfigured
-    } = data.diagnostics;
-
-    isInMemory = (repositoryBackend === "memory");
-
-    console.log(`   [DIAGNOSTICS] shopifyOAuthConfigured         : ${shopifyOAuthConfigured}`);
-    console.log(`   [DIAGNOSTICS] repositoryBackend              : ${repositoryBackend}`);
-    console.log(`   [DIAGNOSTICS] firestoreDatabaseConfigured    : ${firestoreDatabaseConfigured}`);
-    console.log(`   [DIAGNOSTICS] agentDevBypassAllowed          : ${agentDevBypassAllowed}`);
-    console.log(`   [DIAGNOSTICS] agentDevBypassSecretConfigured : ${agentDevBypassSecretConfigured}`);
-
-    // Deploy/Release Guard: fail if Shopify OAuth is not configured
-    if (shopifyOAuthConfigured !== true) {
-      throw new Error("Release Guard Failure: Deployed service Shopify OAuth is not configured!");
-    }
-
-    // Deploy/Release Guard: fail if firestore backend is requested but database is not configured
-    if (repositoryBackend === "firestore" && firestoreDatabaseConfigured !== true) {
-      throw new Error("Release Guard Failure: Repository backend is set to firestore, but Firestore database is not configured!");
-    }
-
-    // Dev bypass validations for smoke testing
-    if (agentDevBypassAllowed !== true) {
-      throw new Error("Release Guard Failure: Agent Dev Bypass is not allowed on the server!");
-    }
-
-    if (agentDevBypassSecretConfigured !== true) {
-      throw new Error("Release Guard Failure: Agent Dev Bypass Secret is missing/unconfigured on the server!");
-    }
+async function seedInProcessDb() {
+  const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+  const { encryptAccessToken } = await import("../src/server/services/token-crypto.service.ts");
+  const repos = getRepositories();
+  
+  const encryptedToken = await encryptAccessToken("mock-shopify-access-token");
+  
+  // Seed store-glowthread
+  await repos.stores.createStoreConnection({
+    id: "store-glowthread",
+    organizationId: "demo-org-id",
+    storeUrl: "glowthread-apparel.myshopify.com",
+    accessTokenEncrypted: encryptedToken,
+    scopes: ["read_products", "write_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+    status: "CONNECTED",
+    connectedAt: new Date().toISOString(),
+    plan: "Shopify Plus",
+    currency: "USD"
   });
+
+  // Seed store-luminary
+  await repos.stores.createStoreConnection({
+    id: "store-luminary",
+    organizationId: "demo-org-id",
+    storeUrl: "luminary-essentials.myshopify.com",
+    accessTokenEncrypted: encryptedToken,
+    scopes: ["read_products", "write_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+    status: "CONNECTED",
+    connectedAt: new Date().toISOString(),
+    plan: "Shopify Plus",
+    currency: "USD"
+  });
+
+  // Seed store-yambasurf
+  await repos.stores.createStoreConnection({
+    id: "store-yambasurf",
+    organizationId: "demo-org-id",
+    storeUrl: "yambasurf-co-il.myshopify.com",
+    accessTokenEncrypted: encryptedToken,
+    scopes: ["read_products", "write_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+    status: "CONNECTED",
+    connectedAt: new Date().toISOString(),
+    plan: "Standard Plan",
+    currency: "ILS"
+  });
+
+  // Seed store-scope-mismatch
+  await repos.stores.createStoreConnection({
+    id: "store-scope-mismatch",
+    organizationId: "demo-org-id",
+    storeUrl: "scope-mismatch.myshopify.com",
+    accessTokenEncrypted: encryptedToken,
+    scopes: ["read_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+    status: "CONNECTED",
+    connectedAt: new Date().toISOString(),
+    plan: "Standard Plan",
+    currency: "USD"
+  });
+
+  // Seed stuck-executing-approval
+  await repos.approvals.createApprovalRequest({
+    id: "stuck-executing-approval",
+    organizationId: "demo-org-id",
+    storeConnectionId: "store-luminary",
+    agentInstallationId: "inst-mock",
+    agentId: "agent_product_intelligence",
+    toolName: "catalog.products.propose_update",
+    requestedBy: "Product Intelligence Agent",
+    status: "EXECUTING",
+    riskLevel: "Medium",
+    targetType: "PRODUCT_PROPOSAL",
+    targetId: "101",
+    proposedChangesSummary: "Stuck update title",
+    diffSummary: "Stuck update title",
+    sanitizedPayload: { title: "Stuck Update Title" },
+    allowedFields: ["title", "vendor", "productType", "status", "tags"],
+    executionStartedAt: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    executionAttemptCount: 1,
+    lastExecutionStatus: "EXECUTING",
+    lastExecutedBy: "Shop Owner",
+    lastExecutionCorrelationId: "exec-stuck-uuid"
+  });
+
+  // Seed active-executing-approval
+  await repos.approvals.createApprovalRequest({
+    id: "active-executing-approval",
+    organizationId: "demo-org-id",
+    storeConnectionId: "store-luminary",
+    agentInstallationId: "inst-mock",
+    agentId: "agent_product_intelligence",
+    toolName: "catalog.products.propose_update",
+    requestedBy: "Product Intelligence Agent",
+    status: "EXECUTING",
+    riskLevel: "Medium",
+    targetType: "PRODUCT_PROPOSAL",
+    targetId: "101",
+    proposedChangesSummary: "Active update title",
+    diffSummary: "Active update title",
+    sanitizedPayload: { title: "Active Update Title" },
+    allowedFields: ["title", "vendor", "productType", "status", "tags"],
+    executionStartedAt: new Date().toISOString(),
+    executionAttemptCount: 1,
+    lastExecutionStatus: "EXECUTING",
+    lastExecutedBy: "Shop Owner",
+    lastExecutionCorrelationId: "exec-active-uuid"
+  });
+
+  // Seed invalid proposed action for SEO (contains forbidden vendor changes)
+  await repos.proposedActions.createProposedAction({
+    id: "test-invalid-seo-action",
+    organizationId: "demo-org-id",
+    storeConnectionId: "store-yambasurf",
+    agentRunId: "RUN-SEED-INVALID",
+    agentId: "agent_product_seo",
+    recommendationId: "REC-SEED-INVALID-SEO",
+    targetType: "PRODUCT",
+    targetId: "101",
+    title: "Test SEO Proposed Action with Invalid Fields",
+    description: "Simulated invalid proposed action containing forbidden vendor fields for SEO",
+    actionType: "simulated_action",
+    riskLevel: "LOW",
+    executionMode: "APPROVAL_REQUIRED",
+    changes: { vendor: "SEO Proposed Vendor" },
+    status: "DRAFT",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  // Seed invalid proposed action for Cleanup (contains forbidden title changes)
+  await repos.proposedActions.createProposedAction({
+    id: "test-invalid-cleanup-action",
+    organizationId: "demo-org-id",
+    storeConnectionId: "store-yambasurf",
+    agentRunId: "RUN-SEED-INVALID",
+    agentId: "agent_catalog_cleanup",
+    recommendationId: "REC-SEED-INVALID-CLEANUP",
+    targetType: "PRODUCT",
+    targetId: "101",
+    title: "Test Cleanup Proposed Action with Invalid Fields",
+    description: "Simulated invalid proposed action containing forbidden title fields for Cleanup",
+    actionType: "simulated_action",
+    riskLevel: "LOW",
+    executionMode: "APPROVAL_REQUIRED",
+    changes: { title: "Cleanup Proposed Title" },
+    status: "DRAFT",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+
+  // Seed invalid proposed action for Merchandising Insights (read-only agent has no proposal permissions)
+  await repos.proposedActions.createProposedAction({
+    id: "test-invalid-readonly-action",
+    organizationId: "demo-org-id",
+    storeConnectionId: "store-yambasurf",
+    agentRunId: "RUN-SEED-INVALID",
+    agentId: "agent_merchandising_insights",
+    recommendationId: "REC-SEED-INVALID-READONLY",
+    targetType: "PRODUCT",
+    targetId: "101",
+    title: "Test Readonly Proposed Action",
+    description: "Simulated invalid proposed action for read-only Merchandising Insights agent",
+    actionType: "simulated_action",
+    riskLevel: "LOW",
+    executionMode: "APPROVAL_REQUIRED",
+    changes: { title: "Readonly Proposed Title" },
+    status: "DRAFT",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  });
+  
+  console.log("   [SMOKE-TEST] Seeded in-process memory database successfully with invalid proposed actions and mock connections.");
+}
+
+async function runSuite() {
+  try {
+    // 0. Pre-smoke runtime diagnostics check
+    await check("0. Pre-smoke runtime diagnostics check", async () => {
+      const timestamp = Date.now();
+      const url = `${baseUrl}/api/diagnostics?t=${timestamp}`;
+      const res = await fetch(url);
+      await checkResponse(res);
+      const data = await res.json();
+      scanForForbiddenKeys(data);
+
+      if (data.ok !== true || !data.diagnostics) {
+        throw new Error(`Diagnostics returned failure status: ${JSON.stringify(data)}`);
+      }
+
+      const {
+        shopifyOAuthConfigured,
+        repositoryBackend,
+        firestoreDatabaseConfigured,
+        agentDevBypassAllowed,
+        agentDevBypassSecretConfigured
+      } = data.diagnostics;
+
+      isInMemory = (repositoryBackend === "memory");
+
+      console.log(`   [DIAGNOSTICS] shopifyOAuthConfigured         : ${shopifyOAuthConfigured}`);
+      console.log(`   [DIAGNOSTICS] repositoryBackend              : ${repositoryBackend}`);
+      console.log(`   [DIAGNOSTICS] firestoreDatabaseConfigured    : ${firestoreDatabaseConfigured}`);
+      console.log(`   [DIAGNOSTICS] agentDevBypassAllowed          : ${agentDevBypassAllowed}`);
+      console.log(`   [DIAGNOSTICS] agentDevBypassSecretConfigured : ${agentDevBypassSecretConfigured}`);
+
+      // Deploy/Release Guard: fail if Shopify OAuth is not configured
+      if (shopifyOAuthConfigured !== true) {
+        throw new Error("Release Guard Failure: Deployed service Shopify OAuth is not configured!");
+      }
+
+      // Deploy/Release Guard: fail if firestore backend is requested but database is not configured
+      if (repositoryBackend === "firestore" && firestoreDatabaseConfigured !== true) {
+        throw new Error("Release Guard Failure: Repository backend is set to firestore, but Firestore database is not configured!");
+      }
+
+      // Dev bypass validations for smoke testing
+      if (agentDevBypassAllowed !== true) {
+        throw new Error("Release Guard Failure: Agent Dev Bypass is not allowed on the server!");
+      }
+
+      if (agentDevBypassSecretConfigured !== true) {
+        throw new Error("Release Guard Failure: Agent Dev Bypass Secret is missing/unconfigured on the server!");
+      }
+    });
+
+    // Dynamically start ephemeral local in-process server or configure Firestore seeding based on diagnosed backend
+    if (isInMemory && isLocalBaseUrl) {
+      console.log("   [SMOKE-TEST] Diagnosed local in-memory backend. Initializing in-process local server on ephemeral port...");
+      const { app } = await import("../src/server/app.ts");
+      await new Promise((resolve) => {
+        localServerInstance = app.listen(0, "127.0.0.1", () => {
+          const assignedPort = localServerInstance.address().port;
+          console.log(`   [SMOKE-TEST] Ephemeral local server listening at http://127.0.0.1:${assignedPort}`);
+          baseUrl = `http://127.0.0.1:${assignedPort}`;
+          resolve();
+        });
+      });
+      await seedInProcessDb();
+      hasSeededFirestoreFixtures = true;
+    } else if (!isInMemory) {
+      const allowFirestoreSmokeFixtures = process.env.SOFTIFY_ALLOW_FIRESTORE_SMOKE_FIXTURES === "true";
+      const isTestSandbox = shop.includes("yambasurf") || shop.includes("test") || shop.includes("sandbox") || process.env.NODE_ENV === "test";
+
+      if (allowFirestoreSmokeFixtures && isTestSandbox) {
+        console.log("   [SMOKE-TEST] Firestore environment diagnosed and guardrails passed. Seeding unique invalid proposed actions...");
+        const uniqueSuffix = `-${Date.now()}`;
+        uniqueSeoActionId = `test-invalid-seo-action${uniqueSuffix}`;
+        uniqueCleanupActionId = `test-invalid-cleanup-action${uniqueSuffix}`;
+        uniqueReadonlyActionId = `test-invalid-readonly-action${uniqueSuffix}`;
+
+        const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+        const repos = getRepositories();
+
+        await repos.proposedActions.createProposedAction({
+          id: uniqueSeoActionId,
+          organizationId: "demo-org-id",
+          storeConnectionId: "store-yambasurf",
+          agentRunId: "RUN-SEED-INVALID",
+          agentId: "agent_product_seo",
+          recommendationId: `REC-INVALID-SEO${uniqueSuffix}`,
+          targetType: "PRODUCT",
+          targetId: "101",
+          title: "Test SEO Proposed Action with Invalid Fields",
+          description: "Simulated invalid proposed action containing forbidden vendor fields for SEO",
+          actionType: "simulated_action",
+          riskLevel: "LOW",
+          changes: { vendor: "SEO Proposed Vendor" },
+          status: "DRAFT",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        await repos.proposedActions.createProposedAction({
+          id: uniqueCleanupActionId,
+          organizationId: "demo-org-id",
+          storeConnectionId: "store-yambasurf",
+          agentRunId: "RUN-SEED-INVALID",
+          agentId: "agent_catalog_cleanup",
+          recommendationId: `REC-INVALID-CLEANUP${uniqueSuffix}`,
+          targetType: "PRODUCT",
+          targetId: "101",
+          title: "Test Cleanup Proposed Action with Invalid Fields",
+          description: "Simulated invalid proposed action containing forbidden title fields for Cleanup",
+          actionType: "simulated_action",
+          riskLevel: "LOW",
+          changes: { title: "Cleanup Proposed Title" },
+          status: "DRAFT",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        await repos.proposedActions.createProposedAction({
+          id: uniqueReadonlyActionId,
+          organizationId: "demo-org-id",
+          storeConnectionId: "store-yambasurf",
+          agentRunId: "RUN-SEED-INVALID",
+          agentId: "agent_merchandising_insights",
+          recommendationId: `REC-INVALID-READONLY${uniqueSuffix}`,
+          targetType: "PRODUCT",
+          targetId: "101",
+          title: "Test Readonly Proposed Action",
+          description: "Simulated invalid proposed action for read-only Merchandising Insights agent",
+          actionType: "simulated_action",
+          riskLevel: "LOW",
+          changes: { title: "Readonly Proposed Title" },
+          status: "DRAFT",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        hasSeededFirestoreFixtures = true;
+      } else {
+        console.warn("   [SMOKE-TEST] [WARNING] Deployed/Firestore environment detected, but SOFTIFY_ALLOW_FIRESTORE_SMOKE_FIXTURES is not true or shop is not a sandbox. Skipping invalid policy-violation bridge validations.");
+      }
+    }
 
   // Test A: OAuth Status validation
   await check("A. OAuth Status endpoint validation", async () => {
@@ -2359,44 +2647,48 @@ async function runSuite() {
     }
     console.log("   [TEST X Hardening] Successfully verified legacy agent runs are blocked with 403.");
 
-    // 5. Hardening: Product SEO proposed action with vendor or status must fail bridge
-    const resBridgeSeo = await fetch(`${baseUrl}/api/proposed-actions/test-invalid-seo-action/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
-      method: "POST"
-    });
-    if (resBridgeSeo.status !== 500 && resBridgeSeo.status !== 400) {
-      throw new Error(`Expected bridge request to fail with 500 or 400 for invalid SEO changes, got: ${resBridgeSeo.status}`);
-    }
-    const bridgeSeoData = await resBridgeSeo.json();
-    if (!bridgeSeoData.error || (!bridgeSeoData.error.includes("forbidden fields") && !bridgeSeoData.error.includes("permissions"))) {
-      throw new Error(`Expected forbidden fields bridge rejection error message, got: '${bridgeSeoData.error}'`);
-    }
-    console.log("   [TEST X Hardening] Successfully verified invalid SEO proposed action fails bridge.");
+    if (hasSeededFirestoreFixtures) {
+      // 5. Hardening: Product SEO proposed action with vendor or status must fail bridge
+      const resBridgeSeo = await fetch(`${baseUrl}/api/proposed-actions/${uniqueSeoActionId}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+        method: "POST"
+      });
+      if (resBridgeSeo.status !== 500 && resBridgeSeo.status !== 400) {
+        throw new Error(`Expected bridge request to fail with 500 or 400 for invalid SEO changes, got: ${resBridgeSeo.status}`);
+      }
+      const bridgeSeoData = await resBridgeSeo.json();
+      if (!bridgeSeoData.error || (!bridgeSeoData.error.includes("forbidden fields") && !bridgeSeoData.error.includes("permissions"))) {
+        throw new Error(`Expected forbidden fields bridge rejection error message, got: '${bridgeSeoData.error}'`);
+      }
+      console.log("   [TEST X Hardening] Successfully verified invalid SEO proposed action fails bridge.");
 
-    // 6. Hardening: Catalog Cleanup proposed action with title must fail bridge
-    const resBridgeCleanup = await fetch(`${baseUrl}/api/proposed-actions/test-invalid-cleanup-action/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
-      method: "POST"
-    });
-    if (resBridgeCleanup.status !== 500 && resBridgeCleanup.status !== 400) {
-      throw new Error(`Expected bridge request to fail with 500 or 400 for invalid Cleanup changes, got: ${resBridgeCleanup.status}`);
-    }
-    const bridgeCleanupData = await resBridgeCleanup.json();
-    if (!bridgeCleanupData.error || (!bridgeCleanupData.error.includes("forbidden fields") && !bridgeCleanupData.error.includes("permissions"))) {
-      throw new Error(`Expected forbidden fields bridge rejection error message, got: '${bridgeCleanupData.error}'`);
-    }
-    console.log("   [TEST X Hardening] Successfully verified invalid Cleanup proposed action fails bridge.");
+      // 6. Hardening: Catalog Cleanup proposed action with title must fail bridge
+      const resBridgeCleanup = await fetch(`${baseUrl}/api/proposed-actions/${uniqueCleanupActionId}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+        method: "POST"
+      });
+      if (resBridgeCleanup.status !== 500 && resBridgeCleanup.status !== 400) {
+        throw new Error(`Expected bridge request to fail with 500 or 400 for invalid Cleanup changes, got: ${resBridgeCleanup.status}`);
+      }
+      const bridgeCleanupData = await resBridgeCleanup.json();
+      if (!bridgeCleanupData.error || (!bridgeCleanupData.error.includes("forbidden fields") && !bridgeCleanupData.error.includes("permissions"))) {
+        throw new Error(`Expected forbidden fields bridge rejection error message, got: '${bridgeCleanupData.error}'`);
+      }
+      console.log("   [TEST X Hardening] Successfully verified invalid Cleanup proposed action fails bridge.");
 
-    // 7. Hardening: Read-only agent proposed action must fail bridge
-    const resBridgeReadonly = await fetch(`${baseUrl}/api/proposed-actions/test-invalid-readonly-action/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
-      method: "POST"
-    });
-    if (resBridgeReadonly.status !== 500 && resBridgeReadonly.status !== 400) {
-      throw new Error(`Expected bridge request to fail with 500 or 400 for read-only agent changes, got: ${resBridgeReadonly.status}`);
+      // 7. Hardening: Read-only agent proposed action must fail bridge
+      const resBridgeReadonly = await fetch(`${baseUrl}/api/proposed-actions/${uniqueReadonlyActionId}/request-approval?shop=${encodeURIComponent(shop)}&t=${timestamp}`, {
+        method: "POST"
+      });
+      if (resBridgeReadonly.status !== 500 && resBridgeReadonly.status !== 400) {
+        throw new Error(`Expected bridge request to fail with 500 or 400 for read-only agent changes, got: ${resBridgeReadonly.status}`);
+      }
+      const bridgeReadonlyData = await resBridgeReadonly.json();
+      if (!bridgeReadonlyData.error || !bridgeReadonlyData.error.includes("permissions")) {
+        throw new Error(`Expected proposal permissions bridge rejection error message, got: '${bridgeReadonlyData.error}'`);
+      }
+      console.log("   [TEST X Hardening] Successfully verified read-only agent proposed action fails bridge.");
+    } else {
+      console.log("   [TEST X Hardening] Skipping invalid proposed actions bridge checks (no seeded fixtures available).");
     }
-    const bridgeReadonlyData = await resBridgeReadonly.json();
-    if (!bridgeReadonlyData.error || !bridgeReadonlyData.error.includes("permissions")) {
-      throw new Error(`Expected proposal permissions bridge rejection error message, got: '${bridgeReadonlyData.error}'`);
-    }
-    console.log("   [TEST X Hardening] Successfully verified read-only agent proposed action fails bridge.");
 
     // 8. Hardening: Verify Tool Gateway proposal field restrictions via direct agent chat simulation
     const resChatInvalidFields = await fetch(`${baseUrl}/api/agents/chat?t=${timestamp}`, {
@@ -2438,13 +2730,43 @@ async function runSuite() {
 
   console.log(`\n\x1b[1mResults: \x1b[32m${passCount} passed\x1b[0m, \x1b[31m${failCount} failed\x1b[0m, total ${tests.length}\n`);
 
+  let exitCode = 0;
   if (failCount > 0) {
     console.log(`\x1b[1m\x1b[31mSMOKE TEST FAILED!\x1b[0m\n`);
-    process.exit(1);
+    exitCode = 1;
   } else {
     console.log(`\x1b[1m\x1b[32mSMOKE TEST COMPLETED SUCCESSFULLY!\x1b[0m\n`);
-    process.exit(0);
+    exitCode = 0;
+  }
+  
+  return exitCode;
+} catch (err) {
+  console.error("   [SMOKE-TEST] Fatal error encountered during suite execution:", err);
+  return 1;
+} finally {
+  if (localServerInstance) {
+    await new Promise((resolve) => {
+      localServerInstance.close(() => {
+        console.log("   [SMOKE-TEST] Ephemeral in-process local server shutdown completed.");
+        resolve();
+      });
+    });
+  }
+  if (hasSeededFirestoreFixtures && !isInMemory) {
+    console.log("   [SMOKE-TEST] Teardown: Cleaning up seeded Firestore fixtures...");
+    try {
+      const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+      const repos = getRepositories();
+      await repos.proposedActions.deleteProposedAction(uniqueSeoActionId);
+      await repos.proposedActions.deleteProposedAction(uniqueCleanupActionId);
+      await repos.proposedActions.deleteProposedAction(uniqueReadonlyActionId);
+      console.log("   [SMOKE-TEST] Firestore fixtures cleaned up successfully.");
+    } catch (err) {
+      console.error("   [SMOKE-TEST] Failed to clean up Firestore fixtures:", err.message);
+    }
   }
 }
+}
 
-runSuite();
+runSuite().then(code => process.exit(code));
+

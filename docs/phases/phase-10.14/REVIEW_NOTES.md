@@ -23,9 +23,11 @@ Allowed fields are centrally defined inside `src/server/services/agent-policy.se
 - **Batch Gating**: In `proposed-actions.routes.ts`, `batch-request-approval` validates each draft proposed action independently based on `getAllowedFieldsForAgent(act.agentId)`. The entire batch request is rejected with `400` if any item violates these boundaries.
 - **Tool Gateway Verification**: In `tool-gateway.ts`, allowed fields for `catalog.products.propose_update` are resolved dynamically via context. Arguments containing unallowlisted fields are blocked before generating approvals.
 
-### D. Complete Route Cleanliness & Static Checking
-- **No Test Backdoors**: There are absolutely no mock seeding branches or test backdoor parameters inside runtime route files (such as `agents.routes.ts` or `proposed-actions.routes.ts`). All test/smoke-test fixtures are seeded cleanly inside dev-only database initialization hooks (`src/server/index.ts`).
-- **Static Assertions**: `release-check.mjs` has been strengthened to ensure route files are structurally free from keywords and strings related to test-fixtures and simulated records (`test-invalid-bridge-`, `Support for smoke-test`, `Simulated invalid proposed action`, `ACT-TEST`).
+### D. Complete Runtime Cleanliness & Static Checking
+- **No Test Backdoors**: There are absolutely no mock seeding branches, test backdoor parameters, or hardcoded test proposed actions inside the runtime routes or server entrypoints (such as `agents.routes.ts`, `proposed-actions.routes.ts`, or `src/server/index.ts`). All test/smoke-test fixtures are seeded cleanly inside the test-environment context only:
+  - **In-Memory**: Seeded in-process via ephemeral port `0` (`app.listen(0)`), completely isolating tests to a dynamic, standalone in-process server instance.
+  - **Firestore**: Explicitly opt-in via environment flag and sandbox check, with automatic cleanup inside a `finally` block.
+- **Static Assertions**: `release-check.mjs` (Test 58) statically asserts that `src/server/index.ts` and runtime route files are structurally free from keywords and strings related to test-fixtures and simulated records (`test-invalid-bridge-`, `Support for smoke-test`, `Simulated invalid proposed action`, `ACT-TEST`, `test-invalid-seo-action`, `test-invalid-cleanup-action`, `test-invalid-readonly-action`).
 
 ---
 

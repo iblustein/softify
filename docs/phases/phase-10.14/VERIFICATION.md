@@ -6,7 +6,7 @@ This document records the automated verification logs validating the initial age
 
 ## 1. Static Release Verification (Test 58)
 
-We executed the full static suite via `node scripts/release-check.mjs` containing the **Test 58** static guardrails checks, now including strict checks asserting the route files do not contain test fixture strings or simulate endpoints:
+We executed the full static suite via `node scripts/release-check.mjs` containing the **Test 58** static guardrails checks, now including strict checks asserting the route files AND `src/server/index.ts` do not contain test fixture strings or simulate endpoints:
 
 ```
 Verifying: 58. Phase 10.14 Initial Agent Set & Merchant Workflows static validation...
@@ -25,9 +25,9 @@ RELEASE VERIFICATION PASSED SUCCESSFULLY!
 
 ---
 
-## 2. Dynamic Integration Smoke Test (Test X & Test Q)
+## 2. Dynamic Integration Smoke Test (Test X & Ephemeral In-Process Server)
 
-We executed the full dynamic integration suite using the development server bypass token against a fresh server environment to ensure zero test pollution, leveraging pre-seeded invalid ProposedAction fixtures:
+We executed the full dynamic integration suite using the development server bypass token, dynamically starting an in-process local server on an ephemeral port (`app.listen(0)`) to isolate memory databases during verification:
 
 ```
 === SOFTIFY SAAS RELEASE SMOKE TEST SUITE ===
@@ -43,24 +43,13 @@ Running: 0. Pre-smoke runtime diagnostics check...
    [DIAGNOSTICS] agentDevBypassSecretConfigured : true
 ✓ PASS
 
-...
-
-Running: I. Agent chat product summary validation...
+   [SMOKE-TEST] Diagnosed local in-memory backend. Initializing in-process local server on ephemeral port...
+   [SMOKE-TEST] Ephemeral local server listening at http://127.0.0.1:58356
+   [SMOKE-TEST] Seeded in-process memory database successfully with invalid proposed actions and mock connections.
+Running: A. OAuth Status endpoint validation...
 ✓ PASS
 
-...
-
-Running: M. Agent chat tenant isolation override validation...
-✓ PASS
-
-Running: N. Audit log tenant safety, scoping, and sanitization validation...
-   [AUDIT TESTS] Retrieved 28 sanitized audit events successfully.
-✓ PASS
-
-...
-
-Running: Q. Approval Execution Operations & Recovery validation...
-   [RECOVERY TESTS] Successfully verified status filters, details/audit tenant scoping, performer constraints, timeout recoveries, and state reset bounds.
+Running: B. Admin Shop Read endpoint validation...
 ✓ PASS
 
 ...
@@ -82,4 +71,7 @@ Running: X. Phase 10.14 Initial Agent Set & Merchant Workflows integration check
 Results: 31 passed, 0 failed, total 31
 
 SMOKE TEST COMPLETED SUCCESSFULLY!
+
+   [SMOKE-TEST] Ephemeral in-process local server shutdown completed.
 ```
+

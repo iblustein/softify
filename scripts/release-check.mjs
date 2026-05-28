@@ -1727,19 +1727,31 @@ async function runVerification() {
       throw new Error("Hardening Static Check Violation: /api/proposed-actions/simulate route must not exist in proposed-actions.routes.ts.");
     }
 
-    // 13. Hardening: Assert that production-facing route files do not contain test fixture strings
+    // 13. Hardening: Assert that production-facing route and runtime server files do not contain test fixture strings
+    const serverIndexPath = path.resolve(process.cwd(), "src/server/index.ts");
+    const serverIndexContent = fs.readFileSync(serverIndexPath, "utf8");
+
     const forbiddenTestFixtureStrings = [
       "test-invalid-bridge-",
       "Support for smoke-test",
       "Simulated invalid proposed action",
-      "ACT-TEST"
+      "ACT-TEST",
+      "test-invalid-seo-action",
+      "test-invalid-cleanup-action",
+      "test-invalid-readonly-action"
     ];
-    for (const str of forbiddenTestFixtureStrings) {
-      if (routesContent.includes(str)) {
-        throw new Error(`Hardening Static Check Violation: Route file agents.routes.ts contains forbidden test fixture string: "${str}"`);
-      }
-      if (proposedActionsRouteContent.includes(str)) {
-        throw new Error(`Hardening Static Check Violation: Route file proposed-actions.routes.ts contains forbidden test fixture string: "${str}"`);
+
+    const targets = [
+      { name: "agents.routes.ts", content: routesContent },
+      { name: "proposed-actions.routes.ts", content: proposedActionsRouteContent },
+      { name: "index.ts", content: serverIndexContent }
+    ];
+
+    for (const target of targets) {
+      for (const str of forbiddenTestFixtureStrings) {
+        if (target.content.includes(str)) {
+          throw new Error(`Hardening Static Check Violation: Runtime file ${target.name} contains forbidden test fixture string: "${str}"`);
+        }
       }
     }
   });
