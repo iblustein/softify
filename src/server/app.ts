@@ -17,6 +17,7 @@ import diagnosticsRoutes from "./routes/diagnostics.routes.js";
 import agentInstallationsRoutes from "./routes/agent-installations.routes.js";
 import recommendationsRoutes from "./routes/recommendations.routes.js";
 import proposedActionsRoutes from "./routes/proposed-actions.routes.js";
+import pilotRoutes from "./routes/pilot.routes.js";
 
 const app = express();
 app.use(express.json());
@@ -28,6 +29,7 @@ app.use("/api/catalog", catalogRoutes);
 app.use("/api/agents", agentChatRoutes);
 app.use("/api", shopRoutes);
 app.use("/api", readinessRoutes);
+app.use("/api", pilotRoutes);
 app.use("/api", agentInstallationsRoutes);
 app.use("/api", agentsRoutes);
 app.use("/api", productsRoutes);

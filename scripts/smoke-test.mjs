@@ -2718,6 +2718,139 @@ async function runSuite() {
     console.log("   [TEST X] Successfully verified dynamic GET /api/agents/catalog exclusions, per-agent allowed field schemas, read-only agent mutation immunity, and strict tenant security isolation.");
   });
 
+  // Test Y: Controlled Merchant Pilot Access & Readiness Endpoint validation
+  await check("Y. Controlled Merchant Pilot Access & Readiness Endpoint validation", async () => {
+    const timestamp = Date.now();
+
+    // Configure the pilot allowlist environment variable for this test
+    const oldPilotShops = process.env.SOFTIFY_PILOT_SHOPS;
+    process.env.SOFTIFY_PILOT_SHOPS = `${shop},another-pilot-shop.myshopify.com`;
+
+    try {
+      // 1. Approved pilot shop readiness
+      const urlApproved = `${baseUrl}/api/pilot/readiness?shop=${encodeURIComponent(shop)}&t=${timestamp}`;
+      const resApproved = await fetch(urlApproved);
+      await checkResponse(resApproved);
+      const dataApproved = await resApproved.json();
+      
+      scanForForbiddenKeys(dataApproved);
+
+      if (dataApproved.shopDomain !== shop) {
+        throw new Error(`Expected shopDomain to be "${shop}", got: "${dataApproved.shopDomain}"`);
+      }
+      if (dataApproved.pilotApproved !== true) {
+        throw new Error(`Expected pilotApproved to be true for allowlisted shop, got: ${dataApproved.pilotApproved}`);
+      }
+      if (dataApproved.connected !== true) {
+        throw new Error(`Expected connected to be true for synced test shop, got: ${dataApproved.connected}`);
+      }
+      if (dataApproved.readinessStatus !== "READY") {
+        throw new Error(`Expected readinessStatus to be "READY", got: "${dataApproved.readinessStatus}"`);
+      }
+      if (dataApproved.canExecuteMutations !== false) {
+        throw new Error(`Expected canExecuteMutations to be false, got: ${dataApproved.canExecuteMutations}`);
+      }
+      if (dataApproved.mutationMode !== "read_only_blocked") {
+        throw new Error(`Expected mutationMode to be "read_only_blocked", got: "${dataApproved.mutationMode}"`);
+      }
+      if (!Array.isArray(dataApproved.grantedScopeSummary)) {
+        throw new Error(`Expected grantedScopeSummary to be an array, got: ${typeof dataApproved.grantedScopeSummary}`);
+      }
+      // Ensure no theme scopes/tools are present in scopes or details
+      if (dataApproved.grantedScopeSummary.includes("read_themes") || dataApproved.grantedScopeSummary.includes("write_themes")) {
+        throw new Error("Security Violation: Theme scopes should not be returned or allowed.");
+      }
+      if (typeof dataApproved.productSnapshotCount !== "number") {
+        throw new Error(`Expected productSnapshotCount to be a number, got: ${typeof dataApproved.productSnapshotCount}`);
+      }
+      if (dataApproved.visibleProductionAgentCount !== 5) {
+        throw new Error(`Expected visibleProductionAgentCount to be 5, got: ${dataApproved.visibleProductionAgentCount}`);
+      }
+
+      // Assert warnings
+      if (!Array.isArray(dataApproved.warnings)) {
+        throw new Error("Expected warnings to be an array");
+      }
+      if (!dataApproved.warnings.includes("execution blocked")) {
+        throw new Error("Expected warnings to contain 'execution blocked'");
+      }
+      
+      // Let's test unallowlisted shop
+      const unallowlistedShop = "unallowlisted-shop.myshopify.com";
+      const urlRejected = `${baseUrl}/api/pilot/readiness?shop=${encodeURIComponent(unallowlistedShop)}&t=${timestamp}`;
+      const resRejected = await fetch(urlRejected);
+      await checkResponse(resRejected);
+      const dataRejected = await resRejected.json();
+
+      scanForForbiddenKeys(dataRejected);
+
+      if (dataRejected.pilotApproved !== false) {
+        throw new Error(`Expected pilotApproved to be false for unallowlisted shop, got: ${dataRejected.pilotApproved}`);
+      }
+      if (dataRejected.readinessStatus !== "NOT_READY") {
+        throw new Error(`Expected readinessStatus to be "NOT_READY" for unallowlisted shop, got: "${dataRejected.readinessStatus}"`);
+      }
+      if (dataRejected.connected !== false) {
+        throw new Error(`Expected connected to be false for unallowlisted shop, got: ${dataRejected.connected}`);
+      }
+
+      // Let's test an allowlisted shop that has no store connection registered
+      const unregisteredShop = "unregistered-pilot-shop.myshopify.com";
+      process.env.SOFTIFY_PILOT_SHOPS = `${shop},${unregisteredShop}`;
+      
+      const urlUnregistered = `${baseUrl}/api/pilot/readiness?shop=${encodeURIComponent(unregisteredShop)}&t=${timestamp}`;
+      const resUnregistered = await fetch(urlUnregistered);
+      await checkResponse(resUnregistered);
+      const dataUnregistered = await resUnregistered.json();
+
+      scanForForbiddenKeys(dataUnregistered);
+
+      if (dataUnregistered.pilotApproved !== true) {
+        throw new Error(`Expected pilotApproved to be true for unregistered allowlisted shop, got: ${dataUnregistered.pilotApproved}`);
+      }
+      if (dataUnregistered.connected !== false) {
+        throw new Error(`Expected connected to be false for unregistered allowlisted shop, got: ${dataUnregistered.connected}`);
+      }
+      if (dataUnregistered.readinessStatus !== "NOT_READY") {
+        throw new Error(`Expected readinessStatus to be "NOT_READY" for unregistered allowlisted shop, got: "${dataUnregistered.readinessStatus}"`);
+      }
+
+      // Let's test an allowlisted shop with a connection but missing write_products scope.
+      // In seedInProcessDb, "scope-mismatch.myshopify.com" has only ["read_products", "read_orders", "read_customers", "write_themes", "read_analytics"]. It lacks "write_products".
+      const mismatchShop = "scope-mismatch.myshopify.com";
+      process.env.SOFTIFY_PILOT_SHOPS = `${shop},${mismatchShop}`;
+
+      const urlMismatch = `${baseUrl}/api/pilot/readiness?shop=${encodeURIComponent(mismatchShop)}&t=${timestamp}`;
+      const resMismatch = await fetch(urlMismatch);
+      await checkResponse(resMismatch);
+      const dataMismatch = await resMismatch.json();
+
+      scanForForbiddenKeys(dataMismatch);
+
+      if (dataMismatch.pilotApproved !== true) {
+        throw new Error("Expected pilotApproved to be true for scope-mismatch shop");
+      }
+      if (dataMismatch.connected !== true) {
+        throw new Error("Expected connected to be true for scope-mismatch shop");
+      }
+      if (dataMismatch.canExecuteMutations !== false) {
+        throw new Error("Expected canExecuteMutations to be false for scope-mismatch shop");
+      }
+      if (!dataMismatch.warnings.includes("write_products missing")) {
+        throw new Error(`Expected warnings to contain "write_products missing" for scope-mismatch shop, got: ${JSON.stringify(dataMismatch.warnings)}`);
+      }
+
+      console.log("   [TEST Y] Dynamic allowlist validation, readiness mapping, safety disclaimers, and scope scans passed successfully.");
+    } finally {
+      // Restore previous environment setting
+      if (oldPilotShops === undefined) {
+        delete process.env.SOFTIFY_PILOT_SHOPS;
+      } else {
+        process.env.SOFTIFY_PILOT_SHOPS = oldPilotShops;
+      }
+    }
+  });
+
   // Summary Printing
   console.log(`\n\x1b[1m\x1b[36m=== SMOKE TEST SUMMARY ===\x1b[0m`);
   for (const t of tests) {
