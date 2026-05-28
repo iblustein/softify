@@ -39,6 +39,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Real-Store Product Readiness (Phase 10.13) is complete, delivering a sanitized connection diagnostics & readiness API, premium store setup dashboard checklist card, explicit execute button overrides and amber-tinted "Mutations Blocked" banners on write scope deficiency, and frontend UX bulk execute gating.
 - Initial Agent Set & Merchant Workflows (Phase 10.14) is complete, defining exactly the five active production-safe agents, hiding legacy agents, enforcing strict allowed fields per agent, and rendering status change warnings.
 - Production Deployment & Pilot Readiness (Phase 10.15) is complete, formally validating compiled production Cloud Run serverless deployment workflows, zero-trust OIDC Workload Identity Federation (using google-github-actions/auth@v3), environments mapping, GCP Secret Manager validations (secrets: SHOPIFY_API_SECRET, SHOPIFY_TOKEN_ENCRYPTION_KEY, SOFTIFY_AGENT_DEV_BYPASS_SECRET), operational database gates, and dynamic live Cloud Run deployed smoke tests (31/31 passed cleanly on Run ID: 26598640767).
+- MVP Pilot Launch & Merchant Onboarding Plan (Phase 10.16) is complete, formally validating pilot implementation checklists, runbooks, matrix verifications, and running a read-only dry run against the approved store yambasurf-co-il.myshopify.com under production Firestore database mappings.
 - Robust pre-deployment static checks (58 tests) and integration smoke test suites (31 tests) are passing completely.
 
 ### Completed Milestones
@@ -58,6 +59,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.13 — Real-Store Product Readiness
 - Phase 10.14 — Initial Agent Set & Merchant Workflows
 - Phase 10.15 — Production Deployment & Pilot Readiness Checklist
+- Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan
 
 
 ### Core Architectural Guardrails & Constraints
@@ -90,7 +92,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan. The goal is to draft the operational onboarding plans, tenant setup protocols, and merchant checklists. Implementation must begin by drafting the implementation plan only.
+We are ready to initiate Phase 10.17 — Controlled Merchant Pilot Onboarding Plan. The goal is to plan and decide how to onboard a controlled real merchant or internal pilot user safely without enabling the mutation `write_products` scope by default. Implementation must begin by drafting the implementation plan only.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

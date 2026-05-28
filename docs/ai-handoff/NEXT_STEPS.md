@@ -12,17 +12,21 @@ This document outlines the goals, requirements, and scope definitions for the ne
 ### Phase 10.15 — Production Deployment & Pilot Readiness Checklist
 - **Goal**: Formally validated the compiled production deployment pipeline, serverless source-based Cloud Run builds, OIDC Workload Identity Federation (using google-github-actions/auth@v3), environments mapping, GCP Secret Manager validations (`SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, `SOFTIFY_AGENT_DEV_BYPASS_SECRET`), operational database gates, and dynamic live Cloud Run deployed smoke tests (31/31 passed cleanly on Run ID: 26598640767).
 
+### Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan
+- **Goal**: Drafted and validated the operational plans, checklists, runbooks, validation matrices, feedback templates, and executed a read-only agent dry run against the approved development store `yambasurf-co-il.myshopify.com` under production Firestore database mappings.
+
 ---
 
-## 2. Next Active Milestone: Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan (Planning Only)
+## 2. Next Active Milestone: Phase 10.17 — Controlled Merchant Pilot Onboarding Plan (Planning Only)
 
 ### Goal
-Formulate the operational plan, tenant setup protocols, and merchant onboarding checklists to safely launch Softify's live MVP pilot.
+Decide and outline how to onboard a controlled real merchant or internal pilot user safely, without enabling the mutation `write_products` scope by default.
 
 ### Scope
-- **Implementation Plan Only**: Draft and finalize the onboarding implementation plan detailing tenant provisioning, store connectivity checks, and initial catalog synchronizations. Do not write runtime code.
-- **Merchant Onboarding Checklists**: Create structured checklist templates to guide merchant installations and scope resolutions.
-- **Telemetry Review Guidelines**: Define operational guardrails for reviewing live sanitizations, audit telemetry, and trace timelines during the pilot phase.
+- **Implementation Plan Only**: Draft the onboarding implementation plan detailing safety gating, tenant boundaries, and merchant-in-the-loop operational restrictions. Do not modify runtime code.
+- **Onboarding Risk Management**: Outline specific risk boundaries and sandbox containment guidelines for the pilot user onboarding sequence.
+- **Feedback Loop Enhancements**: Prepare refined qualitative feedback structures based on Phase 10.16 review feedback.
+
 ---
 
 ## 3. Explicitly Deferred Agent Scopes (Out-of-Scope)

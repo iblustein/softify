@@ -61,9 +61,22 @@ This document provides a highly durable and centralized technical reference for 
   - **Target Project ID**: `softify-dev`
   - **Firestore Persistent Backend**: Confirmed and active.
   - **Production Environment**: Confirmed and active.
+- **MVP Pilot Launch & Merchant Onboarding Plan**: Phase 10.16 is completed and approved. Formally drafted and finalized the merchant onboarding checklists, operator runbooks, pilot validation matrices, and qualitative feedback questionnaires.
+  - **Development Store**: `yambasurf-co-il.myshopify.com`
+  - **Cloud Run service**: Remained deployed, responsive, and reachable.
+  - **Firestore Backend & DB ID**: Confirmed and active (`softify` database).
+  - **Store Connection**: Verified and healthy connection decrypted safely (`tokenValid: true`).
+  - **Product Snapshot Count**: `13` products stored in the `product_snapshots` collection.
+  - **Sync Behavior**: Synchronizing catalog products was intentionally skipped to keep a clean test footprint.
+  - **Dry Run Verification**: All five production-safe agents (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`) ran successfully in a dry run without exposing legacy agents.
+  - **Capped Fields Compliance**: Proposed actions generated stayed strictly within per-agent allowed metadata lists (with read-only agents producing zero proposed actions). No price, variant, media, descriptionHtml, or inventory fields appeared.
+  - **Approvals & Auto-Execution**: The approvals bridge workflow successfully queued proposals in a `PENDING` state and transitioned them to `APPROVED` upon merchant decision, verifying that approvals change database state only and do **not** trigger auto-execution on Shopify.
+  - **Execution Containment**: Initiating manual execution commits was blocked with HTTP 400 (`EXECUTION_BLOCKED`) due to the missing `write_products` scope. *No successful Shopify mutation was observed, and no write_products path was tested on live stores.*
+  - *No real production merchant onboarding or live production storefront migrations were executed during this phase.*
 
 ## Next Recommended Phase
-- **Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan**: Draft and finalize the merchant onboarding checklists, monitor live catalog diagnostics in production-persistence Firestore backend, and gather pilot storefront feedback.
+- **Phase 10.17 — Controlled Merchant Pilot Onboarding Plan**: Focuses on deciding how to onboard a controlled real merchant or internal pilot user safely, without enabling `write_products` by default.
+
 
 ## Current Non-Goals
 - **No Theme Patching / Theme Tools**: Theme layout/CSS patching is entirely out-of-scope and disabled. No theme tools or read/write theme scopes may be used.

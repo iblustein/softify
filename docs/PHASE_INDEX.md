@@ -20,6 +20,8 @@ This index acts as the central directory for Softify's completed and planned dev
 | **10.13** | Real-Store Product Readiness | **Completed** | Sanitized shop readiness API, premium checklist onboarding UI, amber blocked banners, bulk UX feature flags, and e2e integration smoke validation | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.14** | Initial Agent Set & Merchant Workflows | **Completed** | Defined five active production-safe agents in registry/catalog, hid legacy agents, enforced strict per-agent field allowed lists, added status change card badges & warnings | 100% Passed (Pre-deploy checks & smoke tests) |
 | **10.15** | Production Deployment & Pilot Readiness Checklist | **Completed** | Validated compiled production deployment, Cloud Run source-based workflows, Workload Identity Federation (WIF) OIDC authentication, environment secrets audits, and operational database gating | 100% Passed — release checks, local smoke tests, and deployed Cloud Run smoke tests |
+| **10.16** | MVP Pilot Launch & Merchant Onboarding Plan | **Completed** | MVP pilot launch planning, onboarding checklists, security policies, connected-store discovery checks, and read-only development-store dry run validation | Completed — pilot planning, connected-store discovery, and read-only development-store dry run validated. |
+
 
 ## Ongoing Workflow & Maintenance Rules
 For every future phase, Antigravity must create or update the phase folder before and after implementation.
