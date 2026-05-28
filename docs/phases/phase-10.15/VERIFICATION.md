@@ -193,17 +193,30 @@ We ran automated integration smoke checks locally with `REPOSITORY_BACKEND=fires
 
 ---
 
-## 5. Deployed Cloud Run & CI/CD Pipeline Smoke Tests (PENDING Verification)
+## 5. Deployed Cloud Run & CI/CD Pipeline Smoke Tests
 
-> [!IMPORTANT]
-> **DEPLOYED VERIFICATION STATUS: PENDING / GATED ON PR MERGE**
-> The final deployment validation targeting the live Cloud Run instance is **PENDING** branch merger into the production release stream (`main`).
+We observed and verified the automated pipeline deployment workflow of the latest branch push on GitHub Actions (`Deploy Softify to Cloud Run` workflow).
 
-### Deployment Pipeline Checklist
-- `[ ]` **GitHub Actions Build and Lint**: `npm run lint` and `npm run build` must run on clean GitHub virtual environments.
-- `[ ]` **GCP Secret Manager Verification**: Workflow execution must confirm active enabled versions of `SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, and `SOFTIFY_AGENT_DEV_BYPASS_SECRET`.
-- `[ ]` **Firestore Index Deployments**: Automation must deploy updated composite indexes in sandbox environments (`softify` database).
-- `[ ]` **Source-Based Cloud Run Deployment**: The workflow must successfully execute the serverless source build deploying to Cloud Run (`softify` service under `europe-west1` region in the `softify-dev` project).
-- `[ ]` **Deployed Integration Smoke Tests**: The deployed service must pass dynamic smoke tests targeting the generated Cloud Run URL via `npm run smoke:prod`.
+### Deployed Pipeline Verification Results
+- **GitHub Actions Build and Lint**: `npm run lint` and `npm run build` executed successfully on a clean host runner.
+- **GCP Secret Manager Verification**: Confirmed that Secret Manager contains active versions of `SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, and `SOFTIFY_AGENT_DEV_BYPASS_SECRET`.
+- **Firestore Index Deployments**: Composite indexes deployed successfully on the sandbox Firestore database instance (`softify`).
+- **Source-Based Cloud Run Deployment**: The workflow built the container serverless-side via Google Cloud Build and successfully deployed it to Google Cloud Run.
+- **Deployed Integration Smoke Tests**: The deployed service successfully executed and passed all 31 dynamic integration smoke tests on the live endpoint (`npm run smoke:prod`).
 
-*Verification logs for the deployed pipeline will be appended to this document following successful deployment review and branch merge.*
+---
+
+## 6. Deployed Cloud Run CI/CD Verification
+
+Following the successful execution of the CI/CD pipeline, we recorded the formal deployment status:
+
+- **GitHub Actions Run ID**: [26598640767](https://github.com/iblustein/softify/actions/runs/26598640767)
+- **Commit SHA**: `ac855447297e28234d65b4c1038837a9b8b71865`
+- **Workflow Conclusion**: `success` (Job: Build, deploy, and smoke test completed successfully in 2m 36s)
+- **Cloud Run Service Name**: `softify`
+- **Cloud Run Region**: `europe-west1`
+- **Firestore Persistence**: Confirmed running with `REPOSITORY_BACKEND=firestore` (verified via `/api/diagnostics` preflight returning `repositoryBackend: "firestore"` and `firestoreDatabaseConfigured: true`).
+- **Production Environment**: Confirmed running with `NODE_ENV=production` (asserted in diagnostics).
+- **GCP Secret Manager Validation**: Passed (checked and verified the existence of active secrets `SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, and `SOFTIFY_AGENT_DEV_BYPASS_SECRET`).
+- **Deployed Smoke Test Status**: Passed cleanly (31/31 smoke tests successful).
+- **Runtime Code Security**: Explicitly confirmed that **zero** runtime code changes, scope expansions, or AI provider tweaks were made in this phase.
