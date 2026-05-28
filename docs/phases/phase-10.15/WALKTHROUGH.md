@@ -56,7 +56,7 @@ Configured as regular public variables inside Google Cloud Run console or build 
 - `NODE_ENV`: Must be strictly set to `"production"`.
 - `REPOSITORY_BACKEND`: Must be strictly set to `"firestore"`.
 - `SHOPIFY_API_KEY`: The public Client ID for the Shopify App integration (moved out of GCP Secret Manager).
-- `SOFTIFY_ALLOW_AGENT_DEV_BYPASS`: Must be strictly set to `"false"` (or left unset) inside the production console. (Allowed strictly as `"true"` during transient automated smoke testing workflows).
+- `SOFTIFY_ALLOW_AGENT_DEV_BYPASS`: The current CI/CD deployment workflow sets `SOFTIFY_ALLOW_AGENT_DEV_BYPASS="true"` solely to facilitate controlled deployed smoke validation targeting the freshly revisioned container. This bypass is acceptable only while strictly protected by a cryptographically strong `SOFTIFY_AGENT_DEV_BYPASS_SECRET` dynamically resolved from Secret Manager. It must not be described as the default merchant pilot behavior: prior to exposing the merchant pilot environment, the team must explicitly review whether the dev bypass should be disabled or completely isolated from any merchant-facing access.
 - `FIRESTORE_DATABASE_ID`: Identifies the target Firestore instance (`(default)` or dedicated instance such as `softify`).
 - `SHOPIFY_APP_URL`: The fully qualified public domain of the running Cloud Run service.
 
