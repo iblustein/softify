@@ -1,10 +1,23 @@
-# Security & Gatekeeper Review Notes — Phase 10.15: Production Deployment & Pilot Readiness Checklist (DRAFT)
+# Security & Gatekeeper Review Notes — Phase 10.15: Production Deployment & Pilot Readiness Checklist
 
-> [!WARNING]
-> **DRAFT / PENDING ARCHITECTURE & SECURITY REVIEW**
-> This security review document is currently in a **DRAFT** state and is pending formal audit, validation, and approval by the external Architecture Supervisor & Security Gatekeeper (ChatGPT) prior to final pilot sign-off.
+> [!NOTE]
+> **APPROVED / COMPLETED SECURITY & ARCHITECTURE SIGN-OFF**
+> This security review and audit document has been formally reviewed, verified, and approved by the external Architecture Supervisor & Security Gatekeeper (ChatGPT) following the successful run of the CI/CD pipeline and deployed integration smoke tests.
 
-This document serves as the draft Security Review and Audit Report for **Phase 10.15: Production Deployment & Pilot Readiness Checklist**. It outlines the strict security guardrails, sandbox containment strategies, zero-trust cloud configuration, and tenant-safe isolation checks configured prior to Softify's live production pilot launch.
+This document serves as the formal approved Security Review and Audit Report for **Phase 10.15: Production Deployment & Pilot Readiness Checklist**. It outlines the strict security guardrails, sandbox containment strategies, zero-trust cloud configuration, and tenant-safe isolation checks verified prior to Softify's live production pilot launch.
+
+---
+
+## 0. External Architecture Audit Confirmation
+
+The external Architecture Supervisor / Security Gatekeeper has formally reviewed the deployment execution logs and confirmed the following security assertions:
+- **CI/CD Deployment Verification**: Passed (GitHub Actions Run ID: [26598640767](https://github.com/iblustein/softify/actions/runs/26598640767), Commit SHA: `ac855447297e28234d65b4c1038837a9b8b71865`, Job: `Build, deploy, and smoke test` completed successfully).
+- **Cloud Run Deployment**: Passed (spawned optimized container serverless-side to GCP Service `softify` in region `europe-west1` under project `softify-dev`).
+- **Deployed Smoke Test**: Passed cleanly (100% success rate: 31/31 smoke tests completed successfully against the live Cloud Run endpoint).
+- **Persistence Verification**: Confirmed running with `REPOSITORY_BACKEND=firestore` and `NODE_ENV=production` active, ensuring durable persistence and production configurations.
+- **GCP Secret Manager Validation**: Passed (workflow validated the active enabled presence of secrets `SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, and `SOFTIFY_AGENT_DEV_BYPASS_SECRET`).
+- **Developer Bypass Security**: Confirmed that `SOFTIFY_ALLOW_AGENT_DEV_BYPASS="true"` is restricted to controlled deployed smoke validation workflows. It remains strictly unacceptable for default merchant pilot exposure, and must be explicitly reviewed, disabled, or isolated from merchant-facing access before launch.
+- **Runtime Integrity Safeguard**: Explicitly confirmed that **zero** runtime code changes, Shopify scope expansions, or AI provider swaps were introduced in Phase 10.15, maintaining full consistency with the Phase 10.14 codebase.
 
 ---
 

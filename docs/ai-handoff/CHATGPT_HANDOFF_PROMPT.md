@@ -38,7 +38,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Production Bulk Operations Foundation (Phase 10.12) is complete, establishing secure multi-select bulk proposed actions and merchant approvals, dynamic fail-fast tenant preflight validations, 500ms safety delays, sequential claim locks, and live stepper UI checklists.
 - Real-Store Product Readiness (Phase 10.13) is complete, delivering a sanitized connection diagnostics & readiness API, premium store setup dashboard checklist card, explicit execute button overrides and amber-tinted "Mutations Blocked" banners on write scope deficiency, and frontend UX bulk execute gating.
 - Initial Agent Set & Merchant Workflows (Phase 10.14) is complete, defining exactly the five active production-safe agents, hiding legacy agents, enforcing strict allowed fields per agent, and rendering status change warnings.
-- Production Deployment & Pilot Readiness (Phase 10.15) is in review, drafting compiled production deployment architectures, zero-trust Workload Identity Federation (using google-github-actions/auth@v3), environment secrets audits, and operational database gating pending final CI/CD verification.
+- Production Deployment & Pilot Readiness (Phase 10.15) is complete, formally validating compiled production Cloud Run serverless deployment workflows, zero-trust OIDC Workload Identity Federation (using google-github-actions/auth@v3), environments mapping, GCP Secret Manager validations (secrets: SHOPIFY_API_SECRET, SHOPIFY_TOKEN_ENCRYPTION_KEY, SOFTIFY_AGENT_DEV_BYPASS_SECRET), operational database gates, and dynamic live Cloud Run deployed smoke tests (31/31 passed cleanly on Run ID: 26598640767).
 - Robust pre-deployment static checks (58 tests) and integration smoke test suites (31 tests) are passing completely.
 
 ### Completed Milestones
@@ -57,6 +57,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.12 — Production Bulk Operations Foundation
 - Phase 10.13 — Real-Store Product Readiness
 - Phase 10.14 — Initial Agent Set & Merchant Workflows
+- Phase 10.15 — Production Deployment & Pilot Readiness Checklist
 
 
 ### Core Architectural Guardrails & Constraints
@@ -89,7 +90,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to review and complete Phase 10.15 — Production Deployment & Pilot Readiness Checklist. The goal is to audit and finalize compiled Cloud Run serverless deployment architectures, WIF credentials, public/secret environment configuration maps, and pending dynamic CI/CD deployed validation tests.
+We are ready to initiate Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan. The goal is to draft the operational onboarding plans, tenant setup protocols, and merchant checklists. Implementation must begin by drafting the implementation plan only.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

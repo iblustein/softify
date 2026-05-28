@@ -54,11 +54,16 @@ This document provides a highly durable and centralized technical reference for 
 - **Production Bulk Operations Foundation**: Multi-select bulk workflows on proposed actions (batch request-approval, batch dismiss) and merchant approvals (batch-decide, batch-execute). Implements strict Phase 1 preflight tenant assertions, 500ms safety throttle delays, sequential dispatch via ApprovedProductMutationExecutorService, individual claim locks, and live sequential progress checklist stepper UX.
 - **Real-Store Product Readiness**: A sanitized, read-only connection diagnostics & readiness API (`GET /api/shop/readiness`), premium store setup readiness dashboard card (`AgentWorkspace.tsx`), explicit execute button overrides and amber-tinted "Mutations Blocked" banners on write scope deficiency (`ApprovalQueue.tsx`), and frontend UX bulk execute gating via `VITE_SOFTIFY_ALLOW_BULK_EXECUTE`.
 - **Initial Agent Set & Merchant Workflows**: Formally defined and configured the initial active production-safe multi-agent catalog (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`), enforcing strict allowed fields, hiding legacy development agents from public display, rendering prominent status change warnings inside left-card badges and drawer panels.
-- **CI/CD & Production Smoke Tests**: Complete pre-deployment verification suite. Static release checks pass cleanly (58/58) and local in-process smoke tests pass cleanly (31/31). Deployed Cloud Run smoke validation is **still pending** final CI/CD deployment verification and branch merger to main. Phase 10.15 remains strictly in a pending review and verification state.
-- **Production Deployment & Pilot Readiness (In Review)**: Formally drafted compiled serverless source-based Cloud Run deployment architectures, zero-trust OIDC Workload Identity Federation (WIF) OIDC authentication (using auth@v3), public/secret environment variables separation, and required operational database release gates. Verification Pending for final CI/CD pipeline run.
+- **CI/CD & Production Smoke Tests**: Full verification suite passed cleanly. Static release checks passed 58/58, local in-process smoke tests passed 31/31, and actual deployed Cloud Run smoke tests passed 31/31.
+- **Production Deployment & Pilot Readiness**: Phase 10.15 is completed and approved. Formally validated compiled serverless source-based Cloud Run deployment architectures, zero-trust OIDC Workload Identity Federation (WIF) OIDC authentication (using auth@v3), environment secrets mapping (`SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, `SOFTIFY_AGENT_DEV_BYPASS_SECRET`), and required operational database gates. GitHub Actions Run ID [26598640767](https://github.com/iblustein/softify/actions/runs/26598640767) succeeded.
+  - **Service Name**: `softify`
+  - **Deployment Region**: `europe-west1`
+  - **Target Project ID**: `softify-dev`
+  - **Firestore Persistent Backend**: Confirmed and active.
+  - **Production Environment**: Confirmed and active.
 
 ## Next Recommended Phase
-- **Phase 10.15 — Production Deployment & Pilot Readiness Checklist (Pending Review/Approval)**: Complete formal review of the deployment architecture, merge code to main to execute GitHub Actions deployed smoke validation, and finalize pilot readiness logs.
+- **Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan**: Draft and finalize the merchant onboarding checklists, monitor live catalog diagnostics in production-persistence Firestore backend, and gather pilot storefront feedback.
 
 ## Current Non-Goals
 - **No Theme Patching / Theme Tools**: Theme layout/CSS patching is entirely out-of-scope and disabled. No theme tools or read/write theme scopes may be used.

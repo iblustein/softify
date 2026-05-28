@@ -9,17 +9,20 @@ This document outlines the goals, requirements, and scope definitions for the ne
 ### Phase 10.14 — Initial Agent Set & Merchant Workflows
 - **Goal**: Defined and configured the active production-safe agent catalog MVP set, enforcing allowed field policies, hiding legacy agents, and rendering status change warnings.
 
+### Phase 10.15 — Production Deployment & Pilot Readiness Checklist
+- **Goal**: Formally validated the compiled production deployment pipeline, serverless source-based Cloud Run builds, OIDC Workload Identity Federation (using google-github-actions/auth@v3), environments mapping, GCP Secret Manager validations (`SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, `SOFTIFY_AGENT_DEV_BYPASS_SECRET`), operational database gates, and dynamic live Cloud Run deployed smoke tests (31/31 passed cleanly on Run ID: 26598640767).
+
 ---
 
-## 2. Next Active Milestone: Phase 10.15 — Production Deployment & Pilot Readiness Checklist (In Review)
+## 2. Next Active Milestone: Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan (Planning Only)
 
 ### Goal
-Validate compiled production assets under Cloud Run, map environment configurations, configure zero-trust OIDC WIF credentials, and execute deployed integration smoke validation targeting the spawned service revision following PR merger.
+Formulate the operational plan, tenant setup protocols, and merchant onboarding checklists to safely launch Softify's live MVP pilot.
 
 ### Scope
-- **Deployment Review Walkthrough**: Map dynamic service, region, and project variables cleanly to the existing workflow source of truth, and record public/secret variables mapping (such as `SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, and `SOFTIFY_AGENT_DEV_BYPASS_SECRET`).
-- **Draft Security Review Notes**: Audit tenant isolation, scopes limit, and database isolation in draft form pending final reviewer feedback.
-- **CI/CD Smoke Validation**: Execute GitHub Actions deployment pipeline (using google-github-actions/auth@v3) and dynamic deployed smoke tests once branch merger is finalized.
+- **Implementation Plan Only**: Draft and finalize the onboarding implementation plan detailing tenant provisioning, store connectivity checks, and initial catalog synchronizations. Do not write runtime code.
+- **Merchant Onboarding Checklists**: Create structured checklist templates to guide merchant installations and scope resolutions.
+- **Telemetry Review Guidelines**: Define operational guardrails for reviewing live sanitizations, audit telemetry, and trace timelines during the pilot phase.
 ---
 
 ## 3. Explicitly Deferred Agent Scopes (Out-of-Scope)
