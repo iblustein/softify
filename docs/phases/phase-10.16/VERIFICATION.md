@@ -64,10 +64,10 @@ The following table maps the required planning areas to the corresponding sectio
 
 The planning documents successfully maintain all platform containment policies:
 1. **Stateless AI Boundary**: Ensures that AI modules function purely as advisors. The documents outline no direct path for AI engines to call Shopify write routes or access private database keys.
-2. **Controlled Gateway Meditations**: Reaffirms that the Softify runtime Tool Gateway functions as the sole authorization gatekeeper for all integrations.
+2. **Controlled Gateway Mediation**: Reaffirms that the Softify runtime Tool Gateway functions as the sole authorization gatekeeper for all integrations.
 3. **No Automatic Storefront Mutations**: Confirms that approving proposed recommendations in the Approvals Inbox will never trigger storefront writes automatically. All mutation commands require explicit merchant action.
 4. **Theme Mutations Disabled**: Ensures no theme asset permissions (`read_themes` or `write_themes`) are requested.
-5. **Mutation Capability Caps**: Strict limitations ensure that only basic text attributes (`vendor`, `productType`, `status`, `tags`) can ever be targeted for editing, even inside the separately approved sandbox path.
+5. **Mutation Capability Caps**: Mutation capability remains capped by the current per-agent allowed-field policy: title only where permitted, and vendor, productType, status, or tags where permitted. High-risk fields remain prohibited.
 6. **High-Risk Protections**: Price, inventory, variant details, product media, and product `descriptionHtml` are strictly omitted from allowed mutation targets.
 7. **Read-Only Telemetry**: Ensures audit trails, timelines, and gateway reports strip all raw prompts, model chains-of-thought, credentials, and customer PII before saving or rendering.
 8. **Multi-Tenant Separation**: Dynamic context isolation checks remain fully mapped in database structures to prevent any cross-tenant leaks.

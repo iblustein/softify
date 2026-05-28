@@ -67,7 +67,7 @@ The pilot explicitly defines two distinct operational paths:
 | Path Name | Allowed Scopes | Description & Behavior | Mutation Status |
 | :--- | :--- | :--- | :--- |
 | **Default Read-Only Pilot Path (Standard)** | `read_products`, `read_orders`, `read_customers` | The standard onboarding posture for the pilot. Retains compatibility with read-oriented workflows while completely blocking live mutations. | **BLOCKED**: Execution commits fail; amber banner is displayed. |
-| **Separately Approved Sandbox Path** | `read_products`, `write_products`, `read_orders`, `read_customers` | Allowed strictly in controlled developer sandbox stores after explicit, separate merchant authorization. | **ENABLED**: Caps writes strictly to `vendor`, `productType`, `status`, and `tags`. |
+| **Separately Approved Sandbox Path** | `read_products`, `write_products`, `read_orders`, `read_customers` | Allowed strictly in controlled developer sandbox stores after explicit, separate merchant authorization. | **ENABLED**: Writes are strictly capped to the current per-agent allowed fields, such as title where permitted, vendor, productType, status, and tags. Field permissions are strictly enforced per agent. |
 
 ---
 
@@ -97,7 +97,7 @@ Operators must instantly halt the pilot and route 100% of traffic back to the st
 Throughout Phase 10.16 planning and subsequent pilot iterations, the core architectural guardrails remain absolutely intact:
 * **Stateless Recommendation Engines**: AI providers function strictly as offline advisors. They possess no direct database write paths, token access, or live API credentials.
 * **Unified Tool Gateway**: All tool execution requests are validated dynamically against `allowedTools`, user tenant, and field policies, stripping unallowlisted keys.
-* **Strict Mutation Capping**: Write commits are restricted to safe metadata fields (`vendor`, `productType`, `status`, `tags`).
+* **Strict Mutation Capping**: Write commits are restricted to the current per-agent allowed metadata fields, including title only where the agent policy permits it, and vendor, productType, status, or tags where permitted.
 * **Price/Inventory Protection**: Price, inventory, variant, product media, and product `descriptionHtml` mutations are strictly rejected by the executor.
 * **Theme Protection**: Zero theme asset read or write capabilities are authorized.
 * **Tenant Isolation**: Deep multi-tenant separation is checked strictly at the service and data layers before any database or gateway transaction.
