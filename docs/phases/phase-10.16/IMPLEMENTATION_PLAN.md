@@ -11,7 +11,7 @@ As a planning-only phase, no runtime source code modifications, deployment alter
 The core objective of **Phase 10.16** is to validate that the complete **Softify** platform operates successfully and safely under controlled, real-world pilot store connections. This phase is designed to prove that:
 1. **Onboarding & Authentication**: A merchant can seamlessly trigger and complete the Shopify OAuth connection handshake.
 2. **Readiness Verification**: Softify can dynamically execute store preflights, validating configurations and reporting correct connectedness status.
-3. **Firestore Synchronization**: Store product snapshots can be synchronized recursively and safely from Shopify Admin APIs into Google Firestore.
+3. **Firestore Synchronization**: Store product metadata snapshots can be synchronized safely from Shopify into Firestore.
 4. **Controlled Catalog Workspace**: The catalog workspace can resolve installations and allow the production-safe catalog agents to perform diagnostic scans.
 5. **No Auto-Execution**: Scanned recommendations and proposed actions are bridged correctly into the merchant approvals queue, ensuring approvals remain strictly merchant-in-the-loop.
 6. **Explicit Gated Executions**: Committing an approved update to a real storefront is blocked unless required scopes (`write_products`) are explicitly resolved and approved by the merchant.
@@ -34,7 +34,7 @@ To guarantee zero database pollution or accidental production service disruption
 This checklist defines the operational verification sequence to onboard a pilot store safely:
 
 - [ ] **Shopify App Installation**: Complete app installation via Shopify Partners dashboard or app URL.
-- [ ] **OAuth Completion**: Complete redirect loops and confirm successful access token decryption setup.
+- [ ] **OAuth Completion**: Complete redirect loops and confirm the store connection is persisted and can be resolved securely by the backend.
 - [ ] **Store Connection Status**: Confirm connection registers status `CONNECTED` in Firestore collection `shopify_store_connections`.
 - [ ] **Scope Verification**: Confirm granted scopes strictly match pilot parameters (`read_products`, `read_orders`, `read_customers`).
 - [ ] **Readiness Endpoint Validation**: Query `GET /api/shop/readiness` and assert it returns connection metrics without leakages.
@@ -52,8 +52,8 @@ Softify operates under a strict minimal API scope posture during the pilot launc
 
 ### A. Default Scope Posture
 - `read_products`: Strictly required to fetch catalog snapshots.
-- `read_orders`: Required to parse read-only merchandising metrics.
-- `read_customers`: Required to parse read-only buyer trends.
+- `read_orders`: Part of the current deployed read-oriented scope posture (retains connection compatibility; Phase 10.16 does not introduce new order analytics behaviors or expose buyer PII).
+- `read_customers`: Part of the current deployed read-oriented scope posture (retains connection compatibility; Phase 10.16 does not introduce customer diagnostics or buyer PII exposure).
 
 **No `write_products` scope is requested by default during onboarding.**
 
@@ -92,7 +92,9 @@ The manual validation sequence for the pilot storefront consists of the followin
 7. **Approvals Gating**:
    - Approve or reject items from the queue detail drawer.
    - **No Auto-Execution**: Confirm that approving an item changes its status to `APPROVED` but performs **no automatic storefront writes**.
-8. **Execution Gating**: Trigger manual execution and verify that the commit is successfully completed in write-allowed stores, or blocked with an amber "Mutations Blocked" banner if the store lacks `write_products` scope.
+8. **Execution Gating**: Verify manual execution behavior under two paths:
+   - **Default Read-Only Pilot Path**: Attempting to execute returns a gated error, disabling execution CTAs and replacing them with a prominent amber "Mutations Blocked" banner.
+   - **Separately Approved Sandbox `write_products` Path**: Manual execution and storefront committing may be successfully tested only after obtaining explicit separate authorization and approval to request the write scope.
 
 ---
 
@@ -120,7 +122,7 @@ The pilot must be immediately suspended and rolled back to a safe revision if an
 - **Auto-Execution Detection**: Any scenario where approving a proposed action triggers automatic storefront execution without explicit merchant dispatch.
 - **Theme Scope Detection**: Any reference to `read_themes`, `write_themes`, or theme assets tools inside the runtime Gateway.
 - **Memory Backend in Prod**: Any deployment instance of Cloud Run initializing with `REPOSITORY_BACKEND=memory` in a pilot environment.
-- **Execution State Mismatches**:Misleading approvals queue statuses or concurrency locks failures.
+- **Execution State Mismatches**: Misleading approvals queue statuses or concurrency locks failures.
 
 ---
 
