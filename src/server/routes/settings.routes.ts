@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { getRepositories } from "../repositories/repository-provider.js";
 import { normalizeShopDomain } from "../services/shopify-oauth.service.js";
+import { getSystemAiEngines, testAiEngineConnection } from "../services/ai-engine.service.js";
 
 const router = Router();
 
@@ -67,6 +68,39 @@ router.get("/settings/store-status", async (req, res) => {
 });
 
 /**
+ * GET /api/settings/ai-engines
+ * Returns the list of registered system AI engines with sanitized metadata.
+ */
+router.get("/settings/ai-engines", async (req, res) => {
+  try {
+    const tenantCtx = await validateTenant(req, res);
+    if (!tenantCtx) return;
+    const engines = getSystemAiEngines();
+    res.json(engines);
+  } catch (error: any) {
+    console.error("Failed to read system AI engines:", error);
+    res.status(500).json({ error: "Internal server error.", code: "INTERNAL_ERROR" });
+  }
+});
+
+/**
+ * POST /api/settings/ai-engines/:engineId/test
+ * Securely executes the connection test using backend-only credentials.
+ */
+router.post("/settings/ai-engines/:engineId/test", async (req, res) => {
+  try {
+    const { engineId } = req.params;
+    const tenantCtx = await validateTenant(req, res);
+    if (!tenantCtx) return;
+    const result = await testAiEngineConnection(engineId);
+    res.json(result);
+  } catch (error: any) {
+    console.error(`Failed to test connection for ${req.params.engineId}:`, error);
+    res.status(500).json({ error: "Internal server error.", code: "INTERNAL_ERROR" });
+  }
+});
+
+/**
  * GET /api/settings/agents
  * Lists available agents status.
  */
@@ -78,6 +112,7 @@ router.get("/settings/agents", async (req, res) => {
 
     const installation = await repos.agentInstallations.getByShopAndAgent(cleanShop, "theme_editor_ai_agent");
     const enabled = installation ? installation.enabled === true : false;
+    const defaultModel = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
     res.json([
       {
@@ -87,7 +122,8 @@ router.get("/settings/agents", async (req, res) => {
         enabled,
         status: enabled ? "ACTIVE" : "INACTIVE",
         requiredPermissions: ["read_themes", "write_themes"],
-        aiProvider: "gemini"
+        engineId: installation?.engineId || "gemini",
+        model: installation?.model || defaultModel
       }
     ]);
   } catch (error: any) {
@@ -97,7 +133,7 @@ router.get("/settings/agents", async (req, res) => {
 
 /**
  * PATCH /api/settings/agents/:agentId
- * Toggles an agent on/off.
+ * Updates agent settings including enabled toggle, engineId, and model assignment.
  */
 router.patch("/settings/agents/:agentId", async (req: any, res: any) => {
   try {
@@ -106,11 +142,7 @@ router.patch("/settings/agents/:agentId", async (req: any, res: any) => {
       return res.status(400).json({ error: "Only Theme Editor AI Agent can be managed in this phase.", code: "INVALID_AGENT" });
     }
 
-    const { enabled } = req.body;
-    if (typeof enabled !== "boolean") {
-      return res.status(400).json({ error: "Missing or invalid 'enabled' boolean state.", code: "INVALID_PARAMETERS" });
-    }
-
+    const { enabled, engineId, model } = req.body;
     const tenantCtx = await validateTenant(req, res);
     if (!tenantCtx) return;
     const { connection, cleanShop, repos } = tenantCtx;
@@ -118,13 +150,33 @@ router.patch("/settings/agents/:agentId", async (req: any, res: any) => {
     const docId = `${connection.id}_${agentId}`;
     const existing = await repos.agentInstallations.getByShopAndAgent(cleanShop, agentId);
 
+    const updateEnabled = typeof enabled === "boolean" ? enabled : (existing ? existing.enabled : false);
+    const updateEngineId = typeof engineId === "string" ? engineId : (existing?.engineId || "gemini");
+    
+    const defaultModel = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    const updateModel = typeof model === "string" ? model : (existing?.model || defaultModel);
+
+    // Validate engineId
+    if (updateEngineId !== "gemini") {
+      return res.status(400).json({ error: "Only Gemini engine is supported in this phase.", code: "INVALID_ENGINE" });
+    }
+
+    // Validate model
+    const engines = getSystemAiEngines();
+    const gemini = engines.find(e => e.engineId === "gemini");
+    if (model && (!gemini || !gemini.supportedModels.includes(model))) {
+      return res.status(400).json({ error: `Unsupported model '${model}' for engine 'gemini'.`, code: "UNSUPPORTED_MODEL" });
+    }
+
     const saved = await repos.agentInstallations.upsertInstallation({
       id: docId,
       organizationId: connection.organizationId,
       storeConnectionId: connection.id,
       shopDomain: cleanShop,
       agentId,
-      enabled,
+      enabled: updateEnabled,
+      engineId: updateEngineId,
+      model: updateModel,
       allowedTools: [
         "shopify.theme.themes",
         "shopify.theme.assets",
@@ -139,9 +191,12 @@ router.patch("/settings/agents/:agentId", async (req: any, res: any) => {
       ok: true,
       agentId,
       enabled: saved.enabled,
-      status: saved.enabled ? "ACTIVE" : "INACTIVE"
+      status: saved.enabled ? "ACTIVE" : "INACTIVE",
+      engineId: saved.engineId,
+      model: saved.model
     });
   } catch (error: any) {
+    console.error("Failed to update agent settings:", error);
     res.status(500).json({ error: "Internal server error.", code: "INTERNAL_ERROR" });
   }
 });

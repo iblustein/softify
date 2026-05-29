@@ -43,7 +43,8 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Live Installed Store UI Truth Audit (Phase 10.17) is complete, hardening the UI to prevent any mock/demo/fallback data from being presented as real connected-store data, sanitizing OAuth scopes representation, and removing any write/full-access implications under read-only containment.
 - Merchant Onboarding UX & Read-Only Pilot Polish (Phase 10.18) is complete, fixing readiness allowlist regressions, adding Guided Onboarding Checklist step-by-step progress cards, mounting an explicit Trust & Safety Panel, polishing empty analytics states, rebranding proposed change cards to use non-jargon fields, collapsing developer tools under warning tags, and verifying all static release checks and smoke tests pass (32/32 smoke tests passed!).
 - Simplified Merchant UI & Theme Editor AI Agent MVP (Phase 11.0) is complete, pivoting the product direction around the Theme Editor AI Agent MVP. Connects Settings and active Dynamic Team sidebar nav, builds premium Theme Editor Chat and Settings views, mounts theme asset routes under /api, compiles successfully under npm run lint, passes all 58 pre-deployment checks, and executes local smoke checks (32/32 tests) successfully.
-- Robust pre-deployment static checks (58 tests) and integration smoke test suites (32 tests) are passing completely.
+- System AI Engines & Agent Engine Assignment (Phase 11.1) is complete, building system-managed AI engine registry metadata, sanitized connection test probe commands, generic assignment database schemas, beautiful Settings selectors, and dynamic chat prompt routing. Verified all static release checks (59/59) and integration smoke tests (34/34) pass completely.
+- Robust pre-deployment static checks (59 tests) and integration smoke test suites (34 tests) are passing completely.
 
 ### Completed Milestones
 - Phase 10.1 — AI Engine Interface and Catalog Agent POC
@@ -66,6 +67,7 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.17 — Live Installed Store UI Truth Audit
 - Phase 10.18 — Merchant Onboarding UX & Read-Only Pilot Polish
 - Phase 11.0 — Simplified Merchant UI & Theme Editor AI Agent MVP
+- Phase 11.1 — System AI Engines & Agent Engine Assignment
 
 
 ### Core Architectural Guardrails & Constraints
@@ -98,7 +100,7 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 11.1 — Theme Editor AI Agent Pilot Launch. The goal is to formally launch the live pilot program specifically for the Theme Editor AI Agent MVP, onboarding pilot merchants to interactively plan and execute theme updates.
+We are ready to initiate Phase 11.2 — Theme Editor AI Agent Pilot Launch. The goal is to formally launch the live pilot program specifically for the Theme Editor AI Agent MVP, onboarding pilot merchants to interactively plan and execute theme updates.
 Implementation must begin by drafting the implementation plan only.
 
 Please inspect the current GitHub code before proposing or assuming any code details.

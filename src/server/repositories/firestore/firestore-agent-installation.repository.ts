@@ -43,6 +43,8 @@ function mapDocument(doc: FirebaseFirestore.DocumentSnapshot): AgentInstallation
     enabled: data.enabled,
     createdAt: data.createdAt,
     updatedAt: data.updatedAt,
+    engineId: data.engineId,
+    model: data.model,
     // Legacy fields
     agentDefinitionId: data.agentDefinitionId,
     customSettings: data.customSettings

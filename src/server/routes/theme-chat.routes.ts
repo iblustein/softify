@@ -48,7 +48,7 @@ async function validateChatTenant(req: any, res: any) {
     return null;
   }
 
-  return { connection, cleanShop, repos };
+  return { connection, cleanShop, repos, installation };
 }
 
 /**
@@ -153,13 +153,18 @@ router.post("/agents/theme-editor/conversations/:conversationId/messages", async
 
     const tenantCtx = await validateChatTenant(req, res);
     if (!tenantCtx) return;
-    const { cleanShop, repos, connection } = tenantCtx;
+    const { cleanShop, repos, connection, installation } = tenantCtx;
 
     // Load active connection/conversation checks
     const conversation = await repos.conversations.getConversationById(conversationId);
     if (!conversation || conversation.organizationId !== connection.organizationId) {
       return res.status(404).json({ error: "Conversation not found.", code: "CONVERSATION_NOT_FOUND" });
     }
+
+    // Resolve assigned engine and model
+    const engineId = installation?.engineId || "gemini";
+    const defaultModel = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    const model = installation?.model || defaultModel;
 
     // 1. Save user message to database
     const userMessage = await repos.conversations.addConversationMessage({
@@ -170,11 +175,14 @@ router.post("/agents/theme-editor/conversations/:conversationId/messages", async
       timestamp: new Date().toISOString()
     });
 
-    const client = getGeminiSDK();
+    const client = engineId === "gemini" ? getGeminiSDK() : null;
 
     // 2. AI Credentials check fail-safe
-    if (!client) {
-      const fallbackText = "⚠️ **AI Provider Credentials Missing:**\n\nThe AI Engine (Gemini) is not configured on the backend server. Please verify that the `GEMINI_API_KEY` environment variable is loaded to authorize Theme Editor AI responses.";
+    if (!client || engineId !== "gemini") {
+      let fallbackText = "⚠️ **Gemini is not configured yet. Configure the system AI engine before using this agent.**";
+      if (engineId !== "gemini") {
+        fallbackText = `⚠️ **Unsupported AI Engine:**\n\nThe assigned AI Engine '${engineId}' is not supported in this phase.`;
+      }
       
       const assistantMessage = await repos.conversations.addConversationMessage({
         id: `msg-${Date.now()}-a`,
@@ -258,50 +266,59 @@ router.post("/agents/theme-editor/conversations/:conversationId/messages", async
     `;
 
     // 5. Query Gemini
-    const geminiRes = await client.models.generateContent({
-      model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json"
-      }
-    });
-
-    let parsedResponse: any = null;
+    let geminiRes: any = null;
     let parseError = false;
     let validationErrorMsg = "";
 
     try {
-      parsedResponse = JSON.parse(geminiRes.text.trim());
-      
-      // Basic property checks
-      if (!parsedResponse || typeof parsedResponse.reply !== "string" || typeof parsedResponse.requiresChanges !== "boolean") {
-        parseError = true;
-        validationErrorMsg = "Gemini response is missing required properties or has invalid types.";
-      } else if (parsedResponse.requiresChanges) {
-        // Validate proposedChanges structure
-        if (!Array.isArray(parsedResponse.proposedChanges) || parsedResponse.proposedChanges.length === 0) {
+      geminiRes = await client.models.generateContent({
+        model: model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json"
+        }
+      });
+    } catch (err: any) {
+      parseError = true;
+      validationErrorMsg = `Gemini AI Engine error: ${err.message || "Failed to contact Gemini provider."}`;
+    }
+
+    let parsedResponse: any = null;
+
+    if (!parseError) {
+      try {
+        parsedResponse = JSON.parse(geminiRes.text.trim());
+        
+        // Basic property checks
+        if (!parsedResponse || typeof parsedResponse.reply !== "string" || typeof parsedResponse.requiresChanges !== "boolean") {
           parseError = true;
-          validationErrorMsg = "requiresChanges is true but proposedChanges is empty or not an array.";
-        } else {
-          const change = parsedResponse.proposedChanges[0];
-          if (!change || !change.assetKey || typeof change.assetKey !== "string" || !validateAssetPath(change.assetKey)) {
+          validationErrorMsg = "Gemini response is missing required properties or has invalid types.";
+        } else if (parsedResponse.requiresChanges) {
+          // Validate proposedChanges structure
+          if (!Array.isArray(parsedResponse.proposedChanges) || parsedResponse.proposedChanges.length === 0) {
             parseError = true;
-            validationErrorMsg = "proposedChanges[0].assetKey is missing, invalid, or is an unsafe path.";
-          } else if (!change.newValue || typeof change.newValue !== "string" || change.newValue.trim() === "") {
-            parseError = true;
-            validationErrorMsg = "proposedChanges[0].newValue is missing or empty.";
+            validationErrorMsg = "requiresChanges is true but proposedChanges is empty or not an array.";
           } else {
-            // Validate riskLevel
-            const risks = ["Low", "Medium", "High"];
-            if (!parsedResponse.riskLevel || typeof parsedResponse.riskLevel !== "string" || !risks.includes(parsedResponse.riskLevel)) {
-              parsedResponse.riskLevel = "Medium";
+            const change = parsedResponse.proposedChanges[0];
+            if (!change || !change.assetKey || typeof change.assetKey !== "string" || !validateAssetPath(change.assetKey)) {
+              parseError = true;
+              validationErrorMsg = "proposedChanges[0].assetKey is missing, invalid, or is an unsafe path.";
+            } else if (!change.newValue || typeof change.newValue !== "string" || change.newValue.trim() === "") {
+              parseError = true;
+              validationErrorMsg = "proposedChanges[0].newValue is missing or empty.";
+            } else {
+              // Validate riskLevel
+              const risks = ["Low", "Medium", "High"];
+              if (!parsedResponse.riskLevel || typeof parsedResponse.riskLevel !== "string" || !risks.includes(parsedResponse.riskLevel)) {
+                parsedResponse.riskLevel = "Medium";
+              }
             }
           }
         }
+      } catch (e: any) {
+        parseError = true;
+        validationErrorMsg = e.message || "Failed to parse Gemini JSON output.";
       }
-    } catch (e: any) {
-      parseError = true;
-      validationErrorMsg = e.message || "Failed to parse Gemini JSON output.";
     }
 
     let assistantText = "";

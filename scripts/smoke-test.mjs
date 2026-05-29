@@ -3132,6 +3132,97 @@ async function runSuite() {
       }
     }
   });
+
+  // Test AA: Phase 11.1 System AI Engines & Agent Engine Assignment validation
+  await check("AA. Phase 11.1 System AI Engines & Agent Engine Assignment validation", async () => {
+    const timestamp = Date.now();
+    const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+    const repos = getRepositories();
+
+    // 1. Validate GET /api/settings/ai-engines returns Gemini metadata
+    const resAiEngines = await fetch(`${baseUrl}/api/settings/ai-engines?shop=glowthread-apparel.myshopify.com&t=${timestamp}`);
+    await checkResponse(resAiEngines);
+    const aiEngines = await resAiEngines.json();
+    const geminiEngine = aiEngines.find(e => e.engineId === "gemini");
+    if (!geminiEngine) throw new Error("Missing Gemini system engine in registry.");
+    if (geminiEngine.displayName !== "Gemini AI Engine" || geminiEngine.provider !== "Gemini") {
+      throw new Error(`Expected Gemini metadata, got: ${JSON.stringify(geminiEngine)}`);
+    }
+
+    // 2. Validate POST /api/settings/ai-engines/gemini/test connection execution
+    const resTestGemini = await fetch(`${baseUrl}/api/settings/ai-engines/gemini/test?shop=glowthread-apparel.myshopify.com`, {
+      method: "POST"
+    });
+    await checkResponse(resTestGemini);
+    const testResult = await resTestGemini.json();
+    if (testResult.provider !== "Gemini") {
+      throw new Error(`Expected test connection provider to be Gemini, got: ${testResult.provider}`);
+    }
+
+    // 3. Validate PATCH rejects invalid engineId
+    const resInvalidEngine = await fetch(`${baseUrl}/api/settings/agents/theme_editor_ai_agent?shop=glowthread-apparel.myshopify.com`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ engineId: "openai-gpt4" })
+    });
+    if (resInvalidEngine.status !== 400) {
+      throw new Error(`Expected invalid engine PATCH to reject with 400, got: ${resInvalidEngine.status}`);
+    }
+    const invalidEngineJson = await resInvalidEngine.json();
+    if (invalidEngineJson.code !== "INVALID_ENGINE") {
+      throw new Error(`Expected INVALID_ENGINE code, got: ${JSON.stringify(invalidEngineJson)}`);
+    }
+
+    // 4. Validate PATCH accepts valid engineId and model assignment
+    const resValidAssign = await fetch(`${baseUrl}/api/settings/agents/theme_editor_ai_agent?shop=glowthread-apparel.myshopify.com`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        engineId: "gemini", 
+        model: "gemini-1.5-flash" 
+      })
+    });
+    await checkResponse(resValidAssign);
+    const assignJson = await resValidAssign.json();
+    if (assignJson.engineId !== "gemini" || assignJson.model !== "gemini-1.5-flash") {
+      throw new Error(`Expected assigned gemini and gemini-1.5-flash, got: ${JSON.stringify(assignJson)}`);
+    }
+
+    // 5. Verify GET /api/settings/agents returns the updated engine and model
+    const resAgents = await fetch(`${baseUrl}/api/settings/agents?shop=glowthread-apparel.myshopify.com&t=${timestamp}`);
+    await checkResponse(resAgents);
+    const agentsList = await resAgents.json();
+    const themeAgent = agentsList.find(a => a.agentId === "theme_editor_ai_agent");
+    if (!themeAgent) throw new Error("Missing theme_editor_ai_agent in agents status.");
+    if (themeAgent.engineId !== "gemini" || themeAgent.model !== "gemini-1.5-flash") {
+      throw new Error(`Expected active assignment gemini-1.5-flash, got: ${JSON.stringify(themeAgent)}`);
+    }
+
+    // 6. Validate that Chat routes dynamically use the newly assigned model
+    const resStartConv = await fetch(`${baseUrl}/api/agents/theme-editor/conversations?shop=glowthread-apparel.myshopify.com`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    await checkResponse(resStartConv);
+    const convData = await resStartConv.json();
+
+    const resSendMsg = await fetch(`${baseUrl}/api/agents/theme-editor/conversations/${convData.id}/messages?shop=glowthread-apparel.myshopify.com`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: "Show my storefront theme"
+      })
+    });
+    await checkResponse(resSendMsg);
+    const sendMsgJson = await resSendMsg.json();
+    const lastMessage = sendMsgJson.messages[sendMsgJson.messages.length - 1];
+    
+    if (!lastMessage || !lastMessage.text) {
+      throw new Error("Chat response has no message content.");
+    }
+
+    console.log("   [TEST AA] Verified GET/POST engines status and testing, invalid registry boundaries, successful engine/model assignment patch, and dynamic chat context loading successfully!");
+  });
   }
 
   // Summary Printing

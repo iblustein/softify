@@ -24,9 +24,12 @@ This document outlines the goals, requirements, and scope definitions for the ne
 ### Phase 11.0 — Simplified Merchant UI & Theme Editor AI Agent MVP
 - **Goal**: Pivot the product direction around the Theme Editor AI Agent MVP. Simplify sidebar navigation to Settings and active/enabled dynamic Your Team roster. Build interactive conversational Theme Editor Chat (defaulting to safe unpublished target themes, live theme confirmation gating, side-by-side diff previews, apply actions) and SaaS Settings React panels. Connect Express backend theme asset editing routes securely under `/api`. Confirmed 100% successful compiler builds, static release passes (58/58 tests), and dynamic local smoke checks (32/32 tests).
 
+### Phase 11.1 — System AI Engines & Agent Engine Assignment
+- **Goal**: Build a system-managed AI engine layer so Softify can centrally configure AI providers, and the existing Theme Editor AI Agent can be connected to Gemini through this system engine configuration. Implemented system AI engine registry, sanitized metadata endpoint, connection test probe commands, generic assignment schema, dynamic Settings selector UI, and dynamic chat prompt routing. Verified all static release checks (59/59) and integration smoke tests (34/34) pass cleanly.
+
 ---
 
-## 2. Next Active Milestone: Phase 11.1 — Theme Editor AI Agent Pilot Launch
+## 2. Next Active Milestone: Phase 11.2 — Theme Editor AI Agent Pilot Launch
 
 ### Goal
 Formally launch the live pilot program specifically for the Theme Editor AI Agent MVP, onboarding pilot merchants to interactively plan and execute theme updates.

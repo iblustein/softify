@@ -32,14 +32,22 @@ interface AgentSetting {
   enabled: boolean;
   status: 'ACTIVE' | 'INACTIVE';
   requiredPermissions: string[];
-  aiProvider: string;
+  engineId: string;
+  model: string;
+  activeModel?: string;
 }
 
-interface AIProviderSetting {
-  providerId: string;
-  name: string;
+interface AIEngineSetting {
+  engineId: string;
+  provider: string;
+  displayName: string;
+  enabled: boolean;
   configured: boolean;
-  activeModel: string;
+  defaultModel: string;
+  supportedModels: string[];
+  lastTestedAt?: string;
+  lastTestStatus?: 'success' | 'failed' | null;
+  credentialSource: 'env' | 'secret_manager' | 'not_configured';
 }
 
 export default function Settings({
@@ -52,40 +60,53 @@ export default function Settings({
   isLoading
 }: SettingsProps) {
   const [agents, setAgents] = useState<AgentSetting[]>([]);
-  const [providers, setProviders] = useState<AIProviderSetting[]>([]);
+  const [engines, setEngines] = useState<AIEngineSetting[]>([]);
   const [storeStatus, setStoreStatus] = useState<any>(null);
   
   const [storeInput, setStoreInput] = useState(store.url || testShop || "");
   const [loadingAgents, setLoadingAgents] = useState(false);
-  const [loadingProviders, setLoadingProviders] = useState(false);
+  const [loadingEngines, setLoadingEngines] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const shopQuery = `?shop=${encodeURIComponent(store.url || storeInput || '')}`;
+  // States for Agent Assignment editing
+  const [tempEngineId, setTempEngineId] = useState<string>("gemini");
+  const [tempModel, setTempModel] = useState<string>("gemini-1.5-flash");
+  const [savingAssignment, setSavingAssignment] = useState(false);
+
+  // States for Connection Testing
+  const [testingConnection, setTestingConnection] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<any>(null);
 
   const fetchSettingsData = async () => {
     if (!store.url) return;
     setLoadingAgents(true);
-    setLoadingProviders(true);
+    setLoadingEngines(true);
     setLoadingStatus(true);
     setActionError(null);
     try {
       const q = `?shop=${encodeURIComponent(store.url)}`;
-      const [agentsRes, providersRes, statusRes] = await Promise.all([
+      const [agentsRes, enginesRes, statusRes] = await Promise.all([
         fetch(`/api/settings/agents${q}`),
-        fetch(`/api/settings/ai-providers${q}`),
+        fetch(`/api/settings/ai-engines${q}`),
         fetch(`/api/settings/store-status${q}`)
       ]);
 
-      if (agentsRes.ok) setAgents(await agentsRes.json());
-      if (providersRes.ok) setProviders(await providersRes.json());
+      if (agentsRes.ok) {
+        const agentsData = await agentsRes.json();
+        setAgents(agentsData);
+      }
+      if (enginesRes.ok) {
+        const enginesData = await enginesRes.json();
+        setEngines(enginesData);
+      }
       if (statusRes.ok) setStoreStatus(await statusRes.json());
     } catch (err: any) {
       console.error(err);
       setActionError("Failed to fetch settings configuration metadata.");
     } finally {
       setLoadingAgents(false);
-      setLoadingProviders(false);
+      setLoadingEngines(false);
       setLoadingStatus(false);
     }
   };
@@ -94,6 +115,14 @@ export default function Settings({
     fetchSettingsData();
   }, [store.url]);
 
+  useEffect(() => {
+    const themeAgent = agents.find(a => a.agentId === "theme_editor_ai_agent");
+    if (themeAgent) {
+      setTempEngineId(themeAgent.engineId || "gemini");
+      setTempModel(themeAgent.model || "gemini-1.5-flash");
+    }
+  }, [agents]);
+
   const handleToggleAgent = async (agentId: string, currentEnabled: boolean) => {
     setActionError(null);
     try {
@@ -101,7 +130,11 @@ export default function Settings({
       const res = await fetch(`/api/settings/agents/${agentId}${q}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !currentEnabled })
+        body: JSON.stringify({ 
+          enabled: !currentEnabled,
+          engineId: tempEngineId,
+          model: tempModel
+        })
       });
 
       if (!res.ok) {
@@ -116,17 +149,71 @@ export default function Settings({
     }
   };
 
+  const handleSaveAssignment = async (agentId: string) => {
+    setActionError(null);
+    setSavingAssignment(true);
+    try {
+      const q = `?shop=${encodeURIComponent(store.url)}`;
+      const res = await fetch(`/api/settings/agents/${agentId}${q}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engineId: tempEngineId,
+          model: tempModel
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || 'Failed to update agent assignment.');
+      }
+      
+      const result = await res.json();
+      setAgents(prev => prev.map(a => a.agentId === agentId ? { ...a, engineId: result.engineId, model: result.model } : a));
+      onRefresh();
+    } catch (err: any) {
+      setActionError(err.message || "Failed to save engine assignment.");
+    } finally {
+      setSavingAssignment(false);
+    }
+  };
+
+  const handleTestConnection = async (engineId: string) => {
+    setTestingConnection(engineId);
+    setTestResult(null);
+    try {
+      const q = `?shop=${encodeURIComponent(store.url)}`;
+      const res = await fetch(`/api/settings/ai-engines/${engineId}/test${q}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTestResult(data);
+        fetchSettingsData();
+      } else {
+        throw new Error("Failed to execute connection test.");
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        statusMessage: err.message || "Connection test failed."
+      });
+    } finally {
+      setTestingConnection(null);
+    }
+  };
+
   const handleConnectStore = (e: React.FormEvent) => {
     e.preventDefault();
     if (!storeInput.trim()) return;
-    // Always request read_themes and write_themes as they are required for theme editor ai agent MVP
     onConnect(storeInput, ["read_themes", "write_themes", "read_products", "read_orders"]);
   };
 
   // Onboarding progress calculation
   const hasStoreConnected = store.connected;
   const hasThemeScopes = store.connected && store.scopes.includes("read_themes") && store.scopes.includes("write_themes");
-  const isGeminiConfigured = providers.find(p => p.providerId === "gemini")?.configured || false;
+  const geminiEngine = engines.find(e => e.engineId === "gemini");
+  const isGeminiConfigured = geminiEngine?.configured || false;
   const isAgentEnabled = agents.find(a => a.agentId === "theme_editor_ai_agent")?.enabled || false;
 
   const steps = [
@@ -138,6 +225,27 @@ export default function Settings({
 
   const completedStepsCount = steps.filter(s => s.completed).length;
   const completionPercentage = Math.round((completedStepsCount / steps.length) * 100);
+
+  // Dynamic Status Resolvers
+  const getAgentStatus = (agent: AgentSetting) => {
+    if (!agent.enabled) return "Agent disabled";
+    if (!hasThemeScopes) return "Missing Shopify permissions";
+    if (agent.engineId === "gemini" && !isGeminiConfigured) return "Engine not configured";
+    return "Ready";
+  };
+
+  const getStatusStyles = (status: string) => {
+    switch (status) {
+      case "Ready":
+        return "bg-emerald-50 text-emerald-700 border-emerald-200";
+      case "Engine not configured":
+        return "bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
+      case "Missing Shopify permissions":
+        return "bg-rose-50 text-rose-700 border-rose-200";
+      default:
+        return "bg-slate-50 text-slate-500 border-slate-200";
+    }
+  };
 
   return (
     <div className="space-y-8 animate-fade-in pb-16">
@@ -380,7 +488,7 @@ export default function Settings({
             )}
           </div>
 
-          {/* Dynamic Agent Installation Switches */}
+          {/* Dynamic Agent Installation Switches & Assignment */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-100 bg-slate-50/70">
               <h2 className="text-sm font-bold text-slate-900 leading-none">Specialized Team Agents</h2>
@@ -396,45 +504,103 @@ export default function Settings({
               </div>
             ) : (
               <div className="p-5 divide-y divide-slate-100">
-                {agents.map(agent => (
-                  <div key={agent.agentId} className="py-4 first:pt-0 last:pb-0 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="space-y-1.5 max-w-xl">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-800">{agent.name}</span>
-                        <span className={`px-2 py-0.5 text-[9px] font-mono font-bold rounded-full ${
-                          agent.enabled 
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
-                            : 'bg-slate-100 text-slate-500 border border-slate-200'
-                        }`}>
-                          {agent.status}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-slate-550 leading-relaxed text-slate-500">{agent.description}</p>
-                      
-                      <div className="flex items-center gap-1.5 text-[9px] text-slate-400 pt-1">
-                        <span className="font-bold">Required scopes:</span>
-                        {agent.requiredPermissions.map(p => (
-                          <span key={p} className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">{p}</span>
-                        ))}
-                      </div>
-                    </div>
+                {agents.map(agent => {
+                  const agentStatus = getAgentStatus(agent);
+                  return (
+                    <div key={agent.agentId} className="py-4 first:pt-0 last:pb-0 space-y-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="space-y-1.5 max-w-xl">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-slate-800">{agent.name}</span>
+                            <span className={`px-2 py-0.5 text-[9px] font-mono font-bold rounded-full ${
+                              agent.enabled 
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
+                                : 'bg-slate-100 text-slate-500 border border-slate-200'
+                            }`}>
+                              {agent.enabled ? 'ACTIVE' : 'INACTIVE'}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-550 leading-relaxed text-slate-500">{agent.description}</p>
+                          
+                          <div className="flex items-center gap-1.5 text-[9px] text-slate-400 pt-1">
+                            <span className="font-bold">Required scopes:</span>
+                            {agent.requiredPermissions.map(p => (
+                              <span key={p} className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">{p}</span>
+                            ))}
+                          </div>
+                        </div>
 
-                    <div className="shrink-0">
-                      <button
-                        onClick={() => handleToggleAgent(agent.agentId, agent.enabled)}
-                        className={`w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-300 outline-none ${
-                          agent.enabled ? 'bg-indigo-600' : 'bg-slate-200'
-                        }`}
-                      >
-                        <div
-                          className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-300 ${
-                            agent.enabled ? 'translate-x-6' : 'translate-x-0'
-                          }`}
-                        ></div>
-                      </button>
+                        <div className="shrink-0">
+                          <button
+                            onClick={() => handleToggleAgent(agent.agentId, agent.enabled)}
+                            className={`w-12 h-6 flex items-center rounded-full p-0.5 cursor-pointer transition-colors duration-300 outline-none ${
+                              agent.enabled ? 'bg-indigo-600' : 'bg-slate-200'
+                            }`}
+                          >
+                            <div
+                              className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-300 ${
+                                agent.enabled ? 'translate-x-6' : 'translate-x-0'
+                              }`}
+                            ></div>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Dropdowns and System Engine Assignment Card */}
+                      {agent.agentId === "theme_editor_ai_agent" && (
+                        <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                Assigned AI Engine
+                              </label>
+                              <select
+                                value={tempEngineId}
+                                onChange={(e) => setTempEngineId(e.target.value)}
+                                className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                              >
+                                <option value="gemini">Gemini (System Managed)</option>
+                              </select>
+                            </div>
+                            
+                            <div>
+                              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                AI Model
+                              </label>
+                              <select
+                                value={tempModel}
+                                onChange={(e) => setTempModel(e.target.value)}
+                                className="w-full text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                              >
+                                {geminiEngine?.supportedModels.map(m => (
+                                  <option key={m} value={m}>{m}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status:</span>
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] font-bold rounded-full border ${getStatusStyles(agentStatus)}`}>
+                                {agentStatus}
+                              </span>
+                            </div>
+                            
+                            <button
+                              onClick={() => handleSaveAssignment(agent.agentId)}
+                              disabled={savingAssignment || !hasStoreConnected}
+                              className="px-4.5 py-1.5 text-xs font-extrabold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 rounded-lg shadow-sm transition cursor-pointer flex items-center gap-1.5"
+                            >
+                              {savingAssignment ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                              Save Configuration
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -443,41 +609,82 @@ export default function Settings({
         {/* AI Provider & Infrastructure Engine (Right Column - Spans 1) */}
         <div className="space-y-6">
           
-          {/* AI Providers */}
+          {/* AI Engines Registry Panel */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-slate-100 bg-slate-50/70 flex items-center gap-2.5">
               <Cpu className="w-4 h-4 text-indigo-500" />
               <div>
-                <h2 className="text-sm font-bold text-slate-900 leading-none">AI Provider Engine</h2>
-                <p className="text-3xs text-slate-400 mt-1 uppercase font-mono tracking-wider">Configuration Metadata</p>
+                <h2 className="text-sm font-bold text-slate-900 leading-none">System AI Engines</h2>
+                <p className="text-3xs text-slate-400 mt-1 uppercase font-mono tracking-wider">System-Level Registry</p>
               </div>
             </div>
 
-            {loadingProviders ? (
+            {loadingEngines ? (
               <div className="p-8 text-center text-xs text-slate-400">
                 <RefreshCw className="w-5 h-5 animate-spin mx-auto text-indigo-500 mb-2" />
-                Querying provider interfaces...
+                Querying engine interfaces...
               </div>
             ) : (
               <div className="p-5 space-y-4">
-                {providers.map(p => (
-                  <div key={p.providerId} className="space-y-3.5">
+                {engines.map(e => (
+                  <div key={e.engineId} className="space-y-3.5">
                     <div className="flex justify-between items-start">
                       <div>
-                        <h3 className="text-xs font-bold text-slate-800">{p.name}</h3>
-                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">Active model: {p.activeModel}</p>
+                        <h3 className="text-xs font-bold text-slate-800">{e.displayName}</h3>
+                        <p className="text-[10px] text-slate-400 font-mono mt-0.5">Default model: {e.defaultModel}</p>
                       </div>
                       
                       <span className={`px-2 py-0.5 text-[9px] font-bold font-mono rounded-full ${
-                        p.configured 
+                        e.configured 
                           ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' 
                           : 'bg-rose-50 text-rose-700 border border-rose-100 animate-pulse'
                       }`}>
-                        {p.configured ? 'Configured' : 'Not Configured'}
+                        {e.configured ? 'Configured' : 'Not Configured'}
                       </span>
                     </div>
 
-                    {p.configured ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 font-mono">
+                        <span>Credentials: Managed by Softify</span>
+                        <span>Source: {e.credentialSource}</span>
+                      </div>
+
+                      <button
+                        onClick={() => handleTestConnection(e.engineId)}
+                        disabled={testingConnection === e.engineId || !hasStoreConnected}
+                        className="w-full py-2 text-center text-xs font-bold text-slate-700 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 rounded-xl border border-slate-250 transition cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        {testingConnection === e.engineId ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : null}
+                        Test Connection
+                      </button>
+                    </div>
+
+                    {/* Test Results Display */}
+                    {testResult && testResult.provider === e.provider && (
+                      <div className={`p-3 rounded-xl border text-[10px] leading-normal flex gap-2 ${
+                        testResult.success 
+                          ? 'bg-emerald-50/50 border-emerald-100 text-emerald-800' 
+                          : 'bg-rose-50/50 border-rose-100 text-rose-800'
+                      }`}>
+                        {testResult.success ? (
+                          <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                        )}
+                        <div>
+                          <strong>{testResult.success ? "Test Succeeded:" : "Test Failed:"}</strong>
+                          <p className="mt-0.5">{testResult.statusMessage}</p>
+                          {testResult.testedAt && (
+                            <span className="text-[9px] text-slate-400 font-mono block mt-1">
+                              Tested at: {new Date(testResult.testedAt).toLocaleTimeString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Engine Info Cards */}
+                    {e.configured ? (
                       <div className="p-3 bg-emerald-50/30 border border-emerald-100 rounded-xl flex gap-2 text-[10px] text-slate-600 leading-normal">
                         <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
                         <span>
@@ -533,6 +740,10 @@ export default function Settings({
                 <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
                 <span>**Merchant Confirmation Gate**: Mutations are locked until the owner signs explicit confirmation cards.</span>
               </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-800 text-[9px] text-slate-400 italic font-medium leading-relaxed">
+              “Softify manages AI engine connections at the system level. Your team only chooses which enabled engine powers each agent. API keys are never shown in the merchant interface.”
             </div>
           </div>
         </div>

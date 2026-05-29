@@ -59,6 +59,8 @@ export interface AgentInstallation {
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+  engineId?: string;
+  model?: string;
   // Legacy fields for read compatibility
   agentDefinitionId?: string;
   customSettings?: Record<string, any>;

@@ -23,6 +23,8 @@ This index acts as the central directory for Softify's completed and planned dev
 | **10.16** | MVP Pilot Launch & Merchant Onboarding Plan | **Completed** | MVP pilot launch planning, onboarding checklists, security policies, connected-store discovery checks, and read-only development-store dry run validation | Completed — pilot planning, connected-store discovery, and read-only development-store dry run validated. |
 | **10.18** | Merchant Onboarding UX & Read-Only Pilot Polish | **Completed** | Resolved allowlist regression, integrated Guided Onboarding Checklist, added Trust & Safety Panel, polished comparative suggestion cards, eliminated developer jargon | 100% Passed (Pre-deploy checks & smoke tests) |
 | **11.0** | Simplified Merchant UI & Theme Editor AI Agent MVP | **Completed** | Product direction pivot around Theme Editor AI Agent MVP, dynamic Settings/Your Team lateral navigation sidebar, premium Theme Editor Chat and Settings React panels, secure theme asset controller and backup snapshots | 100% Passed (Pre-deploy checks & smoke tests) |
+| **11.1** | System AI Engines & Agent Engine Assignment | **Completed** | System-managed AI Engine registry metadata, sanitized connection test probe commands, generic engine/model assignment persistence, dynamic chat model routing, and beautiful settings select interfaces | 100% Passed (Pre-deploy checks & smoke tests) |
+
 
 
 ## Ongoing Workflow & Maintenance Rules
