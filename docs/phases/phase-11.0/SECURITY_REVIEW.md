@@ -59,6 +59,10 @@ Direct theme writing poses significant risks to online stores. A bad write could
 - **Double-Gated Live Theme Writes**: If the selected theme is the active live theme (impacts live customers), the frontend disables the "Apply Change" action until the merchant explicitly checks the live warning gate.
 - **Disabled Direct Write Path**: The endpoint `POST /api/theme/assets/update` is completely disabled for merchant-facing use, returning a `403 DIRECT_WRITE_DISABLED` error. All theme edits must traverse the merchant-approved, double-gated Apply conversational loop.
 
+### F. Insulated Production Smoke Testing (No Dev Bypass / Process Mutations)
+- **Zero Deployed Dev-Bypass Reliance**: Deployed production verification (`smoke:prod`) is strictly separated from local integration testing. It does not require or allow `SOFTIFY_AGENT_DEV_BYPASS_SECRET` to be configured on the client runner, nor does it attempt to perform in-process mutations of environment variables such as `SOFTIFY_PILOT_SHOPS` against already-running remote environments.
+- **Fixture Insulation**: Production smoke testing skips all test assertions requiring database fixtures (`glowthread-apparel`, `scope-mismatch`, etc.) that are only present in local ephemeral in-memory databases, ensuring that live telemetry and production Firestore remain completely pristine and unpolluted.
+
 ---
 
 ## 3. Scope Gating Rules

@@ -10,8 +10,9 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "verify:release": "node scripts/release-check.mjs",
-    "smoke:prod": "node scripts/smoke-test.mjs",
-    "smoke": "node scripts/smoke-test.mjs"
+    "smoke:prod": "node scripts/smoke-test.mjs --mode=prod",
+    "smoke:integration": "node scripts/smoke-test.mjs --mode=integration",
+    "smoke": "npm run smoke:integration"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",

@@ -59,6 +59,11 @@ jobs:
       - name: Pre-deployment static release verification
         run: npm run verify:release
 
+      - name: Integration smoke verification
+        env:
+          SOFTIFY_AGENT_DEV_BYPASS_SECRET: "dev-bypass-secret"
+        run: npm run smoke:integration
+
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v3
         with:

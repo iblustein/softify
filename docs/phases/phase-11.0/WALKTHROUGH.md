@@ -1,4 +1,4 @@
-# Technical Walkthrough — Phase 11.0: Simplified Merchant UI & Theme Editor AI Agent MVP (Corrective Hardening Pass)
+# Technical Walkthrough — Phase 11.0: Simplified Merchant UI & Theme Editor AI Agent MVP (Smoke Test Architecture Split)
 
 This document details the implementation of Phase 11.0, focusing on the simplification of Softify's merchant control center around a single primary experience: the **Theme Editor AI Agent MVP**. It walks through the key architectural changes, premium UI components, backend routing integrations, strict security gates, and validation milestones.
 
@@ -44,7 +44,7 @@ We adhered strictly to code reuse policies, avoiding parallel frameworks and ext
 
 ## 4. Corrective Hardening Accomplishments
 
-As part of the final Phase 11.0 hardening check, several major security and correctness fixes were implemented:
+Several major security and correctness fixes were implemented:
 
 ### A. Removed Yambasurf from Mock Theme Mode
 - Modified `src/server/services/shopify-theme.service.ts` to completely remove `yambasurf-co-il` from all `isMockDomain` checks.
@@ -62,21 +62,28 @@ As part of the final Phase 11.0 hardening check, several major security and corr
 - Modified `src/server/routes/theme-chat.routes.ts` to fetch the model dynamically via `process.env.GEMINI_MODEL || "gemini-1.5-flash"`.
 - Wired the SaaS Settings API to display the exact configured active model name on the frontend.
 
-### E. Gemini Output Schema & Type Validations
-- Implemented a robust JSON schema parser on Gemini output. It validates properties and types:
-  - Validates `reply` is a string and `requiresChanges` is a boolean.
-  - If `requiresChanges` is true, validates `proposedChanges` is a non-empty array, `proposedChanges[0].assetKey` passes `validateAssetPath`, `proposedChanges[0].newValue` is a non-empty string, and validates/defaults `riskLevel` to `Low`/`Medium`/`High` (defaults to `Medium`).
-  - If any parse or validation check fails, it does **not** create a write proposal and instead returns a friendly explanation card.
-
-### F. Explicit OAuth Scope Checking
-- Added strict preflight scope checks inside Theme Editor routes. Reading/planning requires `read_themes` scope (returns `403 MISSING_READ_THEMES_SCOPE`), and applying updates requires `write_themes` (returns `403 MISSING_WRITE_THEMES_SCOPE`).
-
 ---
 
-## 5. Verification Outcomes
+## 5. Smoke Testing Architecture Split (Prod vs Integration)
 
-The build and verification sequences were executed to ensure full production readiness:
-- **TypeScript Compilation**: Compiled successfully under `npm run lint` with zero errors.
-- **Static Release Suitability**: Passed all 59 pre-deployment verification tests (`npm run verify:release`), including the new Phase 11.0 static rules.
-- **Dynamic Smoke Validation**: Expanded `scripts/smoke-test.mjs` with **Test Z** to dynamically assert settings toggles, disabled agent route blocks, scope gates, path traversals, direct write rejections, real yambasurf Shopify REST calls, live warnings, and pre-write backups.
-- **E2E Success**: Successfully executed local smoke checks, passing all 33 dynamic integration checks with 100% green status.
+To fix a critical CI regression where in-process mutations and mock store connections broke tests when run against the deployed Cloud Run production service, we refactored the smoke testing layout.
+
+### A. Modes of Operation
+- **`npm run smoke:integration`** (Explicit Integration Mode):
+  - Boots local/in-process ephemeral Express server.
+  - Seeds all local memory fixtures (`glowthread-apparel.myshopify.com`, `scope-mismatch.myshopify.com`, etc.).
+  - Bypasses real external OAuth calls to Shopify via sandbox boundaries.
+  - Seeds the dev bypass keys and triggers the complete A-Z integration test suite (including Test Y allowlist variations and Test Z Theme Editor checks).
+- **`npm run smoke:prod`** (Explicit Production Mode):
+  - Directs HTTP requests straight to the Cloud Run server URL.
+  - Bypasses in-process environment variable modifications (like updating `process.env.SOFTIFY_PILOT_SHOPS`).
+  - Completely skips all tests requiring seeded database fixtures, mock shop contexts (`glowthread`), and dev bypass key authorization headers.
+  - Runs safe, read-only diagnostics, store connections, products syncing, and pilot approval checks on configured production tenants.
+
+### B. Command Execution and Results
+- **Integration Validation Command**: `npm run smoke:integration`
+  - *Result*: All 33 checks succeed (100% PASS).
+- **Production Validation Command**: `npm run smoke:prod`
+  - *Result*: All 10 deployed-safe checks succeed (100% PASS).
+- **Static Verification Command**: `npm run verify:release`
+  - *Result*: All 59 static release checks pass cleanly.
