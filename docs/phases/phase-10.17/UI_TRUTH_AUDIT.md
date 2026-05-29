@@ -78,11 +78,11 @@ This document maps, evaluates, and classifies every merchant-facing user interfa
   - Renders the actual, real number of stored `ProductSnapshot` files in Firestore.
   - Hardened in `dashboard.service.ts` to return `0` snapshots if none exist, rather than falling back to the default count of mock sandbox products.
 
-### J. Store Connection & Readiness Checklist Card
+### J. Store Connection & Readiness Checklist Card / Authorized Scopes List
 * **Classification**: **REAL**
 * **Verification Detail**:
-  - Renders inside `AgentWorkspace.tsx` powered by `/api/pilot/readiness`.
-  - Displays actual connection status, shop domain, and dynamically filtered granted scopes (excluding secrets).
+  - Renders inside `AgentWorkspace.tsx` powered by `/api/pilot/readiness` and `DashboardOverview.tsx` powered by connection statistics.
+  - Displays actual connection status, shop domain, and dynamically filtered granted scopes (actively stripping `read_themes` and `write_themes` from both merchant-facing components, even if they are defined in the backend DB connection).
   - Employs explicit `/api/pilot/readiness` fields (`hasWriteProducts`, `hasReadProducts`, `catalogSyncRequired`, `agentReadiness`) to avoid client-side computation errors.
   - Fully removes any "Full Access" UI labels; if `write_products` is somehow detected, it displays *"Write scope detected — execution still blocked by read-only pilot policy"*.
   - Renders a high-visibility amber warning disclaimer card explaining the read-only nature of the pilot.

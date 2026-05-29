@@ -73,9 +73,12 @@ export default function DashboardOverview({
   const [storeInput, setStoreInput] = useState(() =>
     resolveStoreInputValue(store, isOAuthConfigured, testShop)
   );
-  const [selectedScopes, setSelectedScopes] = useState<string[]>(
-    store.scopes.length > 0 ? store.scopes : ['read_products', 'read_orders']
-  );
+  const [selectedScopes, setSelectedScopes] = useState<string[]>(() => {
+    const filtered = (store.scopes || [])
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && s !== 'read_themes' && s !== 'write_themes');
+    return filtered.length > 0 ? filtered : ['read_products', 'read_orders'];
+  });
   const [showConnectForm, setShowConnectForm] = useState(!store.connected);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -264,14 +267,23 @@ export default function DashboardOverview({
             </div>
 
             <div className="space-y-2.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Authorized Scopes ({store.scopes.length})</span>
-              <div className="flex flex-wrap gap-1">
-                {store.scopes.map(scope => (
-                  <span key={scope} className="inline-flex items-center px-2.5 py-1 text-[10px] font-mono font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                    {scope}
-                  </span>
-                ))}
-              </div>
+              {(() => {
+                const sanitizedScopes = (store.scopes || [])
+                  .map(s => s.trim())
+                  .filter(s => s.length > 0 && s !== 'read_themes' && s !== 'write_themes');
+                return (
+                  <>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Authorized Scopes ({sanitizedScopes.length})</span>
+                    <div className="flex flex-wrap gap-1">
+                      {sanitizedScopes.map(scope => (
+                        <span key={scope} className="inline-flex items-center px-2.5 py-1 text-[10px] font-mono font-semibold rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
+                          {scope}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         ) : (

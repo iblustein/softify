@@ -136,7 +136,7 @@ SMOKE TEST COMPLETED SUCCESSFULLY!
 ## 5. Security & Gatekeeper Review Metrics
 
 1. **Token Security Check**: Both the endpoint resolver and the smoke validation scans strictly assert that no tokens or secrets propagate inside the JSON payloads.
-2. **Theme Containment Check**: Actively filtered out any theme scopes (`read_themes` and `write_themes`) from the readiness responses to ensure zero theme scope exposure.
+2. **Theme Containment Check**: Actively filtered out any theme scopes (`read_themes` and `write_themes`) from the readiness responses, and **strictly stripped** them from the authorized scopes rendered lists in both `AgentWorkspace.tsx` and `DashboardOverview.tsx` to ensure zero theme scope exposure even if they are returned from the stored connection in database.
 3. **Execution Blockage Check**: Explicitly returned `canExecuteMutations: false` and `mutationMode: "read_only_blocked"` for all pilot shops.
 4. **Dev Bypass Alert Check**: Dynamically appended the warning `"dev bypass must not be merchant-facing"` if `SOFTIFY_ALLOW_AGENT_DEV_BYPASS` is active.
 5. **Sales Analytics Gating Check**: Verified that the mock sales report panel (`LOCAL_SALES_REPORT` dataset) is completely hidden on connected stores, showing only a dynamic notice stating analytics are not connected.
