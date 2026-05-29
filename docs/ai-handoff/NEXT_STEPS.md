@@ -15,17 +15,23 @@ This document outlines the goals, requirements, and scope definitions for the ne
 ### Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan
 - **Goal**: Drafted and validated the operational plans, checklists, runbooks, validation matrices, feedback templates, and executed a read-only agent dry run against the approved development store `yambasurf-co-il.myshopify.com` under production Firestore database mappings.
 
+### Phase 10.17 — Live Installed Store UI Truth Audit
+- **Goal**: Hardened the UI to prevent any mock/demo/fallback data from being presented as real connected-store data, sanitized OAuth scopes representation, and removed any write/full-access implications under read-only containment.
+
+### Phase 10.18 — Merchant Onboarding UX & Read-Only Pilot Polish
+- **Goal**: Fixed readiness allowlist regressions, added Guided Onboarding Checklist step-by-step progress cards, mounted an explicit Trust & Safety Panel, polished empty analytics states, rebranded proposed change cards to use non-jargon fields, collapsed developer tools under warning tags, and verified all static release checks and smoke tests pass (32/32 smoke tests passed!).
+
 ---
 
-## 2. Next Active Milestone: Phase 10.17 — Controlled Merchant Pilot Onboarding Plan (Planning Only)
+## 2. Next Active Milestone: Phase 10.19 — Production Merchant Pilot Launch
 
 ### Goal
-Decide and outline how to onboard a controlled real merchant or internal pilot user safely, without enabling the mutation `write_products` scope by default.
+Formally launch the live, read-only merchant pilot program, onboarding real Shopify store owners to explore catalog recommendations and gather critical operational and copy feedback.
 
 ### Scope
-- **Implementation Plan Only**: Draft the onboarding implementation plan detailing safety gating, tenant boundaries, and merchant-in-the-loop operational restrictions. Do not modify runtime code.
-- **Onboarding Risk Management**: Outline specific risk boundaries and sandbox containment guidelines for the pilot user onboarding sequence.
-- **Feedback Loop Enhancements**: Prepare refined qualitative feedback structures based on Phase 10.16 review feedback.
+- **Controlled Onboarding Sequence**: Guide early merchants step-by-step through the newly polished onboarding checklist.
+- **Feedback Collection Mechanics**: Deploy the qualitative feedback loops and survey templates prepared in Phase 10.16.
+- **Pilot Telemetry & Analytics Monitoring**: Audit Firestore persistent log metrics to evaluate agent recommendations utility and merchant selection conversion ratios.
 
 ---
 

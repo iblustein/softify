@@ -54,7 +54,8 @@ This document provides a highly durable and centralized technical reference for 
 - **Production Bulk Operations Foundation**: Multi-select bulk workflows on proposed actions (batch request-approval, batch dismiss) and merchant approvals (batch-decide, batch-execute). Implements strict Phase 1 preflight tenant assertions, 500ms safety throttle delays, sequential dispatch via ApprovedProductMutationExecutorService, individual claim locks, and live sequential progress checklist stepper UX.
 - **Real-Store Product Readiness**: A sanitized, read-only connection diagnostics & readiness API (`GET /api/shop/readiness`), premium store setup readiness dashboard card (`AgentWorkspace.tsx`), explicit execute button overrides and amber-tinted "Mutations Blocked" banners on write scope deficiency (`ApprovalQueue.tsx`), and frontend UX bulk execute gating via `VITE_SOFTIFY_ALLOW_BULK_EXECUTE`.
 - **Initial Agent Set & Merchant Workflows**: Formally defined and configured the initial active production-safe multi-agent catalog (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`), enforcing strict allowed fields, hiding legacy development agents from public display, rendering prominent status change warnings inside left-card badges and drawer panels.
-- **CI/CD & Production Smoke Tests**: Full verification suite passed cleanly. Static release checks passed 58/58, local in-process smoke tests passed 31/31, and actual deployed Cloud Run smoke tests passed 31/31.
+- **Merchant Onboarding UX & Read-Only Pilot Polish**: Formally resolved the pilot allowlist/readiness regression, verified that `/api/pilot/readiness` allowlist checking returns true for approved pilot shops, integrated Guided Onboarding Checklist step-by-step progress cards, mounted an explicit Trust & Safety Panel, polished empty analytics states, rebranded proposed change cards to use non-jargon fields, collapsed developer tools (`Super Agent Chat`, `Tool Gateway`) under warning tags, and verified all static release checks and smoke tests pass (32/32 smoke tests passed!).
+- **CI/CD & Production Smoke Tests**: Full verification suite passed cleanly. Static release checks passed 58/58, local in-process smoke tests passed 32/32, and actual deployed Cloud Run smoke tests passed 32/32.
 - **Production Deployment & Pilot Readiness**: Phase 10.15 is completed and approved. Formally validated compiled serverless source-based Cloud Run deployment architectures, zero-trust OIDC Workload Identity Federation (WIF) OIDC authentication (using auth@v3), environment secrets mapping (`SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, `SOFTIFY_AGENT_DEV_BYPASS_SECRET`), and required operational database gates. GitHub Actions Run ID [26598640767](https://github.com/iblustein/softify/actions/runs/26598640767) succeeded.
   - **Service Name**: `softify`
   - **Deployment Region**: `europe-west1`
@@ -75,7 +76,7 @@ This document provides a highly durable and centralized technical reference for 
   - *No real production merchant onboarding or live production storefront migrations were executed during this phase.*
 
 ## Next Recommended Phase
-- **Phase 10.17 — Controlled Merchant Pilot Onboarding Plan**: Focuses on deciding how to onboard a controlled real merchant or internal pilot user safely, without enabling `write_products` by default.
+- **Phase 10.19 — Production Merchant Pilot Launch**: Focuses on launching the actual merchant pilot program, gather merchant feedback, and evaluate the product onboarding flow under real-world usage.
 
 
 ## Current Non-Goals

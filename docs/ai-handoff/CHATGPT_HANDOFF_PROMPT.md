@@ -40,7 +40,9 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Initial Agent Set & Merchant Workflows (Phase 10.14) is complete, defining exactly the five active production-safe agents, hiding legacy agents, enforcing strict allowed fields per agent, and rendering status change warnings.
 - Production Deployment & Pilot Readiness (Phase 10.15) is complete, formally validating compiled production Cloud Run serverless deployment workflows, zero-trust OIDC Workload Identity Federation (using google-github-actions/auth@v3), environments mapping, GCP Secret Manager validations (secrets: SHOPIFY_API_SECRET, SHOPIFY_TOKEN_ENCRYPTION_KEY, SOFTIFY_AGENT_DEV_BYPASS_SECRET), operational database gates, and dynamic live Cloud Run deployed smoke tests (31/31 passed cleanly on Run ID: 26598640767).
 - MVP Pilot Launch & Merchant Onboarding Plan (Phase 10.16) is complete, formally validating pilot implementation checklists, runbooks, matrix verifications, and running a read-only dry run against the approved store yambasurf-co-il.myshopify.com under production Firestore database mappings.
-- Robust pre-deployment static checks (58 tests) and integration smoke test suites (31 tests) are passing completely.
+- Live Installed Store UI Truth Audit (Phase 10.17) is complete, hardening the UI to prevent any mock/demo/fallback data from being presented as real connected-store data, sanitizing OAuth scopes representation, and removing any write/full-access implications under read-only containment.
+- Merchant Onboarding UX & Read-Only Pilot Polish (Phase 10.18) is complete, fixing readiness allowlist regressions, adding Guided Onboarding Checklist step-by-step progress cards, mounting an explicit Trust & Safety Panel, polishing empty analytics states, rebranding proposed change cards to use non-jargon fields, collapsing developer tools under warning tags, and verifying all static release checks and smoke tests pass (32/32 smoke tests passed!).
+- Robust pre-deployment static checks (58 tests) and integration smoke test suites (32 tests) are passing completely.
 
 ### Completed Milestones
 - Phase 10.1 — AI Engine Interface and Catalog Agent POC
@@ -60,6 +62,8 @@ Softify is a SaaS AI Agent platform designed for Shopify store management, engin
 - Phase 10.14 — Initial Agent Set & Merchant Workflows
 - Phase 10.15 — Production Deployment & Pilot Readiness Checklist
 - Phase 10.16 — MVP Pilot Launch & Merchant Onboarding Plan
+- Phase 10.17 — Live Installed Store UI Truth Audit
+- Phase 10.18 — Merchant Onboarding UX & Read-Only Pilot Polish
 
 
 ### Core Architectural Guardrails & Constraints
@@ -92,7 +96,8 @@ For every future phase, the implementation agent (Antigravity) must create or up
    - Update `/docs/PHASE_INDEX.md`
 
 ### Next Step
-We are ready to initiate Phase 10.17 — Controlled Merchant Pilot Onboarding Plan. The goal is to plan and decide how to onboard a controlled real merchant or internal pilot user safely without enabling the mutation `write_products` scope by default. Implementation must begin by drafting the implementation plan only.
+We are ready to initiate Phase 10.19 — Production Merchant Pilot Launch. The goal is to formally launch the live, read-only merchant pilot program, onboarding real Shopify store owners to explore catalog recommendations and gather critical operational and copy feedback.
+Implementation must begin by drafting the implementation plan only.
 
 Please inspect the current GitHub code before proposing or assuming any code details.
 

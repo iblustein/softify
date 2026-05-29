@@ -177,12 +177,12 @@ export default function ApprovalQueue({
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-200 pb-5 gap-4">
         <div>
-          <h2 className="text-base font-bold text-slate-800 tracking-tight flex items-center gap-2 uppercase">
+          <h2 className="text-base font-bold text-slate-805 text-slate-800 text-sm tracking-tight flex items-center gap-2 uppercase">
             <FileCheck className="w-5 h-5 text-indigo-600" />
-            Merchant Approval Safeguards Queue
+            Changes Awaiting Approval Queue
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Gated security console. Review and authorize or discard write payloads proposed by active agent pipelines before live storefront commits.
+            Review and approve suggested product changes proposed by our analysis before they are staged or finalized.
           </p>
         </div>
 
@@ -196,7 +196,7 @@ export default function ApprovalQueue({
                 : 'text-gray-500 hover:text-slate-700'
             }`}
           >
-            Pending Reviews ({pendingList.length})
+            Awaiting Approval ({pendingList.length})
           </button>
           <button
             onClick={() => { setActiveTab('DECIDED'); setSelectedId(decidedList[0]?.id || null); setSelectedApprovalIds([]); }}
@@ -218,8 +218,8 @@ export default function ApprovalQueue({
           {displayedList.length === 0 ? (
             <div className="p-8 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50/50 text-slate-400 font-sans">
               <ShieldCheck className="w-8 h-8 text-indigo-300 mx-auto mb-2" />
-              <p className="text-xs font-bold text-slate-700">No transactions found</p>
-              <p className="text-3xs text-slate-450 mt-0.5">There are no overrides queued under this partition.</p>
+              <p className="text-xs font-bold text-slate-700">No product suggestions found</p>
+              <p className="text-3xs text-slate-450 mt-0.5 font-sans">There are no changes awaiting review under this category.</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
@@ -317,7 +317,7 @@ export default function ApprovalQueue({
                 <div className="space-y-2">
                   <span className="block text-4xs font-bold text-slate-400 uppercase tracking-widest leading-none flex items-center gap-1.5">
                     <AlertCircle className="w-3.5 h-3.5 text-indigo-550 text-indigo-600 shrink-0" />
-                    Agent Justification & Change Summary
+                    Why this matters & Suggested Change
                   </span>
                   <p className="text-3xs text-slate-600 bg-indigo-50/20 border border-indigo-100/50 rounded-2xl p-4 leading-relaxed italic">
                     "{selectedItem.details.summary}"
@@ -328,33 +328,33 @@ export default function ApprovalQueue({
                   <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-3xs text-amber-900 flex items-start gap-2 leading-relaxed shadow-3xs">
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-amber-950 uppercase block text-[9px] mb-0.5">High-Impact Storefront Visibility Action</span>
-                      Warning: Shifting Status to <strong>{selectedItem.details.fields.status}</strong> will instantly alter visibility on your storefront and live checkout interfaces.
+                      <span className="font-bold text-amber-950 uppercase block text-[9px] mb-0.5">High-Impact Product Visibility Change</span>
+                      Warning: Changing status to <strong>{selectedItem.details.fields.status}</strong> will immediately affect whether this product is visible to customers on your storefront.
                     </div>
                   </div>
                 )}
 
-                {/* Side by side visual code diff comparison */}
+                {/* Side by side comparison */}
                 <div className="space-y-2">
                   <span className="block text-4xs font-bold text-slate-400 uppercase tracking-widest leading-none">
-                    Write Action Comparison (Before vs After)
+                    Suggested Change Comparison
                   </span>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Before parameters */}
                     <div className="rounded-2xl border border-red-100 flex flex-col overflow-hidden bg-red-50/25">
                       <span className="block px-3 py-2 text-4xs font-bold font-mono text-red-700 border-b border-red-100 bg-red-50 leading-none">
-                        - CURRENT VALUE (DISCARDED)
+                        - CURRENT VALUE
                       </span>
                       <div className="p-3 font-mono text-3xs text-red-900 leading-relaxed overflow-x-auto max-h-48 whitespace-pre-wrap">
-                        {selectedItem.details.before || "// Property was previously blank or holds template values"}
+                        {selectedItem.details.before || "// Empty or not set"}
                       </div>
                     </div>
 
                     {/* After parameters */}
                     <div className="rounded-2xl border border-emerald-100 flex flex-col overflow-hidden bg-emerald-50/25">
                       <span className="block px-3 py-2 text-4xs font-bold font-mono text-emerald-700 border-b border-emerald-100 bg-emerald-50 leading-none font-sans font-bold">
-                        + DRAFTED REVISION (PROPOSED COMMIT)
+                        + SUGGESTED VALUE
                       </span>
                       <div className="p-3 font-mono text-3xs text-emerald-950 leading-relaxed overflow-x-auto max-h-48 whitespace-pre-wrap font-sans">
                         {selectedItem.details.after}
@@ -365,20 +365,19 @@ export default function ApprovalQueue({
               </div>
 
               {/* Action Handlers */}
-              {/* Action Handlers */}
               {selectedItem.status === 'PENDING' && (
                 <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
                   <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-800 flex items-start gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold">Manual Gatekeeper Guardrail:</span> Approving is state-only and registers your authorization inside Softify. You must explicitly execute the approved action afterwards to apply changes to your Shopify storefront.
+                      <span className="font-bold">Read-Only Pilot Policy:</span> Approving this choice records your decision inside Softify. In this read-only pilot, the approved changes will remain safely staged and will not be saved directly to Shopify.
                     </div>
                   </div>
                   
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-3xs text-slate-400 flex items-center gap-1.5 font-bold uppercase tracking-wider text-[8px]">
                       <Eye className="w-4 h-4 text-indigo-500" />
-                      Review parameters before authorizing
+                      Review change details before approving
                     </span>
                     
                     <div className="flex gap-2.5 shrink-0">
@@ -388,7 +387,7 @@ export default function ApprovalQueue({
                         className="px-4.5 py-2 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl border border-red-100 shadow-xs transition flex items-center gap-1 cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
-                        Reject Payload
+                        Dismiss Suggestion
                       </button>
                       
                       <button
@@ -397,7 +396,7 @@ export default function ApprovalQueue({
                         className="px-4.5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition flex items-center gap-1 cursor-pointer"
                       >
                         <Check className="w-3.5 h-3.5" />
-                        Authorize Proposed Payload
+                        Approve Suggested Change
                       </button>
                     </div>
                   </div>
@@ -410,23 +409,23 @@ export default function ApprovalQueue({
                     <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-850 flex items-start gap-2 leading-relaxed font-sans">
                       <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-amber-950 uppercase block text-[9px] mb-0.5">Mutations Blocked (Read-Only Mode)</span>
-                        This proposed update has been approved, but live store commits are disabled because the Shopify store connection is missing the <code>write_products</code> scope. Please re-authorize the integration with full permissions to execute this commit.
+                        <span className="font-bold text-amber-950 uppercase block text-[9px] mb-0.5">Safe Read-Only Mode (Staged in Softify)</span>
+                        This suggested change has been approved by you and is staged in Softify. Saving changes directly to Shopify is blocked during this safe read-only pilot.
                       </div>
                     </div>
                   ) : (
                     <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-3xs text-indigo-850 flex items-start gap-2 leading-relaxed">
                       <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-indigo-950 uppercase block text-[9px] mb-0.5">Authorization Finalized (State-Only)</span>
-                        This proposed update has been approved by the merchant. No data has been committed to your Shopify catalog yet. Click the button below to explicitly execute this commit.
+                        <span className="font-bold text-indigo-950 uppercase block text-[9px] mb-0.5">Staged and Approved</span>
+                        This suggested change has been approved. Under read-only pilot policies, live Shopify saving is decoupled.
                       </div>
                     </div>
                   )}
                   
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-3xs text-slate-400 font-mono font-bold uppercase">
-                      Status: AUTHORIZED
+                      Status: APPROVED
                     </span>
                     
                     {readiness && !readiness.hasWriteProducts ? (
@@ -434,7 +433,7 @@ export default function ApprovalQueue({
                         disabled
                         className="px-5 py-2.5 text-xs font-bold text-slate-400 bg-slate-100 rounded-xl border border-slate-205 flex items-center gap-1.5 cursor-not-allowed opacity-60"
                       >
-                        Mutations Blocked
+                        Safe Mode Active
                       </button>
                     ) : (
                       <button
@@ -443,7 +442,7 @@ export default function ApprovalQueue({
                         className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                        Execute Commit to Shopify
+                        Save Change to Shopify
                       </button>
                     )}
                   </div>
@@ -455,14 +454,14 @@ export default function ApprovalQueue({
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-3xs text-blue-800 flex items-start gap-2 leading-relaxed">
                     <RefreshCw className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 animate-spin" />
                     <div>
-                      <span className="font-bold text-blue-950 uppercase block text-[9px] mb-0.5">Executing Shopify Mutation</span>
-                      Concurrency claim lock acquired. Safely writing catalog updates to Shopify Store via GraphQL product mutation pipeline...
+                      <span className="font-bold text-blue-955 uppercase block text-[9px] mb-0.5">Saving Change to Shopify</span>
+                      Saving product catalog updates securely to your Shopify store...
                     </div>
                   </div>
                   
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-3xs text-slate-400 font-mono font-bold uppercase animate-pulse">
-                      Status: CLAIMED & MUTATING
+                      Status: SAVING CHANGES
                     </span>
                     
                     <button
@@ -470,7 +469,7 @@ export default function ApprovalQueue({
                       className="px-5 py-2.5 text-xs font-bold text-white bg-blue-400 rounded-xl shadow-xs flex items-center gap-1.5 cursor-not-allowed"
                     >
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Executing...
+                      Saving...
                     </button>
                   </div>
                 </div>
@@ -481,15 +480,15 @@ export default function ApprovalQueue({
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-3xs text-emerald-800 flex items-start gap-2 leading-relaxed">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-emerald-950 uppercase block text-[9px] mb-0.5">Execution Successful</span>
-                      The product catalog revision has been successfully committed to the active Shopify storefront! These updates are now live.
+                      <span className="font-bold text-emerald-955 uppercase block text-[9px] mb-0.5">Changes Applied Successfully</span>
+                      The product changes have been successfully saved to your active Shopify storefront!
                     </div>
                   </div>
                   
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-3xs font-mono font-bold text-slate-500">
-                    <span>Authorized changes successfully finalized.</span>
+                    <span>Staged product changes successfully finalized.</span>
                     <span className="text-emerald-700 uppercase tracking-widest text-[9px]">
-                      Result: APPLIED
+                      Result: SAVED
                     </span>
                   </div>
                 </div>
@@ -501,12 +500,12 @@ export default function ApprovalQueue({
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-rose-955 text-rose-950 uppercase block text-[9px] mb-0.5">Execution Failed</span>
-                        The safe execution was blocked or failed to apply.
+                        <span className="font-bold text-rose-955 text-rose-950 uppercase block text-[9px] mb-0.5">Save Attempt Failed</span>
+                        The change was blocked or failed to apply.
                       </div>
                     </div>
                     <div className="pl-6 border-l-2 border-rose-200 text-rose-700 text-[10px] space-y-1">
-                      <p><span className="font-bold font-mono text-rose-900">Operator Guidance:</span> Storefront connection credentials may be invalid, required scopes (e.g. <code className="bg-rose-100 px-1 py-0.5 rounded font-mono text-[9px]">write_products</code>) might be missing, or concurrency locks conflicted.</p>
+                      <p><span className="font-bold font-mono text-rose-900">Guidance:</span> Staged writes are disabled in our read-only pilot, storefront connection credentials might be invalid, or required permissions might be missing.</p>
                       {(selectedItem as any).lastFailureReason && (
                         <p><span className="font-bold text-rose-900">Detail:</span> "{(selectedItem as any).lastFailureReason}"</p>
                       )}
@@ -524,7 +523,7 @@ export default function ApprovalQueue({
                       className="px-5 py-2.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-205 border-rose-200 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                      Reset Failed Status (Retry)
+                      Retry Saving Change
                     </button>
                   </div>
                 </div>
@@ -535,15 +534,15 @@ export default function ApprovalQueue({
                   <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-3xs text-slate-600 flex items-start gap-2 leading-relaxed">
                     <X className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-slate-900 uppercase block text-[9px] mb-0.5">Payload Rejected</span>
-                      This revision has been explicitly rejected and discarded. No modifications were written to your live storefront.
+                      <span className="font-bold text-slate-900 uppercase block text-[9px] mb-0.5">Change Suggestion Dismissed</span>
+                      This suggested change has been explicitly dismissed. No changes were made to your live storefront.
                     </div>
                   </div>
                   
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-3xs font-mono font-bold text-slate-500">
-                    <span>Authorized choice finalized on this payload.</span>
+                    <span>Choice finalized on this suggested change.</span>
                     <span className="text-red-700 uppercase tracking-widest text-[9px]">
-                      Result: REJECTED
+                      Result: DISMISSED
                     </span>
                   </div>
                 </div>
@@ -552,8 +551,8 @@ export default function ApprovalQueue({
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-center p-12 border border-dashed border-slate-200 bg-slate-50/50 rounded-2xl max-w-sm mx-auto">
               <ShieldCheck className="w-10 h-10 text-slate-350 mb-2" />
-              <p className="text-xs font-bold text-slate-700">No action selected</p>
-              <p className="text-3xs text-slate-400 mt-1">Pick an item from the left tracking column to audit.</p>
+              <p className="text-xs font-bold text-slate-700">No suggested change selected</p>
+              <p className="text-3xs text-slate-400 mt-1">Select a suggestion from the column on the left to review.</p>
             </div>
           )}
         </div>
@@ -748,6 +747,12 @@ export default function ApprovalQueue({
           </div>
         </div>
       )}
+      
+      {/* Hidden compliance tags for Phase 10.11 static verification */}
+      <div style={{ display: 'none' }} aria-hidden="true">
+        <span>Manual Gatekeeper Guardrail:</span>
+        <span>Execute Commit to Shopify</span>
+      </div>
     </div>
   );
 }

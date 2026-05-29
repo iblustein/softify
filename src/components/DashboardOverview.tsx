@@ -126,12 +126,12 @@ export default function DashboardOverview({
 
   return (
     <div className="space-y-6">
-      {/* SaaS Dashboard Title & Handshake Info */}
+      {/* Product Review Workspace Heading */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-5">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">SaaS Central Dashboard</h1>
+          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">Product Review Workspace</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Monitor connected storefront indexes, supervise concurrent agent instances, and verify write approvals.
+            Monitor connected storefronts, synchronize your product catalog, and review suggested product improvements.
           </p>
         </div>
         
@@ -143,10 +143,130 @@ export default function DashboardOverview({
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-              Reset Prototype DB (Admin/Dev Only)
+              Reset Local Sandbox Database (Admin/Dev Only)
             </button>
           </div>
         )}
+      </div>
+
+      {/* Guided Onboarding Checklist / First-Run Merchant Path */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-indigo-600" />
+            Merchant Guided Onboarding Checklist
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            Follow this simple path to safely audit and optimize your Shopify product catalog under our safe read-only pilot.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          {/* Step 1 */}
+          <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+            store.connected 
+              ? 'bg-emerald-50/40 border-emerald-200 text-emerald-950' 
+              : 'bg-amber-50/40 border-amber-200 text-amber-950 animate-pulse'
+          }`}>
+            <div>
+              <div className="flex justify-between items-start font-bold">
+                <span>Step 1: Connect Store</span>
+                {store.connected ? (
+                  <span className="text-[10px] text-emerald-600 uppercase font-mono tracking-wider font-bold">Completed</span>
+                ) : (
+                  <span className="text-[10px] text-amber-600 uppercase font-mono tracking-wider font-bold animate-pulse">Required</span>
+                )}
+              </div>
+              <p className="text-slate-500 text-[11px] mt-1.5 leading-relaxed">
+                Connect your Shopify storefront using secure, read-only credentials to let Softify safely review catalog metadata.
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${store.connected ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+              <span className="text-[10px] font-medium text-slate-600">
+                {store.connected ? `Connected: ${store.name}` : 'Awaiting storefront connection'}
+              </span>
+            </div>
+          </div>
+
+          {/* Step 2 */}
+          <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+            !store.connected 
+              ? 'bg-slate-50 border-slate-200 opacity-60 text-slate-400' 
+              : stats.totalProductsCount > 0 
+                ? 'bg-emerald-50/40 border-emerald-200 text-emerald-950' 
+                : 'bg-amber-50/40 border-amber-200 text-amber-950 animate-pulse'
+          }`}>
+            <div>
+              <div className="flex justify-between items-start font-bold">
+                <span>Step 2: Sync Catalog</span>
+                {stats.totalProductsCount > 0 ? (
+                  <span className="text-[10px] text-emerald-600 uppercase font-mono tracking-wider font-bold">Completed</span>
+                ) : store.connected ? (
+                  <span className="text-[10px] text-amber-600 uppercase font-mono tracking-wider font-bold">Active Step</span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 uppercase font-mono tracking-wider">Locked</span>
+                )}
+              </div>
+              <p className="text-slate-500 text-[11px] mt-1.5 leading-relaxed">
+                Sync product information locally to Softify. This performs a non-destructive read of your active inventory.
+              </p>
+            </div>
+            {store.connected && stats.totalProductsCount === 0 ? (
+              <div className="mt-3 pt-1">
+                <button
+                  onClick={handleSyncCatalog}
+                  disabled={isSyncing}
+                  className="w-full flex items-center justify-center gap-1 px-3 py-1.5 text-[10px] font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg hover:bg-indigo-100 transition cursor-pointer"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Syncing Products...' : 'Sync Catalog Now'}
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${stats.totalProductsCount > 0 ? 'bg-emerald-500' : 'bg-slate-300'}`}></span>
+                <span className="text-[10px] font-medium text-slate-500">
+                  {stats.totalProductsCount > 0 ? `${stats.totalProductsCount} products synchronized` : 'Awaiting catalog sync'}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Step 3 */}
+          <div className={`p-4 rounded-xl border flex flex-col justify-between ${
+            stats.totalProductsCount === 0 
+              ? 'bg-slate-50 border-slate-200 opacity-60 text-slate-400' 
+              : 'bg-indigo-50/40 border-indigo-200 text-indigo-950'
+          }`}>
+            <div>
+              <div className="flex justify-between items-start font-bold">
+                <span>Step 3: Analyze & Review</span>
+                {stats.totalProductsCount > 0 ? (
+                  <span className="text-[10px] text-indigo-600 uppercase font-mono tracking-wider font-bold">Ready</span>
+                ) : (
+                  <span className="text-[10px] text-slate-400 uppercase font-mono tracking-wider font-bold">Locked</span>
+                )}
+              </div>
+              <p className="text-slate-500 text-[11px] mt-1.5 leading-relaxed">
+                Open the Product Review Workspace to scan your products, generate suggested improvements, and approve changes safely.
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${stats.totalProductsCount > 0 ? 'bg-indigo-500' : 'bg-slate-300'}`}></span>
+              <span className="text-[10px] font-medium text-slate-500">
+                {stats.pendingApprovalsCount > 0 ? `${stats.pendingApprovalsCount} suggested changes waiting` : 'No suggested changes yet'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Step 4-6 Info Bar */}
+        <div className="p-3.5 bg-slate-50 border border-slate-100 rounded-xl text-[11px] text-slate-500 leading-relaxed flex flex-col sm:flex-row justify-between gap-2">
+          <div>
+            <span className="font-bold text-slate-700">Safe Read-Only Mode Gating:</span> Softify serves only as a secure metadata analyst. Every change must be reviewed and approved by you, and storefront mutations are strictly blocked under this read-only pilot.
+          </div>
+        </div>
       </div>
 
       {/* Connection Panel */}
@@ -492,47 +612,55 @@ export default function DashboardOverview({
               <div className="w-12 h-12 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
                 <Database className="w-6 h-6" />
               </div>
-              <h4 className="text-xs font-bold text-slate-800">Sales analytics are not connected in this read-only catalog pilot.</h4>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
-                Only catalog snapshots, readiness checklists, agent workspace recommendations, and approval state history are active in Phase 10.17.
+              <h4 className="text-xs font-bold text-slate-800">Store analytics are decoupled in this safe read-only pilot.</h4>
+              <p className="text-[11px] text-slate-505 text-slate-500 leading-relaxed mt-1">
+                Only catalog snapshots, readiness checklists, product review recommendations, and owner approvals are active in the current pilot scope.
               </p>
             </div>
           )}
         </div>
 
-        {/* Guided Overview panel */}
+        {/* Trust & Safety Panel */}
         <div className="bg-slate-900 text-slate-300 rounded-2xl p-6 flex flex-col justify-between shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
             <div className="w-32 h-32 border-4 border-white rounded-full"></div>
           </div>
           <div className="space-y-4 z-10">
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-800 text-indigo-300 border border-slate-700">
-              Agent Registry V1.2
+              Safe Read-Only Pilot
             </span>
             <h3 className="text-sm font-bold text-white tracking-tight font-display leading-snug">
-              Gemini Managed Agents Paradigm
+              What Softify can and cannot do
             </h3>
-            <p className="text-xs text-slate-400 leading-relaxed font-sans mt-2">
-              Based on the newest Gemini architecture, the <strong className="text-indigo-300">Super Agent Orchestrator</strong> reads store instructions, routes queries to specialized units, and schedules safe parameters actions through a central <strong className="text-indigo-300">Tool Gateway</strong>.
-            </p>
-            <div className="space-y-2 pt-1">
-              <div className="flex items-center gap-2 text-3xs text-slate-300 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                <span>Sandbox databases operate on stateful mocks</span>
+            
+            <div className="space-y-3 pt-2">
+              <div>
+                <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Softify Can:</span>
+                <ul className="text-[11px] text-slate-400 space-y-1 mt-1 pl-1 list-disc list-inside">
+                  <li>Read your product catalog metadata</li>
+                  <li>Sync secure product snapshots into Softify</li>
+                  <li>Analyze missing or inconsistent product information</li>
+                  <li>Suggest safe metadata improvements</li>
+                  <li>Let you approve or reject suggestions</li>
+                </ul>
               </div>
-              <div className="flex items-center gap-2 text-3xs text-slate-300 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
-                <span>Real-time safety approval queue gates</span>
-              </div>
-              <div className="flex items-center gap-2 text-3xs text-slate-300 font-mono">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-400"></span>
-                <span>Full metadata logging for live audits</span>
+
+              <div className="pt-2 border-t border-slate-800">
+                <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block">Softify Cannot:</span>
+                <ul className="text-[11px] text-slate-400 space-y-1 mt-1 pl-1 list-disc list-inside">
+                  <li>Change products directly on Shopify</li>
+                  <li>Change product pricing</li>
+                  <li>Change inventory levels or variants</li>
+                  <li>Change images/media assets</li>
+                  <li>Change Shopify themes or storefront layout</li>
+                  <li>Publish any changes automatically</li>
+                </ul>
               </div>
             </div>
           </div>
 
           <div className="pt-4 border-t border-slate-800 mt-6 flex items-center justify-between text-[10px] text-slate-500 font-mono z-10">
-            <span>Shopify OAuth Hook Layer Ready</span>
+            <span>Safe Onboarding Mode Active</span>
             <Coins className="w-4 h-4 text-indigo-400" />
           </div>
         </div>
