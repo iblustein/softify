@@ -120,10 +120,35 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
   const [agentFilter, setAgentFilter] = useState<string>('');
   const [dateRange, setDateRange] = useState<string>('30d');
 
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  const handleSyncCatalog = async () => {
+    const shop = new URLSearchParams(shopQuery).get('shop');
+    if (!shop) return;
+    setIsSyncing(true);
+    setErrorText(null);
+    try {
+      const res = await fetch(`/api/catalog/products/sync?shop=${encodeURIComponent(shop)}&limit=50`, {
+        method: 'POST'
+      });
+      if (!res.ok) {
+        throw new Error('Catalog synchronization failed.');
+      }
+      await fetchCatalogAndWorkspaceData();
+      await fetchReadiness();
+      await onRefreshStats();
+    } catch (err: any) {
+      console.error(err);
+      setErrorText(err.message || 'Failed to synchronize Shopify catalog.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const fetchReadiness = async () => {
     setReadinessLoading(true);
     try {
-      const res = await fetch(`/api/shop/readiness${shopQuery}`);
+      const res = await fetch(`/api/pilot/readiness${shopQuery}`);
       if (res.ok) {
         setReadiness(await res.json());
       }
@@ -432,9 +457,13 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
           <ShieldCheck className="w-5 h-5" />
         </div>
         <div>
-          <h4 className="text-white font-bold tracking-tight text-3xs uppercase font-mono mb-0.5">Sandboxed Environment</h4>
+          <h4 className="text-white font-bold tracking-tight text-3xs uppercase font-mono mb-0.5">
+            {readiness && readiness.connected ? 'Read-Only Connected Store' : 'Sandboxed Environment'}
+          </h4>
           <p className="text-[11px] leading-relaxed text-slate-400">
-            Workspace agents suggest changes for your review. No mutations are ever written to your live store without explicit merchant approval and execution.
+            {readiness && readiness.connected 
+              ? 'Workspace agents suggest read-only changes from your synced store snapshots. Storefront commits are completely disabled and blocked in this pilot phase.'
+              : 'Workspace agents suggest changes for your review. No mutations are ever written to your live store without explicit merchant approval and execution.'}
           </p>
         </div>
       </div>
@@ -445,7 +474,7 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
           <div className="flex justify-between items-center border-b border-slate-100 pb-3">
             <div>
               <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-indigo-650" />
+                <CheckCircle2 className="w-4 h-4 text-indigo-655 text-indigo-600" />
                 Store Connection & Readiness Checklist
               </h3>
               <p className="text-[10px] text-slate-500 mt-0.5 font-sans leading-relaxed">
@@ -453,13 +482,13 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
               </p>
             </div>
             <div>
-              {readiness.connectionStatus === 'CONNECTED' && readiness.hasWriteProducts ? (
+              {readiness.connected && readiness.pilotApproved && readiness.grantedScopeSummary?.includes('write_products') ? (
                 <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-100 text-emerald-700 font-extrabold text-[9px] uppercase tracking-wider rounded-xl">
                   Ready (Full Access)
                 </span>
-              ) : readiness.connectionStatus === 'CONNECTED' ? (
-                <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-705 text-amber-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
-                  Ready (Read-Only Insights)
+              ) : readiness.connected && readiness.pilotApproved ? (
+                <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
+                  Ready (Read-Only Pilot)
                 </span>
               ) : (
                 <span className="px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
@@ -478,20 +507,20 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
               <div className="space-y-2 pt-1 font-sans">
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">
                   <span className="text-slate-500">OAuth Status</span>
-                  <span className={`font-bold ${readiness.connectionStatus === 'CONNECTED' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                    {readiness.connectionStatus === 'CONNECTED' ? 'CONNECTED' : readiness.connectionStatus || 'DISCONNECTED'}
+                  <span className={`font-bold ${readiness.connected ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {readiness.connected ? 'CONNECTED' : 'DISCONNECTED'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">
-                  <span className="text-slate-500">Read Scope</span>
-                  <span className={`font-bold ${readiness.hasReadProducts ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    {readiness.hasReadProducts ? 'ACTIVE' : 'MISSING'}
+                  <span className="text-slate-500">Shop Domain</span>
+                  <span className="font-bold text-slate-800 text-[10px] truncate max-w-[130px]" title={readiness.shopDomain}>
+                    {readiness.shopDomain || 'None'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">
-                  <span className="text-slate-500">Write Scope</span>
-                  <span className={`font-bold ${readiness.hasWriteProducts ? 'text-emerald-500' : 'text-amber-500'}`}>
-                    {readiness.hasWriteProducts ? 'ACTIVE' : 'DISABLED'}
+                  <span className="text-slate-500">Granted Scopes</span>
+                  <span className="font-bold text-slate-800 text-[9px] font-mono truncate max-w-[130px]" title={readiness.grantedScopeSummary?.join(', ')}>
+                    {readiness.grantedScopeSummary?.join(', ') || 'None'}
                   </span>
                 </div>
               </div>
@@ -505,12 +534,18 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
               <div className="space-y-2 pt-1 font-sans">
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">
                   <span className="text-slate-500">Cached Snapshots</span>
-                  <span className="font-bold text-slate-800">{readiness.snapshotCount} products</span>
+                  <span className="font-bold text-slate-800">{readiness.productSnapshotCount} products</span>
                 </div>
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">
                   <span className="text-slate-500">Sync Freshness</span>
                   <span className="font-bold text-slate-800 text-[10px] truncate max-w-[130px]" title={readiness.syncFreshness}>
                     {readiness.syncFreshness ? new Date(readiness.syncFreshness).toLocaleString() : 'Never'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">read_products</span>
+                  <span className={`font-bold ${readiness.canRunInsights ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {readiness.canRunInsights ? 'YES' : 'NO'}
                   </span>
                 </div>
               </div>
@@ -523,19 +558,36 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
               </span>
               <div className="space-y-2 pt-1 font-sans">
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">
-                  <span className="text-slate-500">Active Agents</span>
+                  <span className="text-slate-500">write_products</span>
+                  <span className={`font-bold ${readiness.grantedScopeSummary?.includes('write_products') ? 'text-emerald-500' : 'text-amber-500'}`}>
+                    {readiness.grantedScopeSummary?.includes('write_products') ? 'YES' : 'NO (Blocked)'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">Mutation Mode</span>
+                  <span className="font-bold text-amber-600 font-mono text-[10px]">
+                    {readiness.mutationMode === 'read_only_blocked' ? 'Read-Only (Blocked)' : 'Blocked'}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center text-[11px] leading-relaxed">
+                  <span className="text-slate-500">Workspace Status</span>
                   <span className={`font-bold ${readiness.agentReadiness === 'READY' ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {readiness.agentReadiness === 'READY' ? 'ACTIVE' : 'NOT_READY'}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-[11px] leading-relaxed">
-                  <span className="text-slate-500">Bulk Executable</span>
-                  <span className="font-bold text-slate-650 text-slate-700 font-mono text-[9px]">
-                    {(import.meta as any).env.VITE_SOFTIFY_ALLOW_BULK_EXECUTE === 'true' ? 'ENABLED' : 'UX_DISABLED'}
-                  </span>
-                </div>
               </div>
             </div>
+          </div>
+
+          {/* Amber Warning Disclaimer Alert Panel */}
+          <div className="bg-amber-50/50 border border-amber-200 rounded-xl p-3 text-amber-900 text-xs font-sans space-y-1">
+            <div className="flex items-center gap-2 font-bold uppercase text-[9px]">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>Read-Only Pilot Enforcement</span>
+            </div>
+            <p className="text-[11px] text-amber-800 leading-relaxed pl-6">
+              This installed-store pilot is read-only. Softify will not change Shopify products in this phase.
+            </p>
           </div>
         </div>
       )}
@@ -547,7 +599,29 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
         </div>
       )}
 
-      {activeTab === 'control_center' ? (
+      {readiness && readiness.connected && readiness.productSnapshotCount === 0 ? (
+        <div className="p-8 border border-dashed border-slate-300 bg-white rounded-3xl text-center text-slate-500 space-y-4 shadow-sm animate-fade-in">
+          <div className="w-12 h-12 bg-amber-50 border border-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-600">
+            <AlertCircle className="w-6 h-6 animate-pulse" />
+          </div>
+          <div className="max-w-md mx-auto space-y-2 font-sans">
+            <h3 className="font-bold text-slate-805 text-slate-800 text-sm">No Synced Catalog Found</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              No synced catalog found. Run a read-only product sync before launching agents to analyze store data.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={handleSyncCatalog}
+                disabled={isSyncing}
+                className="inline-flex items-center gap-1.5 px-4 py-2 font-bold text-white bg-indigo-650 bg-indigo-600 hover:bg-indigo-755 hover:bg-indigo-700 disabled:opacity-50 rounded-xl shadow-xs transition cursor-pointer"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                {isSyncing ? 'Synchronizing Store Catalog...' : 'Run Read-Only Catalog Sync'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : activeTab === 'control_center' ? (
         <>
           {/* Grid 1: Available Agents Registry Catalog */}
           <div className="space-y-3">

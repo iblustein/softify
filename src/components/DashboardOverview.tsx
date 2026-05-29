@@ -142,7 +142,7 @@ export default function DashboardOverview({
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            Reset Prototype DB
+            Reset Prototype DB (Admin/Dev Only)
           </button>
         </div>
       </div>
@@ -390,7 +390,11 @@ export default function DashboardOverview({
             </div>
             <p className="text-2xl font-bold text-slate-900 mt-2 font-display">{stats.totalProductsCount}</p>
             <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1.5 flex-wrap">
-              <span>{store.connected ? 'Shopify sync active' : '5 structured sandbox listings ready'}</span>
+              <span>
+                {store.connected 
+                  ? (stats.totalProductsCount > 0 ? 'Shopify sync active' : 'No synced catalog yet. Sync required.')
+                  : '5 structured sandbox listings ready'}
+              </span>
             </div>
           </div>
           {store.connected && (
@@ -429,9 +433,11 @@ export default function DashboardOverview({
           <div className="flex justify-between items-center border-b border-slate-100 pb-3">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <Database className="w-4 h-4 text-indigo-500" />
-              Connected Shopify Sandbox
+              {store.connected ? 'Connected Shopify Store' : 'Connected Shopify Sandbox'}
             </h3>
-            <span className="text-[10px] font-mono text-slate-400 font-semibold bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">Sync status: Live Mock</span>
+            <span className="text-[10px] font-mono text-slate-400 font-semibold bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">
+              {store.connected ? 'Sync status: Read-Only snapshots' : 'Sync status: Live Mock'}
+            </span>
           </div>
 
           {!store.connected ? (

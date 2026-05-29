@@ -57,6 +57,7 @@ router.get("/pilot/readiness", async (req, res) => {
         canExecuteMutations: false,
         grantedScopeSummary: [],
         productSnapshotCount: 0,
+        syncFreshness: null,
         visibleProductionAgentCount: 0,
         mutationMode: "read_only_blocked",
         warnings: ["Shop is not approved for pilot participation"],
@@ -77,6 +78,7 @@ router.get("/pilot/readiness", async (req, res) => {
         canExecuteMutations: false,
         grantedScopeSummary: [],
         productSnapshotCount: 0,
+        syncFreshness: null,
         visibleProductionAgentCount: 0,
         mutationMode: "read_only_blocked",
         warnings: ["Store connection does not exist"],
@@ -98,6 +100,7 @@ router.get("/pilot/readiness", async (req, res) => {
       .filter(s => s.length > 0 && s !== "read_themes" && s !== "write_themes");
 
     const productSnapshotCount = await repos.products.countProductSnapshotsByShop(shopDomain);
+    const syncFreshness = await repos.products.getLatestProductSyncAt(shopDomain);
 
     // Visible production agents (excluding legacy ones)
     const productionAgents = getAgents().filter(a => !a.isLegacy);
@@ -122,6 +125,7 @@ router.get("/pilot/readiness", async (req, res) => {
       canExecuteMutations,
       grantedScopeSummary,
       productSnapshotCount,
+      syncFreshness,
       visibleProductionAgentCount,
       mutationMode: "read_only_blocked",
       warnings,

@@ -663,7 +663,7 @@ export default function App() {
           <div className="p-4 bg-slate-900/50 border-b border-slate-900">
             <div className="flex items-center justify-between text-[10px] text-slate-500 uppercase tracking-widest font-semibold font-display">
               <span>Merchant Identity</span>
-              <span className="font-mono text-indigo-400 text-3xs">Sandbox</span>
+              <span className="font-mono text-indigo-400 text-3xs">{store && store.connected ? 'Read-Only Pilot' : 'Sandbox'}</span>
             </div>
             <p className="text-xs text-white font-bold mt-1.5 truncate leading-none">
               {store.connected ? store.name : "Unconnected Store"}
@@ -724,9 +724,8 @@ export default function App() {
                 <Cpu className="w-4 h-4 shrink-0" />
                 <span>Super Agent Chat</span>
               </div>
-              <span className="text-4xs font-mono bg-indigo-950 text-indigo-400 px-1.5 py-0.5 rounded flex items-center gap-0.5">
-                <Sparkles className="w-2.5 h-2.5" />
-                Run
+              <span className="text-4xs font-mono bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded">
+                Admin/Dev Only
               </span>
             </button>
 
@@ -740,6 +739,9 @@ export default function App() {
                 <Terminal className="w-4 h-4 shrink-0" />
                 <span>Tool Gateway</span>
               </div>
+              <span className="text-4xs font-mono bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded">
+                Admin/Dev Only
+              </span>
             </button>
 
             <button

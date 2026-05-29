@@ -53,7 +53,13 @@ export async function getDashboardStats(shopDomain?: string): Promise<DashboardS
   const finalAuditLogs = dbEvents.length > 0 ? dbEvents : cacheLogs;
 
   let totalProductsCount = getMockProducts().length;
-  if (shopDomain) {
+  if (store.connected && shopDomain) {
+    try {
+      totalProductsCount = await repos.products.countProductSnapshotsByShop(shopDomain);
+    } catch (error) {
+      totalProductsCount = 0;
+    }
+  } else if (shopDomain) {
     try {
       const count = await repos.products.countProductSnapshotsByShop(shopDomain);
       if (count > 0) {
