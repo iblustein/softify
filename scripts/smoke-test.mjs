@@ -343,12 +343,18 @@ async function runSuite() {
       }
 
       // Dev bypass validations for smoke testing
-      if (agentDevBypassAllowed !== true) {
-        throw new Error("Release Guard Failure: Agent Dev Bypass is not allowed on the server!");
-      }
-
-      if (agentDevBypassSecretConfigured !== true) {
-        throw new Error("Release Guard Failure: Agent Dev Bypass Secret is missing/unconfigured on the server!");
+      if (isIntegrationMode) {
+        if (agentDevBypassAllowed !== true) {
+          throw new Error("Release Guard Failure: Agent Dev Bypass is not allowed on the local integration server!");
+        }
+        if (agentDevBypassSecretConfigured !== true) {
+          throw new Error("Release Guard Failure: Agent Dev Bypass Secret is missing/unconfigured on the local integration server!");
+        }
+      } else {
+        // Production Mode
+        if (agentDevBypassAllowed === true) {
+          throw new Error("Security Violation: Production service must not enable agent dev bypass!");
+        }
       }
     });
 

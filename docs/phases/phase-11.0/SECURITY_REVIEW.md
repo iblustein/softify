@@ -61,6 +61,7 @@ Direct theme writing poses significant risks to online stores. A bad write could
 
 ### F. Insulated Production Smoke Testing (No Dev Bypass / Process Mutations)
 - **Zero Deployed Dev-Bypass Reliance**: Deployed production verification (`smoke:prod`) is strictly separated from local integration testing. It does not require or allow `SOFTIFY_AGENT_DEV_BYPASS_SECRET` to be configured on the client runner, nor does it attempt to perform in-process mutations of environment variables such as `SOFTIFY_PILOT_SHOPS` against already-running remote environments.
+- **Strict Production Bypass Gating**: In production mode (`smoke:prod`), the diagnostics check explicitly asserts that the server does **not** allow developer bypasses. If the remote server returns `agentDevBypassAllowed === true`, the test immediately fails, protecting the production ecosystem from accidental security exposure.
 - **Fixture Insulation**: Production smoke testing skips all test assertions requiring database fixtures (`glowthread-apparel`, `scope-mismatch`, etc.) that are only present in local ephemeral in-memory databases, ensuring that live telemetry and production Firestore remain completely pristine and unpolluted.
 
 ---

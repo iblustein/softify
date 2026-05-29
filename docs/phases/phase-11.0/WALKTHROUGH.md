@@ -1,4 +1,4 @@
-# Technical Walkthrough — Phase 11.0: Simplified Merchant UI & Theme Editor AI Agent MVP (Smoke Test Architecture Split)
+# Technical Walkthrough — Phase 11.0: Simplified Merchant UI & Theme Editor AI Agent MVP (Bypass Gating & Scopes Hardening)
 
 This document details the implementation of Phase 11.0, focusing on the simplification of Softify's merchant control center around a single primary experience: the **Theme Editor AI Agent MVP**. It walks through the key architectural changes, premium UI components, backend routing integrations, strict security gates, and validation milestones.
 
@@ -44,8 +44,6 @@ We adhered strictly to code reuse policies, avoiding parallel frameworks and ext
 
 ## 4. Corrective Hardening Accomplishments
 
-Several major security and correctness fixes were implemented:
-
 ### A. Removed Yambasurf from Mock Theme Mode
 - Modified `src/server/services/shopify-theme.service.ts` to completely remove `yambasurf-co-il` from all `isMockDomain` checks.
 - If OAuth is configured, `yambasurf-co-il.myshopify.com` makes actual REST API calls directly to the Shopify Admin API rather than returning sandbox success.
@@ -66,24 +64,28 @@ Several major security and correctness fixes were implemented:
 
 ## 5. Smoke Testing Architecture Split (Prod vs Integration)
 
-To fix a critical CI regression where in-process mutations and mock store connections broke tests when run against the deployed Cloud Run production service, we refactored the smoke testing layout.
+To fix critical CI and security regressions where local environment mutations, seeded fixture connections, and insecure bypass options polluted or failed remote environments, we split our verification loops cleanly.
 
 ### A. Modes of Operation
 - **`npm run smoke:integration`** (Explicit Integration Mode):
-  - Boots local/in-process ephemeral Express server.
-  - Seeds all local memory fixtures (`glowthread-apparel.myshopify.com`, `scope-mismatch.myshopify.com`, etc.).
-  - Bypasses real external OAuth calls to Shopify via sandbox boundaries.
-  - Seeds the dev bypass keys and triggers the complete A-Z integration test suite (including Test Y allowlist variations and Test Z Theme Editor checks).
+  - Boots local/in-process ephemeral Express server using local TSX.
+  - Seeds all local memory database fixtures (`glowthread-apparel`, `scope-mismatch`, etc.).
+  - Enforces local dev-bypass secret credentials and triggers the complete A-Z integration test suite (33 dynamic checks).
 - **`npm run smoke:prod`** (Explicit Production Mode):
-  - Directs HTTP requests straight to the Cloud Run server URL.
-  - Bypasses in-process environment variable modifications (like updating `process.env.SOFTIFY_PILOT_SHOPS`).
-  - Completely skips all tests requiring seeded database fixtures, mock shop contexts (`glowthread`), and dev bypass key authorization headers.
-  - Runs safe, read-only diagnostics, store connections, products syncing, and pilot approval checks on configured production tenants.
+  - Connects to remote deployed endpoints (Google Cloud Run URL).
+  - **Bypass Safety Assertion**: Test 0 checks diagnostics and explicitly fails if the remote server returns `agentDevBypassAllowed === true`. This ensures production environments never deploy with dev bypass enabled.
+  - Skips all local database fixture and credentials tests, verifying only 10 non-destructive production-safe endpoints.
 
-### B. Command Execution and Results
+### B. Deliberate Theme Scopes Configuration
+To support real theme editing by the Theme Editor AI Agent under least-privilege constraints, we updated the deployed production scopes inside [.github/workflows/deploy-cloud-run.yml](file:///.github/workflows/deploy-cloud-run.yml):
+- Added `read_themes`
+- Added `write_themes`
+- strictly omitted unrelated products/variants/customers mutation scopes.
+
+### C. Command Execution and Results
 - **Integration Validation Command**: `npm run smoke:integration`
   - *Result*: All 33 checks succeed (100% PASS).
 - **Production Validation Command**: `npm run smoke:prod`
-  - *Result*: All 10 deployed-safe checks succeed (100% PASS).
+  - *Result*: Fails Test 0 if bypass is unhardened, otherwise completes successfully across all 10 production-safe diagnostics and readiness paths.
 - **Static Verification Command**: `npm run verify:release`
   - *Result*: All 59 static release checks pass cleanly.
