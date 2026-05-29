@@ -15,8 +15,20 @@ if (!process.env.TSX_ACTIVE && !process.argv.includes("--child")) {
 import dotenv from "dotenv";
 dotenv.config();
 
-// Ensure SOFTIFY_PILOT_SHOPS is set for the in-process server
-process.env.SOFTIFY_PILOT_SHOPS = process.env.SOFTIFY_PILOT_SHOPS || "yambasurf-co-il.myshopify.com";
+// Determine Smoke Test Mode
+const isIntegrationMode = !process.argv.includes("--mode=prod");
+
+if (isIntegrationMode) {
+  console.log("   [SMOKE-TEST] Bootstrapping in INTEGRATION mode...");
+  process.env.SOFTIFY_PILOT_SHOPS = "yambasurf-co-il.myshopify.com,unregistered-pilot-shop.myshopify.com,scope-mismatch.myshopify.com,another-pilot-shop.myshopify.com";
+  process.env.SOFTIFY_ALLOW_AGENT_DEV_BYPASS = "true";
+  process.env.SOFTIFY_AGENT_DEV_BYPASS_SECRET = "dev-bypass-secret";
+  process.env.REPOSITORY_BACKEND = "memory";
+  process.env.GEMINI_MODEL = "gemini-test-custom-model";
+} else {
+  console.log("   [SMOKE-TEST] Bootstrapping in PRODUCTION mode...");
+}
+
 
 
 import { URL } from "url";
