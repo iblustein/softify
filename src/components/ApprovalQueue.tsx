@@ -99,6 +99,7 @@ export default function ApprovalQueue({
   };
 
   const handleTriggerBatchExecute = async () => {
+    if (readiness?.canExecuteMutations !== true) return;
     if (!onBatchExecute || selectedApprovalIds.length === 0) return;
     setIsConfirmingExecute(false);
 
@@ -438,8 +439,12 @@ export default function ApprovalQueue({
                     
                     {readiness && readiness.canExecuteMutations ? (
                       <button
-                        onClick={() => onExecute(selectedItem.id)}
-                        disabled={isLoading}
+                        onClick={() => {
+                          if (readiness && readiness.canExecuteMutations === true) {
+                            onExecute(selectedItem.id);
+                          }
+                        }}
+                        disabled={isLoading || !readiness || readiness.canExecuteMutations !== true}
                         className="px-5 py-2.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
@@ -606,19 +611,36 @@ export default function ApprovalQueue({
               </>
             ) : (
               <button
-                onClick={() => setIsConfirmingExecute(true)}
-                disabled={isLoading || (readiness && !readiness.canExecuteMutations) || !selectedApprovalIds.every(id => {
-                  const item = approvals.find(a => a.id === id);
-                  return item?.status === 'APPROVED' || item?.status === 'FAILED';
-                })}
+                onClick={() => {
+                  if (readiness && readiness.canExecuteMutations === true) {
+                    setIsConfirmingExecute(true);
+                  }
+                }}
+                disabled={
+                  isLoading ||
+                  !readiness ||
+                  readiness.canExecuteMutations !== true ||
+                  !selectedApprovalIds.every(id => {
+                    const item = approvals.find(a => a.id === id);
+                    return item?.status === 'APPROVED' || item?.status === 'FAILED';
+                  })
+                }
                 className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 disabled:bg-slate-900 disabled:text-slate-500 disabled:border-slate-850 disabled:opacity-50 text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer shadow-sm transition flex items-center gap-1.5"
-                title={readiness && !readiness.canExecuteMutations ? 'Changes Blocked (Read-Only Mode)' : selectedApprovalIds.every(id => {
-                  const item = approvals.find(a => a.id === id);
-                  return item?.status === 'APPROVED' || item?.status === 'FAILED';
-                }) ? 'Save selected changes' : 'Some selected items are not eligible (only APPROVED or FAILED can be saved)'}
+                title={
+                  !readiness
+                    ? "Readiness status loading — changes are blocked"
+                    : readiness.canExecuteMutations !== true
+                    ? "Changes Blocked (Read-Only Mode)"
+                    : selectedApprovalIds.every(id => {
+                        const item = approvals.find(a => a.id === id);
+                        return item?.status === 'APPROVED' || item?.status === 'FAILED';
+                      })
+                    ? "Save selected changes"
+                    : "Some selected items are not eligible (only APPROVED or FAILED can be saved)"
+                }
               >
                 <RefreshCw className="w-3 h-3" />
-                {readiness && !readiness.canExecuteMutations ? 'Changes Blocked' : 'Save Batch'}
+                {!readiness || readiness.canExecuteMutations !== true ? 'Changes Blocked' : 'Save Batch'}
               </button>
             )}
           </div>
@@ -704,8 +726,13 @@ export default function ApprovalQueue({
                 Cancel
               </button>
               <button
-                onClick={handleTriggerBatchExecute}
-                className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition font-mono uppercase text-[9px] tracking-wider"
+                onClick={() => {
+                  if (readiness && readiness.canExecuteMutations === true) {
+                    handleTriggerBatchExecute();
+                  }
+                }}
+                disabled={!readiness || readiness.canExecuteMutations !== true}
+                className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition font-mono uppercase text-[9px] tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {readiness && readiness.canExecuteMutations ? "Authorize Commits" : "Confirm Staging"}
               </button>

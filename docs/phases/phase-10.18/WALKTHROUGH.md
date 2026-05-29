@@ -57,6 +57,7 @@ We audited all merchant-facing text to eliminate internal technical jargon and r
   - Swapped *“Save Attempt Failed”* for **“Staging Attempt Failed”**.
   - Swapped *“Retry Saving Change”* for **“Retry Staging”**.
   - Swapped raw connection details errors for staging verification-focused guidance: *“Product changes are not written to Shopify during this read-only pilot. This suggestion could not be staged or verified inside Softify.”*
+- **Strict Fail-Closed Gating**: Hardened bulk execution actions, function calls, and the confirmation button inside the modal to be strictly fail-closed, ensuring that actions remain disabled if readiness is not loaded or `canExecuteMutations` is not explicitly `true`. Renders status-aware tooltips like *“Readiness status loading — changes are blocked”* during preflights.
 
 ---
 

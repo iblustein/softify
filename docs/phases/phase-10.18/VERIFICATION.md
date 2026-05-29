@@ -75,6 +75,8 @@ $env:SOFTIFY_BASE_URL="http://localhost:3000"; node scripts/smoke-test.mjs
 - **Policy Enforcement**: Gated all execution buttons and batch modals strictly behind `canExecuteMutations === true`.
 - **Read-Only Gating Message**: If `hasWriteProducts === true` but `canExecuteMutations` is false, it renders: `"Write scope detected — execution is still blocked by read-only pilot policy. This suggested change has been approved and staged in Softify. Softify will not write product changes to Shopify during this read-only pilot."`
 - **Result**: No live storefront "Save" buttons are active; approved changes are cleanly staged inside Softify in Phase 10.18.
+- **Fail-Closed Bulk Gating**: Bulk execution and batch modal triggers are strictly fail-closed. If readiness is loading/null or `canExecuteMutations !== true`, the Save Batch button is completely disabled and the batch modal action is blocked.
+- **Dynamic Tooltips**: Renders `“Readiness status loading — changes are blocked”` if readiness is missing, and `“Changes Blocked (Read-Only Mode)”` if `canExecuteMutations` is not explicitly true.
 
 ### Empty States, Technical Jargon, and Final Copy Cleanup Audit
 - **Analytics empty state** explicitly informs that store metrics are decoupled, prioritizing read-only pilot data integrity.
