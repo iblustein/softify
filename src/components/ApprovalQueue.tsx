@@ -520,12 +520,12 @@ export default function ApprovalQueue({
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-rose-955 text-rose-950 uppercase block text-[9px] mb-0.5">Save Attempt Failed</span>
+                        <span className="font-bold text-rose-955 text-rose-950 uppercase block text-[9px] mb-0.5">Staging Attempt Failed</span>
                         The change was blocked or failed to apply.
                       </div>
                     </div>
                     <div className="pl-6 border-l-2 border-rose-200 text-rose-700 text-[10px] space-y-1">
-                      <p><span className="font-bold font-mono text-rose-900">Guidance:</span> Staged writes are disabled in our read-only pilot, storefront connection credentials might be invalid, or required permissions might be missing.</p>
+                      <p><span className="font-bold font-mono text-rose-900">Guidance:</span> Product changes are not written to Shopify during this read-only pilot. This suggestion could not be staged or verified inside Softify.</p>
                       {(selectedItem as any).lastFailureReason && (
                         <p><span className="font-bold text-rose-900">Detail:</span> "{(selectedItem as any).lastFailureReason}"</p>
                       )}
@@ -543,7 +543,7 @@ export default function ApprovalQueue({
                       className="px-5 py-2.5 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-205 border-rose-200 rounded-xl shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                     >
                       <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-                      Retry Saving Change
+                      Retry Staging
                     </button>
                   </div>
                 </div>
@@ -643,7 +643,7 @@ export default function ApprovalQueue({
             </p>
             {isConfirmingDecide === 'APPROVE' && (
               <div className="p-3 bg-indigo-50/50 border border-indigo-100 rounded-xl text-3xs text-indigo-900 leading-normal leading-relaxed">
-                <span className="font-bold">Important Safe Boundary:</span> Approving is state-only and registers your authorization inside Softify. This will NOT mutate your live Shopify storefront. You must explicitly execute the approved items afterwards to write changes.
+                <span className="font-bold">Important Safe Boundary:</span> Approving is state-only and records your decision inside Softify. During this read-only pilot, approved suggestions remain staged in Softify and will not be written to Shopify.
               </div>
             )}
             <div className="flex justify-end gap-3 pt-2">

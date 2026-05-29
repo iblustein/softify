@@ -46,12 +46,17 @@ We audited all merchant-facing text to eliminate internal technical jargon and r
 - Swapped *“Launch Diagnostic Scan”* console and button labels for **“Run Product Analysis”**.
 - Removed all *“sandbox environment”* and *“mutation”* phrasing from connected-store context.
 
-### C. Approval Queue
+### C. Approval Queue & Final Copy Cleanup Pass
 - Swapped live-store committing buttons for staged status tags:
   - Swapped *“Save Change to Shopify”* for **“Safe Mode Active (Staged)”**.
   - Swapped *“Saving Change to Shopify”* for **“Staging Change in Softify”**.
   - Swapped *“Changes Applied Successfully”* for **“Changes Staged Successfully”**.
   - Swapped batch *“Execute Commits”* for **“Save Batch”** (which remains safely disabled).
+- **Batch Approval Confirmation**: Removed any instruction to execute approved items afterwards. Now strictly states: *“Approving is state-only and records your decision inside Softify. During this read-only pilot, approved suggestions remain staged in Softify and will not be written to Shopify.”*
+- **Failure States**: Re-branded all internal technical failure and retry messages:
+  - Swapped *“Save Attempt Failed”* for **“Staging Attempt Failed”**.
+  - Swapped *“Retry Saving Change”* for **“Retry Staging”**.
+  - Swapped raw connection details errors for staging verification-focused guidance: *“Product changes are not written to Shopify during this read-only pilot. This suggestion could not be staged or verified inside Softify.”*
 
 ---
 

@@ -76,7 +76,11 @@ $env:SOFTIFY_BASE_URL="http://localhost:3000"; node scripts/smoke-test.mjs
 - **Read-Only Gating Message**: If `hasWriteProducts === true` but `canExecuteMutations` is false, it renders: `"Write scope detected — execution is still blocked by read-only pilot policy. This suggested change has been approved and staged in Softify. Softify will not write product changes to Shopify during this read-only pilot."`
 - **Result**: No live storefront "Save" buttons are active; approved changes are cleanly staged inside Softify in Phase 10.18.
 
-### Empty States & Technical Jargon Audit
+### Empty States, Technical Jargon, and Final Copy Cleanup Audit
 - **Analytics empty state** explicitly informs that store metrics are decoupled, prioritizing read-only pilot data integrity.
 - **Jargon Elimination**: Refactored technical headers ("Multi-Agent", "Diagnostic scan", "Handshake OAuth simulated REST injection") with merchant-friendly labels ("Product Review Workspace", "Run Product Analysis", "Demo Store Connection").
 - **Trust & Safety Panel**: Placed a prominent **"What Softify can and cannot do"** panel at the bottom of the dashboard, clearly summarizing scope limits to build high merchant trust.
+- **Final Copy Cleanup (Merchant Gating)**:
+  - **Batch Approval Modal**: Cleaned copy to say: *“Approving is state-only and records your decision inside Softify. During this read-only pilot, approved suggestions remain staged in Softify and will not be written to Shopify.”* (Removed any mention of executing approved items afterwards).
+  - **Failure Status copy**: Refactored `Save Attempt Failed` to `Staging Attempt Failed`, `Retry Saving Change` to `Retry Staging`, and generalized the details so it describes staging verification instead of live writes.
+  - **Safety Boundaries**: Confirmed no scopes were expanded, and no live storefront product mutations were enabled or executed.
