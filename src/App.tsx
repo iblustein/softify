@@ -66,6 +66,14 @@ export default function App() {
     return `${isFirstParam ? '?' : '&'}shop=${encodeURIComponent(shop)}`;
   };
 
+  const checkJsonResponse = async (res: Response, endpointName: string) => {
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      throw new Error(`Endpoint ${endpointName} returned non-JSON content (${contentType}). This typically happens when a route fallback returns HTML instead of JSON.`);
+    }
+    return res.json();
+  };
+
   // Fetch core parameters
   const fetchAllData = async () => {
     setIsLoading(true);
@@ -75,7 +83,7 @@ export default function App() {
 
       const [shopRes, agentsRes, approvalsRes, logsRes, statsRes] = await Promise.all([
         fetch(`/api/shop${shopQuery}`),
-        fetch('/api/agents'),
+        fetch('/api/agents/catalog'),
         fetch(`/api/approvals${shopQuery}`),
         fetch(`/api/audit-logs${shopQuery}`),
         fetch(`/api/dashboard-stats${shopQuery}`)
@@ -85,11 +93,11 @@ export default function App() {
         throw new Error('Server handshakes warning (some tables failed loading)');
       }
 
-      const shopData = await shopRes.json();
-      const agentsData = await agentsRes.json();
-      const approvalsData = await approvalsRes.json();
-      const logsData = await logsRes.json();
-      const statsData = await statsRes.json();
+      const shopData = await checkJsonResponse(shopRes, '/api/shop');
+      const agentsData = await checkJsonResponse(agentsRes, '/api/agents/catalog');
+      const approvalsData = await checkJsonResponse(approvalsRes, '/api/approvals');
+      const logsData = await checkJsonResponse(logsRes, '/api/audit-logs');
+      const statsData = await checkJsonResponse(statsRes, '/api/dashboard-stats');
 
       setStore(shopData);
       setAgents(agentsData);
