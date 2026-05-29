@@ -288,9 +288,9 @@ export default function DashboardOverview({
                 {store.status === 'REAUTH_REQUIRED'
                   ? 'Access token is invalid or expired. Re-authorization required.'
                   : store.status === 'MISSING_SCOPES'
-                    ? 'Store connection is missing required OAuth scopes.'
+                    ? 'Your store connection is missing required permissions for this pilot. Please reconnect your store.'
                     : store.connected 
-                      ? 'Successfully authenticated using Managed Agents OAuth API' 
+                      ? 'Shopify store connection is active.' 
                       : 'Storefront link inactive'}
               </p>
             </div>
@@ -333,12 +333,12 @@ export default function DashboardOverview({
                 <AlertCircle className="w-4 h-4" />
               </div>
               <div>
-                <h3 className="text-xs font-extrabold text-rose-950 uppercase tracking-wider">
+                <h3 className="text-xs font-extrabold text-rose-955 uppercase tracking-wider">
                   {store.status === 'MISSING_SCOPES' ? 'Missing Permissions Required' : 'Invalid API Credentials'}
                 </h3>
                 <p className="text-xs text-rose-800 mt-1.5 leading-relaxed">
                   {store.status === 'MISSING_SCOPES'
-                    ? 'Specialized Gemini Agent workers require additional permissions to invoke tools in the Tool Gateway. Please complete the re-authorization process.'
+                    ? 'Your store connection is missing required permissions for this pilot. Please reconnect your store.'
                     : 'Shopify returned a 401 Unauthorized or 403 Forbidden error, meaning your merchant access token has expired or was revoked. Re-authenticating will securely refresh your session.'}
                 </p>
               </div>
@@ -408,7 +408,7 @@ export default function DashboardOverview({
           </div>
         ) : (
           <div className="p-6">
-            <h3 className="text-sm font-bold text-slate-900 mb-4">Connect Store via Simulated OAuth</h3>
+            <h3 className="text-sm font-bold text-slate-900 mb-4">Demo Store Connection (Admin/Dev Only)</h3>
             <form onSubmit={handleConnectSubmit} className="space-y-4 max-w-2xl">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1.5">
@@ -428,13 +428,13 @@ export default function DashboardOverview({
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1.5">
-                  No real credentials required. Handshake simulates Shopify REST Admin credentials injection.
+                  Admin/Dev demo connection only. Real merchant installs must use Shopify OAuth.
                 </p>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-2">
-                  Requested Scopes (Required capabilities for Agent tool gateways)
+                  Requested permissions for this pilot
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                   {ALL_AVAILABLE_SCOPES.map(scope => {
@@ -458,7 +458,7 @@ export default function DashboardOverview({
                         />
                         <div>
                           <p className="font-bold leading-none text-slate-900">{scope.id}</p>
-                          <p className="text-[10px] text-slate-505 mt-1.5 leading-normal">{scope.label}</p>
+                          <p className="text-[10px] text-slate-550 text-slate-500 mt-1.5 leading-normal">{scope.label}</p>
                         </div>
                       </div>
                     );

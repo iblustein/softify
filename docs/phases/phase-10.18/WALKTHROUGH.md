@@ -4,68 +4,62 @@ This document provides a comprehensive walkthrough of the changes implemented du
 
 ---
 
-## 1. Test Y Allowlist Regression Resolution
+## 1. Scope Pruning in Environment Configuration
 
-### Root Cause
-The readiness endpoint `/api/pilot/readiness` reads `process.env.SOFTIFY_PILOT_SHOPS` to determine if a connected shop domain is allowed to access the merchant pilot. When the server process was started locally or in separately running processes, this variable was not loaded in its starting environment context, causing Test Y to return `pilotApproved: false`.
-
-### The Fix
-1. **Local-only `.env` Isolation**: Configured the git-ignored, local-only `.env` file with:
-   `SOFTIFY_PILOT_SHOPS=yambasurf-co-il.myshopify.com`
-   to ensure the Node process automatically loads it via `dotenv` upon startup.
-2. **Environment Template (`.env.example`)**: Added the template placeholder:
-   `SOFTIFY_PILOT_SHOPS="yambasurf-co-il.myshopify.com"`
-3. **Cloud Run Config (`cloudrun-firestore.env.yaml`)**: Declared the production pilot allowlist:
-   `SOFTIFY_PILOT_SHOPS: "yambasurf-co-il.myshopify.com"`
-   to persist the correct environment configuration on deploy.
-4. **Result**: Re-running the smoke integration test with the server loaded correctly results in **Test Y passing perfectly** (32/32 smoke tests passed!).
+To satisfy strict project guardrails, we reviewed and pruned `SHOPIFY_SCOPES` across committed configurations to remove unnecessary and potentially high-risk permissions:
+- **Removed scopes**: Stripped `read_themes`, `write_themes`, `read_customers`, and `read_content` entirely.
+- **Configured Scopes**: `SHOPIFY_SCOPES="read_products,read_orders"`.
+- **Committed files updated**:
+  - [`.env.example`](file:///c:/Projects/softify/softify/.env.example)
+  - [`cloudrun-firestore.env.yaml`](file:///c:/Projects/softify/softify/cloudrun-firestore.env.yaml)
+  - [`src/server/config/shopify.config.ts`](file:///c:/Projects/softify/softify/src/server/config/shopify.config.ts)
 
 ---
 
-## 2. Jargon Elimination & Copy Polish
+## 2. Dynamic Readiness Gating in Approval Queue
 
-To shield Shopify merchants from technical developer jargon, we performed a thorough visual copy sweep:
-
-- **Avoided / Reduced**: `"Agent workers"`, `"Diagnostic Scan"`, `"Tool Gateway"`, `"Super Agent Chat"`, `"Prototype DB"`, `"Gemini Managed Agents Paradigm"`, `"Runtime"`, `"Mutation"`, `"Full metadata logging"`, `"Sandboxed environment"`.
-- **Preferred / Integrated**: `"Product Review Workspace"`, `"Analyze Products"`, `"Analysis Run"`, `"Suggested Changes"`, `"Changes Awaiting Approval"`, `"Synced Products"`, `"Last Sync"`, `"Safe Read-Only Mode"`, `"Product changes"`.
-
----
-
-## 3. Key UX Enhancements & Components Audited
-
-### A. Guided Onboarding Checklist
-- Mounted a beautiful **Merchant Guided Onboarding Checklist** panel at the top of `DashboardOverview.tsx`.
-- Leads the merchant step-by-step through:
-  - **Step 1: Connect Store** (Connection state audit)
-  - **Step 2: Sync Catalog** (Read-only catalog sync action)
-  - **Step 3: Analyze & Review** (Workspace insights scan gating)
-- Communicates "Safe Read-Only Mode Gating" parameters directly.
-
-### B. Trust & Safety Panel
-- Added a dedicated **"What Softify can and cannot do"** visual card in `DashboardOverview.tsx`.
-- Explicitly lists permitted actions (e.g. read catalog metadata, sync secure snapshots, suggest metadata improvements) and blocked actions (e.g. direct storefront writes, price modifications, variant edits, theme changes) to instill immediate merchant confidence.
-
-### C. Improved Empty States
-- Refined empty states in `DashboardOverview.tsx` and `AgentWorkspace.tsx` to provide clear guidance:
-  - **No synced products**: Prominently displays a "Sync Catalog Now" trigger.
-  - **No suggested changes**: Encourages the user to start a "Product Analysis".
-  - **Decoupled Analytics**: Displays a trust-centric empty card clarifying that live storefront sales metrics are decoupled under the read-only pilot.
-
-### D. Recommendation Card Refinements
-- Rebranded proposed change justification cards in `ApprovalQueue.tsx`:
-  - Clearly displays fields: `"Suggested change"`, `"Why this matters"`, `"Affected field"`, `"Risk: Low / Medium"`, `"Current value"`, and `"Suggested value"`.
-  - Removed technical JSON structural diff layouts in favor of clean merchant-friendly headers.
-
-### E. Developer Tools Containment
-- Hidden developer-only modules like `Tool Gateway` and `Super Agent Chat` under the lateral menu by clearly labeling them as `Admin/Dev Only` with warning flags.
-- Completely shields connected merchants from raw system diagnostics.
+To enforce absolute read-only containment in the UI:
+1. **Endpoint Alignment**: Configured `ApprovalQueue.tsx` to fetch the authoritative pilot readiness endpoint (`/api/pilot/readiness`) instead of `/api/shop/readiness`.
+2. **Strict UI Gating**: Replaced all `hasWriteProducts` gates for showing/enabling live execution buttons with `readiness.canExecuteMutations === true`.
+3. **Execution Block Disclaimer**:
+   - If a merchant connection has write scopes but `canExecuteMutations` remains false, the queue renders:
+     `"Write scope detected — execution is still blocked by read-only pilot policy. This suggested change has been approved and staged in Softify. Softify will not write product changes to Shopify during this read-only pilot."`
+   - In Phase 10.18, all live storefront writes remain strictly disabled, and approved suggestions are staged cleanly inside Softify.
 
 ---
 
-## 4. Verification & Hardening Compliance
+## 3. Visual Wording Audit & Jargon Elimination
 
-- **No expanded Shopify scopes**: Verified that no `write_products`, `read_themes`, or `write_themes` are requested or registered.
-- **No live Shopify product writes**: Asserted that product write executions remain completely blocked (`canExecuteMutations` remains `false` and `mutationMode` remains `read_only_blocked`).
+We audited all merchant-facing text to eliminate internal technical jargon and replace it with user-friendly terms:
+
+### A. Dashboard Overview
+- Swapped *“Successfully authenticated using Managed Agents OAuth API”* for **“Shopify store connection is active.”**
+- Swapped *“Specialized Gemini Agent workers require additional permissions to invoke tools in the Tool Gateway...”* for **“Your store connection is missing required permissions for this pilot. Please reconnect your store.”**
+- Swapped *“Connect Store via Simulated OAuth”* for **“Demo Store Connection (Admin/Dev Only)”**.
+- Swapped *“No real credentials required. Handshake simulates Shopify REST Admin credentials injection.”* for **“Admin/Dev demo connection only. Real merchant installs must use Shopify OAuth.”**
+- Swapped *“Requested Scopes (Required capabilities for Agent tool gateways)”* for **“Requested permissions for this pilot”**.
+
+### B. Agent Workspace
+- Swapped *“Product Multi-Agent Workspace”* for **“Product Review Workspace”**.
+- Swapped *“Analyze catalog compliance warnings and review safe product metadata suggestions in a sandbox environment.”* for **“Analyze synced catalog data and review suggested product improvements in safe read-only mode.”**
+- Swapped *“Diagnostic Scanner Active”* and *“Scanner Settings”* for **“Product Analysis Active”** and **“Analysis Settings”**.
+- Swapped *“Launch Diagnostic Scan”* console and button labels for **“Run Product Analysis”**.
+- Removed all *“sandbox environment”* and *“mutation”* phrasing from connected-store context.
+
+### C. Approval Queue
+- Swapped live-store committing buttons for staged status tags:
+  - Swapped *“Save Change to Shopify”* for **“Safe Mode Active (Staged)”**.
+  - Swapped *“Saving Change to Shopify”* for **“Staging Change in Softify”**.
+  - Swapped *“Changes Applied Successfully”* for **“Changes Staged Successfully”**.
+  - Swapped batch *“Execute Commits”* for **“Save Batch”** (which remains safely disabled).
+
+---
+
+## 4. Verification Highlights
+
+- **Static Release Check Verification**: Passed all 58 safety rules and module validations successfully.
+- **Dynamic Smoke Integration Suite**: Passed all 32 integration test suites cleanly (including allowlist access, scope stripping, and error blocks on Test Y).
+- **Target Store Validation**: `yambasurf-co-il.myshopify.com` connection state and snapshots verify successfully.
 - **Git Safety**: Checked that the local `.env` remains completely untracked and git-ignored.
-- **Build & Quality Checks**: Both `npm run lint` and `npm run build` compiled with zero compiler warnings or bundle errors.
-- **Release Checks**: Static security checks pass 58/58 perfectly.
+- **No Expanded Scopes**: Verified that no `write_products`, `read_themes`, or `write_themes` were requested.
+- **No Shopify writes occurred**: Verified storefront mutations remain strictly blocked.

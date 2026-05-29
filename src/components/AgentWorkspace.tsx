@@ -101,7 +101,7 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [selectedMode, setSelectedMode] = useState<'RECOMMEND' | 'DRAFT'>('RECOMMEND');
   const [isRunning, setIsRunning] = useState<boolean>(false);
-  const [activeConsoleLog, setActiveConsoleLog] = useState<string>('// Workspace Idle...\n// Choose an agent and click "Launch Diagnostic Scan".');
+  const [activeConsoleLog, setActiveConsoleLog] = useState<string>('// Workspace Idle...\n// Choose an agent and click "Run Product Analysis".');
   const [errorText, setErrorText] = useState<string | null>(null);
   const [requestingId, setRequestingId] = useState<string | null>(null);
   const [selectedActionIds, setSelectedActionIds] = useState<string[]>([]);
@@ -402,10 +402,10 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
         <div>
           <h2 className="text-base font-bold text-slate-800 tracking-tight flex items-center gap-2 uppercase">
             <Sparkles className="w-5 h-5 text-indigo-600 shrink-0" />
-            Product Multi-Agent Workspace
+            Product Review Workspace
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Analyze catalog compliance warnings and review safe product metadata suggestions in a sandbox environment.
+            Analyze synced catalog data and review suggested product improvements in safe read-only mode.
           </p>
         </div>
         <div className="flex gap-2">
@@ -458,12 +458,12 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
         </div>
         <div>
           <h4 className="text-white font-bold tracking-tight text-3xs uppercase font-mono mb-0.5">
-            {readiness && readiness.connected ? 'Read-Only Connected Store' : 'Sandboxed Environment'}
+            {readiness && readiness.connected ? 'Read-Only Connected Store' : 'Demo Environment'}
           </h4>
           <p className="text-[11px] leading-relaxed text-slate-400">
             {readiness && readiness.connected 
-              ? 'Workspace agents suggest read-only changes from your synced store snapshots. Product mutations are disabled and blocked in this read-only pilot phase.'
-              : 'Workspace agents suggest changes for your review. No mutations are ever written to your live store without explicit merchant approval and execution.'}
+              ? 'Workspace agents suggest read-only changes from your synced store snapshots. Product changes are disabled and blocked in this read-only pilot phase.'
+              : 'Workspace agents suggest changes for your review. No changes are ever written to your live store without explicit merchant approval.'}
           </p>
         </div>
       </div>
@@ -478,14 +478,14 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                 Store Connection & Readiness Checklist
               </h3>
               <p className="text-[10px] text-slate-500 mt-0.5 font-sans leading-relaxed">
-                Review setup readiness parameters for safe product mutation tracking on connected stores.
+                Review connection parameters and readiness checks for the read-only catalog pilot.
               </p>
             </div>
             <div>
               {readiness.connected && readiness.pilotApproved ? (
                 readiness.hasWriteProducts ? (
                   <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
-                    Write scope detected — execution still blocked by read-only pilot policy
+                    Write scope detected — execution is still blocked by read-only pilot policy.
                   </span>
                 ) : (
                   <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
@@ -707,15 +707,15 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                 <div className="absolute inset-0 bg-white/80 backdrop-blur-xs flex flex-col items-center justify-center z-10 space-y-3">
                   <RefreshCw className="w-8 h-8 text-indigo-600 animate-spin" />
                   <div className="text-center">
-                    <p className="text-xs font-bold text-slate-900">Diagnostic Scanner Active</p>
-                    <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-sans font-bold">Scoping store listing catalog...</p>
+                    <p className="text-xs font-bold text-slate-900">Product Analysis Active</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5 font-sans font-bold">Analyzing catalog metadata...</p>
                   </div>
                 </div>
               )}
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-xs font-bold text-slate-900 uppercase">Scanner Settings</h3>
-                  <p className="text-3xs text-slate-400 mt-0.5">Launch a dynamic workspace diagnostic run session.</p>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase">Analysis Settings</h3>
+                  <p className="text-3xs text-slate-400 mt-0.5">Start a secure read-only product analysis.</p>
                 </div>
 
                 <div className="space-y-3">
@@ -784,7 +784,7 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                   ) : (
                     <Play className="w-3.5 h-3.5" />
                   )}
-                  Launch Diagnostic Scan
+                  Run Product Analysis
                 </button>
               </div>
             </div>

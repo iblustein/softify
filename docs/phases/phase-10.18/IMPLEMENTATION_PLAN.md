@@ -85,11 +85,12 @@ Refine approval cards inside `ApprovalQueue.tsx` to display clear, readable merc
 | Component / File | Rationale / Actions |
 | :--- | :--- |
 | **[LOCAL ONLY / DO NOT COMMIT]** `.env` | Developers may set `SOFTIFY_PILOT_SHOPS=yambasurf-co-il.myshopify.com` locally when launching the server. This file must remain ignored and must not be committed or staged. |
-| **[MODIFY]** `.env.example` | Exposes `SOFTIFY_PILOT_SHOPS` template placeholder. |
-| **[MODIFY]** `cloudrun-firestore.env.yaml` | Adds `SOFTIFY_PILOT_SHOPS: "yambasurf-co-il.myshopify.com"` for Cloud Run. |
-| **[MODIFY]** `DashboardOverview.tsx` | Builds Guided Onboarding Checklist, Trust & Safety Panel, improves empty states, and cleans up copy jargon. |
+| **[MODIFY]** `.env.example` | Exposes `SOFTIFY_PILOT_SHOPS` template placeholder and restricts `SHOPIFY_SCOPES` to `"read_products,read_orders"`, removing theme scopes and non-essential scopes. |
+| **[MODIFY]** `cloudrun-firestore.env.yaml` | Declares persistent pilot allowlist and restricts `SHOPIFY_SCOPES` to `"read_products,read_orders"`. |
+| **[MODIFY]** [shopify.config.ts](file:///c:/Projects/softify/softify/src/server/config/shopify.config.ts) | Prunes fallback default scopes list to `"read_products,read_orders"`. |
+| **[MODIFY]** `DashboardOverview.tsx` | Builds Guided Onboarding Checklist, Trust & Safety Panel, improves empty states, and refines connection card/OAuth description copy. |
 | **[MODIFY]** `AgentWorkspace.tsx` | Replaces "Agent workers", "Diagnostic scan" jargon with clean "Analysis Runs", "Product Review Workspace", and optimizes empty states. |
-| **[MODIFY]** `ApprovalQueue.tsx` | Rebrands diff markers from proposed commits/mutations to "Suggested Changes", cleans up execution status text, and refines justification cards. |
+| **[MODIFY]** `ApprovalQueue.tsx` | Fetches readiness from `/api/pilot/readiness` as the only authoritative policy source. Gates execution UI strictly behind `canExecuteMutations === true` instead of `hasWriteProducts`, and rebrands diff markers to "Suggested Changes". |
 | **[MODIFY]** `App.tsx` | Integrates refined lateral dev tool headings. |
 
 ---

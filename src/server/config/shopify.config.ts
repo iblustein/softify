@@ -15,8 +15,8 @@ export function getShopifyConfig(): ShopifyConfig {
   const apiKey = process.env.SHOPIFY_API_KEY || "";
   const apiSecret = process.env.SHOPIFY_API_SECRET || "";
   
-  // Default scopes: read_products,read_orders,read_customers,read_themes,read_content
-  const rawScopes = process.env.SHOPIFY_SCOPES || "read_products,read_orders,read_customers,read_themes,read_content";
+  // Default scopes: read_products,read_orders
+  const rawScopes = process.env.SHOPIFY_SCOPES || "read_products,read_orders";
   const scopes = rawScopes
     .split(",")
     .map(s => s.trim())

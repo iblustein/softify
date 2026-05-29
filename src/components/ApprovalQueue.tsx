@@ -53,7 +53,7 @@ export default function ApprovalQueue({
     const orgParam = new URLSearchParams(window.location.search).get('organizationId') || '';
     const query = `?shop=${encodeURIComponent(shopParam)}&organizationId=${encodeURIComponent(orgParam)}`;
 
-    fetch(`/api/shop/readiness${query}`)
+    fetch(`/api/pilot/readiness${query}`)
       .then(res => {
         if (res.ok) return res.json();
       })
@@ -405,37 +405,38 @@ export default function ApprovalQueue({
 
               {selectedItem.status === 'APPROVED' && (
                 <div className="space-y-4 pt-4 border-t border-slate-200 mt-5">
-                  {readiness && !readiness.hasWriteProducts ? (
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-850 flex items-start gap-2 leading-relaxed font-sans">
-                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                      <div>
-                        <span className="font-bold text-amber-950 uppercase block text-[9px] mb-0.5">Safe Read-Only Mode (Staged in Softify)</span>
-                        This suggested change has been approved by you and is staged in Softify. Saving changes directly to Shopify is blocked during this safe read-only pilot.
-                      </div>
-                    </div>
-                  ) : (
+                  {readiness && readiness.canExecuteMutations ? (
                     <div className="p-3 bg-indigo-50 border border-indigo-200 rounded-xl text-3xs text-indigo-850 flex items-start gap-2 leading-relaxed">
                       <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
                       <div>
-                        <span className="font-bold text-indigo-950 uppercase block text-[9px] mb-0.5">Staged and Approved</span>
-                        This suggested change has been approved. Under read-only pilot policies, live Shopify saving is decoupled.
+                        <span className="font-bold text-indigo-955 uppercase block text-[9px] mb-0.5">Staged and Approved</span>
+                        This suggested change has been approved. Ready to save directly to Shopify.
+                      </div>
+                    </div>
+                  ) : readiness && readiness.hasWriteProducts ? (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-850 flex items-start gap-2 leading-relaxed font-sans">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-amber-955 uppercase block text-[9px] mb-0.5">Write scope detected — execution is still blocked by read-only pilot policy.</span>
+                        This suggested change has been approved and staged in Softify. Softify will not write product changes to Shopify during this read-only pilot.
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-850 flex items-start gap-2 leading-relaxed font-sans">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-amber-955 uppercase block text-[9px] mb-0.5">Safe Read-Only Mode (Staged in Softify)</span>
+                        This suggested change has been approved and staged in Softify. Softify will not write product changes to Shopify during this read-only pilot.
                       </div>
                     </div>
                   )}
                   
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-3xs text-slate-400 font-mono font-bold uppercase">
-                      Status: APPROVED
+                      Status: APPROVED (STAGED)
                     </span>
                     
-                    {readiness && !readiness.hasWriteProducts ? (
-                      <button
-                        disabled
-                        className="px-5 py-2.5 text-xs font-bold text-slate-400 bg-slate-100 rounded-xl border border-slate-205 flex items-center gap-1.5 cursor-not-allowed opacity-60"
-                      >
-                        Safe Mode Active
-                      </button>
-                    ) : (
+                    {readiness && readiness.canExecuteMutations ? (
                       <button
                         onClick={() => onExecute(selectedItem.id)}
                         disabled={isLoading}
@@ -443,6 +444,13 @@ export default function ApprovalQueue({
                       >
                         <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                         Save Change to Shopify
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="px-5 py-2.5 text-xs font-bold text-slate-400 bg-slate-100 rounded-xl border border-slate-205 flex items-center gap-1.5 cursor-not-allowed opacity-60"
+                      >
+                        Safe Mode Active (Staged)
                       </button>
                     )}
                   </div>
@@ -454,14 +462,18 @@ export default function ApprovalQueue({
                   <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-3xs text-blue-800 flex items-start gap-2 leading-relaxed">
                     <RefreshCw className="w-4 h-4 text-blue-600 shrink-0 mt-0.5 animate-spin" />
                     <div>
-                      <span className="font-bold text-blue-955 uppercase block text-[9px] mb-0.5">Saving Change to Shopify</span>
-                      Saving product catalog updates securely to your Shopify store...
+                      <span className="font-bold text-blue-955 uppercase block text-[9px] mb-0.5">
+                        {readiness && readiness.canExecuteMutations ? "Saving Change to Shopify" : "Staging Change in Softify"}
+                      </span>
+                      {readiness && readiness.canExecuteMutations 
+                        ? "Saving product catalog updates securely to your Shopify store..."
+                        : "Processing product changes in our secure read-only environment..."}
                     </div>
                   </div>
                   
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-3xs text-slate-400 font-mono font-bold uppercase animate-pulse">
-                      Status: SAVING CHANGES
+                      Status: {readiness && readiness.canExecuteMutations ? "SAVING CHANGES" : "STAGING CHANGES"}
                     </span>
                     
                     <button
@@ -469,7 +481,7 @@ export default function ApprovalQueue({
                       className="px-5 py-2.5 text-xs font-bold text-white bg-blue-400 rounded-xl shadow-xs flex items-center gap-1.5 cursor-not-allowed"
                     >
                       <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Saving...
+                      {readiness && readiness.canExecuteMutations ? "Saving..." : "Staging..."}
                     </button>
                   </div>
                 </div>
@@ -480,15 +492,23 @@ export default function ApprovalQueue({
                   <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-3xs text-emerald-800 flex items-start gap-2 leading-relaxed">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <span className="font-bold text-emerald-955 uppercase block text-[9px] mb-0.5">Changes Applied Successfully</span>
-                      The product changes have been successfully saved to your active Shopify storefront!
+                      <span className="font-bold text-emerald-955 uppercase block text-[9px] mb-0.5">
+                        {readiness && readiness.canExecuteMutations ? "Changes Applied Successfully" : "Changes Staged Successfully"}
+                      </span>
+                      {readiness && readiness.canExecuteMutations 
+                        ? "The product changes have been successfully saved to your active Shopify storefront!"
+                        : "The product changes have been successfully verified and staged inside Softify!"}
                     </div>
                   </div>
                   
                   <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-3xs font-mono font-bold text-slate-500">
-                    <span>Staged product changes successfully finalized.</span>
+                    <span>
+                      {readiness && readiness.canExecuteMutations 
+                        ? "Staged product changes successfully finalized."
+                        : "Product change suggestion successfully verified."}
+                    </span>
                     <span className="text-emerald-700 uppercase tracking-widest text-[9px]">
-                      Result: SAVED
+                      Result: {readiness && readiness.canExecuteMutations ? "SAVED" : "STAGED"}
                     </span>
                   </div>
                 </div>
@@ -587,18 +607,18 @@ export default function ApprovalQueue({
             ) : (
               <button
                 onClick={() => setIsConfirmingExecute(true)}
-                disabled={isLoading || (readiness && !readiness.hasWriteProducts) || !selectedApprovalIds.every(id => {
+                disabled={isLoading || (readiness && !readiness.canExecuteMutations) || !selectedApprovalIds.every(id => {
                   const item = approvals.find(a => a.id === id);
                   return item?.status === 'APPROVED' || item?.status === 'FAILED';
                 })}
-                className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 disabled:bg-slate-900 disabled:text-slate-505 disabled:text-slate-500 disabled:border-slate-850 disabled:opacity-50 text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer shadow-sm transition flex items-center gap-1.5"
-                title={readiness && !readiness.hasWriteProducts ? 'Mutations Blocked (Read-Only Mode)' : selectedApprovalIds.every(id => {
+                className="px-4 py-1.5 bg-indigo-650 hover:bg-indigo-700 disabled:bg-slate-900 disabled:text-slate-500 disabled:border-slate-850 disabled:opacity-50 text-white rounded-xl text-3xs font-bold font-mono uppercase tracking-wider cursor-pointer shadow-sm transition flex items-center gap-1.5"
+                title={readiness && !readiness.canExecuteMutations ? 'Changes Blocked (Read-Only Mode)' : selectedApprovalIds.every(id => {
                   const item = approvals.find(a => a.id === id);
                   return item?.status === 'APPROVED' || item?.status === 'FAILED';
-                }) ? 'Execute selected items' : 'Some selected items are not eligible (only APPROVED or FAILED can be executed)'}
+                }) ? 'Save selected changes' : 'Some selected items are not eligible (only APPROVED or FAILED can be saved)'}
               >
                 <RefreshCw className="w-3 h-3" />
-                {readiness && !readiness.hasWriteProducts ? 'Mutations Blocked' : 'Execute Commits'}
+                {readiness && !readiness.canExecuteMutations ? 'Changes Blocked' : 'Save Batch'}
               </button>
             )}
           </div>
@@ -648,22 +668,33 @@ export default function ApprovalQueue({
 
       {/* Execute Confirmation Modal */}
       {isConfirmingExecute && (
-        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-slate-955/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl max-w-md w-full space-y-4 animate-in zoom-in-95 duration-200 text-slate-800">
             <div className="flex items-center gap-3">
               <div className="p-3 bg-indigo-50 border border-indigo-100 text-indigo-600 rounded-2xl animate-pulse">
                 <ShieldCheck className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-xs font-bold text-slate-900 uppercase">Confirm Batch Execution</h3>
-                <p className="text-[9px] text-slate-400 font-mono">Storefront Mutation Commit</p>
+                <h3 className="text-xs font-bold text-slate-900 uppercase">
+                  {readiness && readiness.canExecuteMutations ? "Confirm Batch Execution" : "Confirm Batch Save"}
+                </h3>
+                <p className="text-[9px] text-slate-400 font-mono">
+                  {readiness && readiness.canExecuteMutations ? "Storefront Mutation Commit" : "Save Staged Changes"}
+                </p>
               </div>
             </div>
             <p className="text-xs text-slate-600 leading-relaxed font-sans">
-              You are about to commit <strong>{selectedApprovalIds.length}</strong> change{selectedApprovalIds.length > 1 ? 's' : ''} to your live Shopify store. This operation writes data directly to your storefront. Proceed?
+              {readiness && readiness.canExecuteMutations 
+                ? `You are about to save ${selectedApprovalIds.length} change${selectedApprovalIds.length > 1 ? 's' : ''} to your live Shopify store. This operation writes data directly to your storefront. Proceed?`
+                : `You are about to stage ${selectedApprovalIds.length} change${selectedApprovalIds.length > 1 ? 's' : ''} inside Softify. This safe read-only operation will not write product changes to Shopify. Proceed?`
+              }
             </p>
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-3xs text-amber-800 leading-normal leading-relaxed">
-              <span className="font-bold">Live Execution Warning:</span> This is a manual commit. Safe sequential throttling with a 500ms dynamic cost protection delay will be orchestrated to ensure safe API consumption.
+              <span className="font-bold">Pilot Safety Policy:</span>{" "}
+              {readiness && readiness.canExecuteMutations 
+                ? "Safe sequential throttling with a 500ms dynamic cost protection delay will be orchestrated."
+                : "Softify will not write product changes to Shopify during this read-only pilot."
+              }
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button
@@ -676,7 +707,7 @@ export default function ApprovalQueue({
                 onClick={handleTriggerBatchExecute}
                 className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition font-mono uppercase text-[9px] tracking-wider"
               >
-                Authorize Live Commits
+                {readiness && readiness.canExecuteMutations ? "Authorize Commits" : "Confirm Staging"}
               </button>
             </div>
           </div>

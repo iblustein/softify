@@ -4,7 +4,15 @@ This report details the automated and manual verification results for **Phase 10
 
 ---
 
-## 1. Static Checks & Compiler Sweeps
+## 1. Scope Pruning Verification
+We have restricted committed environment configuration settings to ensure full read-only containment.
+- **Removed theme scopes**: Stripped `read_themes` and `write_themes` entirely from committed configurations.
+- **Removed non-essential scopes**: Removed `read_customers` and `read_content` to prevent over-permissioning.
+- **Resulting Configured Scopes**: `SHOPIFY_SCOPES="read_products,read_orders"`.
+
+---
+
+## 2. Static Checks & Compiler Sweeps
 
 ### TypeScript Compiler Verification
 We executed strict compilation checks to guarantee that all JSX modifications and merchant wording adjustments compile cleanly.
@@ -19,12 +27,12 @@ We compiled the production assets using Vite and parsed TypeScript server entry 
 npm.cmd run build
 ```
 **Result**:
-- Vite production SPA bundle built successfully: `dist/assets/index-BZo0Mawx.js` (356.66 kB) and `dist/assets/index-D7p5SzJR.css` (61.92 kB).
-- Server entry bundle compiled successfully: `dist/server.cjs` (389.7 kB).
+- Vite production SPA bundle built successfully: `dist/assets/index-D7p5SzJR.css` and `dist/assets/index-EwJL9_yV.js`.
+- Server entry bundle compiled successfully: `dist/server.cjs`.
 
 ---
 
-## 2. Pre-Deployment Release Verification
+## 3. Pre-Deployment Release Verification
 
 We executed the offline pre-deployment verification suite to validate security scopes, allowed update field policies, timeline trace sanitization, and manual execution guardrail constraints.
 ```powershell
@@ -38,7 +46,7 @@ npm.cmd run verify:release
 
 ---
 
-## 3. Dynamic Smoke Integration Suite
+## 4. Dynamic Smoke Integration Suite
 
 We launched the Express server process with the target pilot environment allowlist:
 `SOFTIFY_PILOT_SHOPS="yambasurf-co-il.myshopify.com"`
@@ -58,58 +66,17 @@ $env:SOFTIFY_BASE_URL="http://localhost:3000"; node scripts/smoke-test.mjs
 | **Test V** | Production Bulk Operations Foundation Preflight Isolation | **✓ PASS** |
 | **Test U** | normalizer mapping, execution safety status disclaimers | **✓ PASS** |
 
-### Verified Endpoint Shape — `/api/pilot/readiness`
-GET `/api/pilot/readiness?shop=yambasurf-co-il.myshopify.com`
-```json
-{
-  "shopDomain": "yambasurf-co-il.myshopify.com",
-  "pilotApproved": true,
-  "connected": true,
-  "readinessStatus": "READY",
-  "canRunInsights": true,
-  "canExecuteMutations": false,
-  "grantedScopeSummary": [
-    "read_products",
-    "read_orders",
-    "read_customers"
-  ],
-  "productSnapshotCount": 0,
-  "syncFreshness": null,
-  "visibleProductionAgentCount": 5,
-  "mutationMode": "read_only_blocked",
-  "warnings": [
-    "write_products missing",
-    "execution blocked"
-  ],
-  "pilotMessaging": {
-    "mode": "This pilot is read-only.",
-    "approvals": "Approvals do not execute automatically.",
-    "execution": "Execution is blocked unless write_products and policy allow it.",
-    "disclaimer": "No Shopify product changes will be made in the current read-only pilot mode."
-  },
-  "hasReadProducts": true,
-  "hasWriteProducts": false,
-  "catalogSyncRequired": true,
-  "agentReadiness": "NOT_READY"
-}
-```
-*Note: All theme scopes (`read_themes`, `write_themes`) are strictly stripped from response payloads and rendered elements.*
-
 ---
 
-## 4. UI Truth Auditing & Visual Verification
+## 5. UI Truth Auditing & Visual Verification
 
-### Guided Onboarding Checklist
-- Mounted a visual multi-step progress widget at the top of the **Store Dashboard**.
-- Displays completed states dynamically based on backend connection status and active product sync counts.
-- Communicates "Safe Read-Only Mode Gating" so merchants understand storefront safety.
+### Gated Execution UI
+- **Authoritative Gating**: `ApprovalQueue.tsx` has been refactored to fetch `/api/pilot/readiness` directly instead of `/api/shop/readiness`.
+- **Policy Enforcement**: Gated all execution buttons and batch modals strictly behind `canExecuteMutations === true`.
+- **Read-Only Gating Message**: If `hasWriteProducts === true` but `canExecuteMutations` is false, it renders: `"Write scope detected — execution is still blocked by read-only pilot policy. This suggested change has been approved and staged in Softify. Softify will not write product changes to Shopify during this read-only pilot."`
+- **Result**: No live storefront "Save" buttons are active; approved changes are cleanly staged inside Softify in Phase 10.18.
 
 ### Empty States & Technical Jargon Audit
 - **Analytics empty state** explicitly informs that store metrics are decoupled, prioritizing read-only pilot data integrity.
-- **Diagnostics to Product Analysis**: Removed all technical labels ("Diagnostic Scan", "Agent Workers", "Claim Lock", "Mutations") and replaced them with user-focused labels ("Product Analysis", "Suggested Changes", "Save Changes").
-
-### Trust & Safety Overview Panel
-- Placed a prominent **"What Softify can and cannot do"** panel at the bottom of the dashboard, clearly summarizing scope limits to build high merchant trust.
-
-### Recommendation Cards Refinements
-- Replaced the visual JSON diff markers with clear comparative cards ("Suggested change", "Why this matters", "Affected field", "Current value", "Suggested value", "Approve Choice", "Dismiss Choice").
+- **Jargon Elimination**: Refactored technical headers ("Multi-Agent", "Diagnostic scan", "Handshake OAuth simulated REST injection") with merchant-friendly labels ("Product Review Workspace", "Run Product Analysis", "Demo Store Connection").
+- **Trust & Safety Panel**: Placed a prominent **"What Softify can and cannot do"** panel at the bottom of the dashboard, clearly summarizing scope limits to build high merchant trust.
