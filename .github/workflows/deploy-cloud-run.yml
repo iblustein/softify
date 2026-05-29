@@ -142,7 +142,7 @@ jobs:
           source: .
           flags: >-
             --allow-unauthenticated
-            --set-env-vars=^|^REPOSITORY_BACKEND=firestore|GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }}|FIRESTORE_DATABASE_ID=softify|FIRESTORE_STORE_CONNECTIONS_COLLECTION=shopify_store_connections|FIRESTORE_PRODUCT_SNAPSHOTS_COLLECTION=product_snapshots|AI_PROVIDER=mock|SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true|SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }}|SHOPIFY_APP_URL=${{ secrets.SHOPIFY_APP_URL }}|APP_URL=${{ secrets.SHOPIFY_APP_URL }}|SHOPIFY_SCOPES=read_products,read_orders,read_customers|SHOPIFY_APP_HANDLE=softify|SHOPIFY_TEST_SHOP=${{ secrets.SOFTIFY_TEST_SHOP }}|NODE_ENV=production
+            --set-env-vars=^|^REPOSITORY_BACKEND=firestore|GOOGLE_CLOUD_PROJECT=${{ secrets.GCP_PROJECT_ID }}|FIRESTORE_DATABASE_ID=softify|FIRESTORE_STORE_CONNECTIONS_COLLECTION=shopify_store_connections|FIRESTORE_PRODUCT_SNAPSHOTS_COLLECTION=product_snapshots|AI_PROVIDER=mock|SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true|SHOPIFY_API_KEY=${{ secrets.SHOPIFY_API_KEY }}|SHOPIFY_APP_URL=${{ secrets.SHOPIFY_APP_URL }}|APP_URL=${{ secrets.SHOPIFY_APP_URL }}|SHOPIFY_SCOPES=read_products,read_orders,read_customers|SHOPIFY_APP_HANDLE=softify|SHOPIFY_TEST_SHOP=${{ secrets.SOFTIFY_TEST_SHOP }}|NODE_ENV=production|SOFTIFY_PILOT_SHOPS=${{ secrets.SOFTIFY_TEST_SHOP }}
             --set-secrets=SHOPIFY_API_SECRET=SHOPIFY_API_SECRET:latest,SHOPIFY_TOKEN_ENCRYPTION_KEY=SHOPIFY_TOKEN_ENCRYPTION_KEY:latest,SOFTIFY_AGENT_DEV_BYPASS_SECRET=SOFTIFY_AGENT_DEV_BYPASS_SECRET:latest
 
       - name: Smoke test deployed service

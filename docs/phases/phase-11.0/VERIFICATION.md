@@ -1,6 +1,6 @@
 # Verification Logs — Phase 11.0: Simplified Merchant UI & Theme Editor AI Agent MVP (Corrective Hardening Pass)
 
-This document records the automated verification logs validating the product pivot, UI simplifications, backend Express routers, Theme Editor AI Agent catalog additions, dynamic scope and enabled gates, Gemini output parsers, disabled direct write routes, and dynamic integration smoke tests for **Phase 11.0 — Simplified Merchant UI & Theme Editor AI Agent MVP**. All validation criteria are 100% satisfied.
+This document records the automated verification logs validating the product pivot, UI simplifications, backend Express routers, Theme Editor AI Agent catalog additions, dynamic scope and enabled gates, Gemini output parsers, disabled direct write routes, CI allowlist regression resolutions, and dynamic integration smoke tests for **Phase 11.0 — Simplified Merchant UI & Theme Editor AI Agent MVP**. All validation criteria are 100% satisfied.
 
 ---
 
@@ -38,6 +38,7 @@ We started a local memory server and ran the dynamic e2e smoke checks targeting 
 To support the introduction of the new `theme_editor_ai_agent`, the smoke-test assertions in `scripts/smoke-test.mjs` were updated to expect 6 agents:
 - **Test S** (Multi-Agent Workspace Catalog check) asserts `catalog.length === 6`
 - **Test Y** (Pilot Readiness visible agents check) asserts `visibleProductionAgentCount === 6`
+  - Fixed a CI allowlist regression where Test Y was failing due to missing `SOFTIFY_PILOT_SHOPS` env variables. Added a default in-process configuration fallback in `scripts/smoke-test.mjs` and appended it to the Cloud Run build arguments in `.github/workflows/deploy-cloud-run.yml`.
 - **Test Z** (Phase 11.0 validation) explicitly validates the following:
   - Settings provider exposes configurable Gemini model name (`GEMINI_MODEL`).
   - Settings dynamic enable/disable state works and disables/enables agent.
@@ -67,7 +68,7 @@ Running: 0. Pre-smoke runtime diagnostics check...
 ✓ PASS
 
    [SMOKE-TEST] Diagnosed local in-memory backend. Initializing in-process local server on ephemeral port...
-   [SMOKE-TEST] Ephemeral local server listening at http://127.0.0.1:51638
+   [SMOKE-TEST] Ephemeral local server listening at http://127.0.0.1:63137
 [TOKEN CRYPTO] WARNING: SHOPIFY_TOKEN_ENCRYPTION_KEY env var is missing. Using insecure fallback base64 encryption.
    [SMOKE-TEST] Seeded in-process memory database successfully with invalid proposed actions and mock connections.
 Running: A. OAuth Status endpoint validation...
@@ -110,3 +111,4 @@ SMOKE TEST COMPLETED SUCCESSFULLY!
 | **No Mock Domain for Yambasurf** | **Verified** | `yambasurf-co-il.myshopify.com` is completely removed from the mock checks and is verified to execute real Shopify REST calls. |
 | **Direct Write Disabled** | **Verified** | The endpoint `POST /api/theme/assets/update` is fully disabled with code `DIRECT_WRITE_DISABLED`. |
 | **Gemini Output Validator** | **Verified** | Strict JSON schema parses and validates properties/types (reply, requiresChanges, proposedChanges array, safe asset path, newValue, riskLevel) before structuring a write proposal. |
+| **CI Pilot Environment Fixed** | **Verified** | Deployed and local test harnesses boot cleanly with `SOFTIFY_PILOT_SHOPS=yambasurf-co-il.myshopify.com` configured explicitly in CI environment variables. |

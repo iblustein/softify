@@ -15,6 +15,10 @@ if (!process.env.TSX_ACTIVE && !process.argv.includes("--child")) {
 import dotenv from "dotenv";
 dotenv.config();
 
+// Ensure SOFTIFY_PILOT_SHOPS is set for the in-process server
+process.env.SOFTIFY_PILOT_SHOPS = process.env.SOFTIFY_PILOT_SHOPS || "yambasurf-co-il.myshopify.com";
+
+
 import { URL } from "url";
 
 let baseUrl = process.env.SOFTIFY_BASE_URL || "https://softify-595151907767.europe-west1.run.app";
