@@ -39,8 +39,7 @@ jobs:
           test -n "${{ secrets.SOFTIFY_TEST_SHOP }}" || (echo "Missing secret: SOFTIFY_TEST_SHOP" && exit 1)        
           test -n "${{ secrets.SHOPIFY_API_KEY }}" || (echo "Missing secret: SHOPIFY_API_KEY" && exit 1)
           test -n "${{ secrets.SHOPIFY_APP_URL }}" || (echo "Missing secret: SHOPIFY_APP_URL" && exit 1)
-          # SECURITY EXCEPTION: The static check expects the string 'Missing secret: SOFTIFY_AGENT_DEV_BYPASS_SECRET' to exist in this workflow file.
-          # We intentionally document this here to satisfy the check while keeping the bypass disabled.
+
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -94,8 +93,7 @@ jobs:
             exit 1
           fi
 
-          # SECURITY EXCEPTION: The static check expects the string 'gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET' to exist in this workflow file.
-          # We intentionally document this here to satisfy the check while keeping the bypass disabled.
+
 
 
 
@@ -131,8 +129,7 @@ jobs:
             }
           fi
 
-      # SECURITY EXCEPTION: The static check expects the string 'SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true' to exist in this workflow file.
-      # We intentionally document this here to satisfy the check, but configure no such flag in the deployed environment to keep production safe.
+
       - name: Deploy to Cloud Run
         id: deploy
         uses: google-github-actions/deploy-cloudrun@v3
