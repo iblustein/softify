@@ -61,7 +61,11 @@ router.get("/pilot/readiness", async (req, res) => {
         visibleProductionAgentCount: 0,
         mutationMode: "read_only_blocked",
         warnings: ["Shop is not approved for pilot participation"],
-        pilotMessaging
+        pilotMessaging,
+        hasReadProducts: false,
+        hasWriteProducts: false,
+        catalogSyncRequired: true,
+        agentReadiness: "NOT_READY"
       });
     }
 
@@ -82,7 +86,11 @@ router.get("/pilot/readiness", async (req, res) => {
         visibleProductionAgentCount: 0,
         mutationMode: "read_only_blocked",
         warnings: ["Store connection does not exist"],
-        pilotMessaging
+        pilotMessaging,
+        hasReadProducts: false,
+        hasWriteProducts: false,
+        catalogSyncRequired: true,
+        agentReadiness: "NOT_READY"
       });
     }
 
@@ -116,6 +124,9 @@ router.get("/pilot/readiness", async (req, res) => {
       warnings.push("dev bypass must not be merchant-facing");
     }
 
+    const catalogSyncRequired = productSnapshotCount === 0;
+    const agentReadiness = (pilotApproved && canRunInsights && productSnapshotCount > 0) ? "READY" : "NOT_READY";
+
     res.json({
       shopDomain,
       pilotApproved: true,
@@ -129,7 +140,11 @@ router.get("/pilot/readiness", async (req, res) => {
       visibleProductionAgentCount,
       mutationMode: "read_only_blocked",
       warnings,
-      pilotMessaging
+      pilotMessaging,
+      hasReadProducts,
+      hasWriteProducts,
+      catalogSyncRequired,
+      agentReadiness
     });
   } catch (error: any) {
     res.status(500).json({

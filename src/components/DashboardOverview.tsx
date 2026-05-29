@@ -30,10 +30,7 @@ interface DashboardOverviewProps {
 
 const ALL_AVAILABLE_SCOPES = [
   { id: 'read_products', label: 'Read Products (Catalog & inventory audits)', required: true },
-  { id: 'write_products', label: 'Write Products (Description overhauls & tag optimization)' },
   { id: 'read_orders', label: 'Read Orders (Sales analytics & fulfillment triggers)', required: true },
-  { id: 'read_customers', label: 'Read Customers (Contextual support responses)' },
-  { id: 'write_themes', label: 'Write Themes (CSS layout patches & visual assets edits)' },
   { id: 'read_analytics', label: 'Read Analytics (General statistics calculation)' }
 ];
 
@@ -135,16 +132,18 @@ export default function DashboardOverview({
           </p>
         </div>
         
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onReset}
-            disabled={isLoading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            Reset Prototype DB (Admin/Dev Only)
-          </button>
-        </div>
+        {!store.connected && (
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onReset}
+              disabled={isLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              Reset Prototype DB (Admin/Dev Only)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Connection Panel */}
@@ -428,43 +427,41 @@ export default function DashboardOverview({
 
       {/* Split pane for mini summaries */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sandbox Store Mock Database Insight card */}
+        {/* Shopify Store Catalog snapshot & metrics status block */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-sm">
           <div className="flex justify-between items-center border-b border-slate-100 pb-3">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
               <Database className="w-4 h-4 text-indigo-500" />
-              {store.connected ? 'Connected Shopify Store' : 'Connected Shopify Sandbox'}
+              {store.connected ? 'Connected Shopify Store' : 'Shopify Sandbox Store (Demo/Mock)'}
             </h3>
             <span className="text-[10px] font-mono text-slate-400 font-semibold bg-slate-50 border border-slate-100 px-2 py-0.5 rounded-full">
-              {store.connected ? 'Sync status: Read-Only snapshots' : 'Sync status: Live Mock'}
+              {store.connected ? 'Sync status: Read-Only snapshots' : 'Sync status: Live Mock (Demo)'}
             </span>
           </div>
 
           {!store.connected ? (
-            <div className="py-10 text-center text-slate-400 max-w-sm mx-auto">
-              <Unlink className="w-8 h-8 mx-auto text-slate-300 mb-2" />
-              <p className="text-sm font-bold text-slate-700">Shopify Connection offline</p>
-              <p className="text-xs text-slate-400 mt-1">Please connect your store or use the sample config to run queries.</p>
-            </div>
-          ) : (
             <div className="space-y-4">
+              <div className="p-3 bg-amber-50/50 border border-amber-200 rounded-xl text-[11px] text-amber-800 font-sans flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span><strong>Demo Mode:</strong> The following sales statistics are simulated placeholder values.</span>
+              </div>
               <div className="grid grid-cols-3 gap-3 bg-slate-50/70 p-4 rounded-xl text-center border border-slate-100">
                 <div>
-                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold">Conversion Rate</span>
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold">Conversion Rate (Demo)</span>
                   <span className="text-base font-bold text-slate-800 mt-1 block font-mono">{LOCAL_SALES_REPORT.conversionRate}</span>
                 </div>
                 <div>
-                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold">Est. Weekly Revenue</span>
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold">Est. Weekly Revenue (Demo)</span>
                   <span className="text-base font-bold text-indigo-600 mt-1 block font-mono">${LOCAL_SALES_REPORT.totalWeekRevenue}</span>
                 </div>
                 <div>
-                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold">Active Web Sessions</span>
+                  <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold">Active Web Sessions (Demo)</span>
                   <span className="text-base font-bold text-slate-800 mt-1 block font-mono">{LOCAL_SALES_REPORT.activeSessions}</span>
                 </div>
               </div>
 
               <div>
-                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">High performance SKU metrics</h4>
+                <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">High performance SKU metrics (Demo)</h4>
                 <div className="space-y-2">
                   {LOCAL_SALES_REPORT.popularProducts.map((p, i) => (
                     <div key={i} className="flex justify-between items-center p-3 bg-slate-50/40 hover:bg-slate-50/95 rounded-xl border border-slate-150 text-xs transition-colors">
@@ -477,6 +474,16 @@ export default function DashboardOverview({
                   ))}
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className="py-10 text-center text-slate-400 max-w-md mx-auto space-y-3 font-sans">
+              <div className="w-12 h-12 bg-slate-50 border border-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                <Database className="w-6 h-6" />
+              </div>
+              <h4 className="text-xs font-bold text-slate-800">Sales analytics are not connected in this read-only catalog pilot.</h4>
+              <p className="text-[11px] text-slate-500 leading-relaxed">
+                Only catalog snapshots, readiness checklists, agent workspace recommendations, and approval state history are active in Phase 10.17.
+              </p>
             </div>
           )}
         </div>

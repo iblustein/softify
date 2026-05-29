@@ -462,7 +462,7 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
           </h4>
           <p className="text-[11px] leading-relaxed text-slate-400">
             {readiness && readiness.connected 
-              ? 'Workspace agents suggest read-only changes from your synced store snapshots. Storefront commits are completely disabled and blocked in this pilot phase.'
+              ? 'Workspace agents suggest read-only changes from your synced store snapshots. Product mutations are disabled and blocked in this read-only pilot phase.'
               : 'Workspace agents suggest changes for your review. No mutations are ever written to your live store without explicit merchant approval and execution.'}
           </p>
         </div>
@@ -478,18 +478,20 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                 Store Connection & Readiness Checklist
               </h3>
               <p className="text-[10px] text-slate-500 mt-0.5 font-sans leading-relaxed">
-                Review setup readiness parameters for safe storefront commits on real stores.
+                Review setup readiness parameters for safe product mutation tracking on connected stores.
               </p>
             </div>
             <div>
-              {readiness.connected && readiness.pilotApproved && readiness.grantedScopeSummary?.includes('write_products') ? (
-                <span className="px-2.5 py-1 bg-emerald-50 border border-emerald-100 text-emerald-700 font-extrabold text-[9px] uppercase tracking-wider rounded-xl">
-                  Ready (Full Access)
-                </span>
-              ) : readiness.connected && readiness.pilotApproved ? (
-                <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
-                  Ready (Read-Only Pilot)
-                </span>
+              {readiness.connected && readiness.pilotApproved ? (
+                readiness.hasWriteProducts ? (
+                  <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
+                    Write scope detected — execution still blocked by read-only pilot policy
+                  </span>
+                ) : (
+                  <span className="px-2.5 py-1 bg-amber-50 border border-amber-100 text-amber-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
+                    Ready (Read-Only Pilot)
+                  </span>
+                )
               ) : (
                 <span className="px-2.5 py-1 bg-rose-50 border border-rose-100 text-rose-700 font-bold text-[9px] uppercase tracking-wider rounded-xl">
                   Not Ready
@@ -544,8 +546,8 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
                 </div>
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">
                   <span className="text-slate-500">read_products</span>
-                  <span className={`font-bold ${readiness.canRunInsights ? 'text-emerald-500' : 'text-rose-500'}`}>
-                    {readiness.canRunInsights ? 'YES' : 'NO'}
+                  <span className={`font-bold ${readiness.hasReadProducts ? 'text-emerald-500' : 'text-rose-500'}`}>
+                    {readiness.hasReadProducts ? 'YES' : 'NO'}
                   </span>
                 </div>
               </div>
@@ -559,8 +561,8 @@ export default function AgentWorkspace({ shopQuery, onRefreshStats }: AgentWorks
               <div className="space-y-2 pt-1 font-sans">
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">
                   <span className="text-slate-500">write_products</span>
-                  <span className={`font-bold ${readiness.grantedScopeSummary?.includes('write_products') ? 'text-emerald-500' : 'text-amber-500'}`}>
-                    {readiness.grantedScopeSummary?.includes('write_products') ? 'YES' : 'NO (Blocked)'}
+                  <span className={`font-bold ${readiness.hasWriteProducts ? 'text-amber-500' : 'text-slate-400'}`}>
+                    {readiness.hasWriteProducts ? 'YES (Policy Blocked)' : 'NO'}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-[11px] leading-relaxed">

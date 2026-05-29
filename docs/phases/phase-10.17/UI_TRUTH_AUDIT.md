@@ -16,13 +16,14 @@ This document maps, evaluates, and classifies every merchant-facing user interfa
 ## 2. Detailed UI Area Classifications
 
 ### A. Store Dashboard Page
-* **Classification**: **MIXED**
+* **Classification**: **MIXED / REAL**
 * **Verification Detail**: 
   - The dashboard stats load dynamically via `/api/dashboard-stats`.
   - When connected to a real shop (e.g. `yambasurf-co-il.myshopify.com`), the **Product Count** card renders the actual, real Firestore snapshot count (sourcing `countProductSnapshotsByShop`).
   - If a connected shop is provided but has `0` snapshots, it returns the real count of `0` instead of falling back to the `5` mock products count.
   - The **Active Agents Count**, **Pending Approvals Count**, and **Audit Logs Count** cards pull actual database values.
-  - The **Sales Reports metrics** (Weekly Revenue, conversion rates, popular products) utilize simulated static fixtures (`LOCAL_SALES_REPORT` dataset) to represent merchant analytics since analytics endpoints remain read-only mock metrics.
+  - The **Sales Reports metrics** (Weekly Revenue, conversion rates, popular products) have been completely replaced with a truthful read-only description block under active store connections: *"Sales analytics are not connected in this read-only catalog pilot. Only catalog snapshots, readiness checklists, agent workspace recommendations, and approval state history are active in Phase 10.17."*
+  - When the store is unconnected, simulated sales report metrics are kept for demo purposes but explicitly labeled as *"Demo Mode: simulated placeholder values"*.
 
 ### B. Merchant Identity Sidebar
 * **Classification**: **REAL**
@@ -82,6 +83,8 @@ This document maps, evaluates, and classifies every merchant-facing user interfa
 * **Verification Detail**:
   - Renders inside `AgentWorkspace.tsx` powered by `/api/pilot/readiness`.
   - Displays actual connection status, shop domain, and dynamically filtered granted scopes (excluding secrets).
+  - Employs explicit `/api/pilot/readiness` fields (`hasWriteProducts`, `hasReadProducts`, `catalogSyncRequired`, `agentReadiness`) to avoid client-side computation errors.
+  - Fully removes any "Full Access" UI labels; if `write_products` is somehow detected, it displays *"Write scope detected — execution still blocked by read-only pilot policy"*.
   - Renders a high-visibility amber warning disclaimer card explaining the read-only nature of the pilot.
 
 ### K. Catalog/Product-Related UI
@@ -94,7 +97,7 @@ This document maps, evaluates, and classifies every merchant-facing user interfa
 * **Classification**: **ADMIN/DEV ONLY**
 * **Verification Detail**:
   - Prototype database reset action.
-  - Hardened by renaming the action button to `"Reset Prototype DB (Admin/Dev Only)"` on the central Dashboard page.
+  - Hardened by renaming the action button to `"Reset Prototype DB (Admin/Dev Only)"` on the central Dashboard page, and **completely hiding** the button under connected store states to protect configurations from accidental loss.
 
 ---
 

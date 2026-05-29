@@ -139,3 +139,7 @@ SMOKE TEST COMPLETED SUCCESSFULLY!
 2. **Theme Containment Check**: Actively filtered out any theme scopes (`read_themes` and `write_themes`) from the readiness responses to ensure zero theme scope exposure.
 3. **Execution Blockage Check**: Explicitly returned `canExecuteMutations: false` and `mutationMode: "read_only_blocked"` for all pilot shops.
 4. **Dev Bypass Alert Check**: Dynamically appended the warning `"dev bypass must not be merchant-facing"` if `SOFTIFY_ALLOW_AGENT_DEV_BYPASS` is active.
+5. **Sales Analytics Gating Check**: Verified that the mock sales report panel (`LOCAL_SALES_REPORT` dataset) is completely hidden on connected stores, showing only a dynamic notice stating analytics are not connected.
+6. **Dangerous Scopes Removal Check**: Verified that selectable OAuth permission parameters inside setup forms completely omit `write_products`, `write_themes`, and `read_customers`.
+7. **Accidental DB Reset Block Check**: Verified that the prototype database reset trigger button is completely hidden under connected store states.
+8. **"Full Access" Removal Check**: Verified that the agent workspace connection status card completely removes "Ready (Full Access)" badges, displaying dynamic blocked notices if write scopes are present.

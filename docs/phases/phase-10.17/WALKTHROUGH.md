@@ -53,3 +53,15 @@ The following files have been created or modified in the workspace repository:
 - **Static Release Check Verification**: Passed all 58 safety rules and module validations successfully.
 - **Dynamic Smoke Integration Suite**: Passed all 32 integration test suites cleanly (including allowlist access, scope stripping, and error blocks on Test Y).
 - **Target Store Validation**: yambasurf-co-il.myshopify.com connection state and snapshots verify successfully.
+
+---
+
+## 4. Corrective Pass Accomplishments (Post-Architecture Review)
+
+Following an external architecture review, additional modifications were completed to ensure total truthfulness and guardrails compliance:
+- **Mock Metrics Gating**: Removed the simulated sales reports block from active connected store dashboard screens entirely, replacing it with a precise read-only disclaimer message. For unconnected sandboxes, labeled simulated metrics as simulated placeholders.
+- **Accidental DB Reset Block**: Hidden the database reset button completely inside connected store contexts to prevent merchants from accidentally clearing credentials or metadata snapshots.
+- **dangerous Scope Exclusions**: Screened setup screens to completely remove selectable options for out-of-scope permissions (`write_products`, `write_themes`, `read_customers`).
+- **Wording Audit**: Eliminated all "Ready (Full Access)" labels from the connection checklist in favor of read-only blocked status checks. Swapped out all misleading "storefront commits" phrasing.
+- **Backend Readiness Extension**: Aligned the client-side state parameters directly with robust, explicit `/api/pilot/readiness` payload keys.
+

@@ -103,3 +103,18 @@ Every merchant-facing UI area has been audited and classified under the followin
 - [x] **Vite & esbuild Bundle**: `npm run build` compiles frontend assets and backend server bundle correctly.
 - [x] **Pre-deployment Release Checks**: `npm run verify:release` completes all 58 safety rules and module validations.
 - [x] **Smoke Test Validation**: `npm run smoke` runs all 32 tests (including Test Y for pilot allowlist, scope stripping, and readiness disclaimers) successfully.
+
+---
+
+## 7. Corrective Pass (Post-Architecture Review Hardening)
+
+A corrective pass was successfully planned and executed to harden UI truthfulness and eliminate any possibility of misleading mock presentations:
+1. **Mock Sales Metrics Resolution**: Completely replaced the mock sales metrics panel with a truthful read-only description block under active store connections: *"Sales analytics are not connected in this read-only catalog pilot. Only catalog snapshots, readiness checklists, agent workspace recommendations, and approval state history are active in Phase 10.17."*
+2. **Prototype/Demo Mode Labeling**: Explicitly labeled mock reporting metrics as `"Demo Mode: simulated placeholder values"` when store connection is offline.
+3. **Risky OAuth Scope Shielding**: Removed selectable checkboxes for risky and out-of-scope permissions (`write_products`, `write_themes`, `read_customers`) from the merchant-facing setup forms. Keep only safe, required read-only items (`read_products`, `read_orders`, `read_analytics`).
+4. **"Full Access" Removal**: Removed all references to "Ready (Full Access)" in the merchant workspace. If a test store connection somehow registers `write_products`, the badge gracefully displays *"Write scope detected — execution still blocked by read-only pilot policy"*.
+5. **Readiness Payload Alignment**: Extended `/api/pilot/readiness` with explicit, robust fields: `hasWriteProducts`, `hasReadProducts`, `catalogSyncRequired`, and `agentReadiness` to avoid client-side computation errors.
+6. **Commits Language Clarification**: Swapped misleading `"storefront commits"` strings with precise `"product mutations"` and `"product mutation tracking"` labels.
+7. **Accidental Database Reset Gating**: Hidden the `"Reset Prototype DB (Admin/Dev Only)"` trigger completely inside connected store contexts.
+8. **No Shopify Scope Extensions**: Verified that zero active write scopes or theme mutation paths have been added or executed on Shopify.
+
