@@ -26,6 +26,9 @@ if (isIntegrationMode) {
   process.env.SOFTIFY_AGENT_DEV_BYPASS_SECRET = "dev-bypass-secret";
   process.env.REPOSITORY_BACKEND = "memory";
   process.env.GEMINI_MODEL = "gemini-test-custom-model";
+  process.env.SHOPIFY_API_KEY = "mock-key";
+  process.env.SHOPIFY_API_SECRET = "mock-secret";
+  process.env.SHOPIFY_APP_URL = "http://localhost:3000";
 } else {
   console.log("   [SMOKE-TEST] Bootstrapping in PRODUCTION mode...");
 }
