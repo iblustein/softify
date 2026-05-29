@@ -142,45 +142,13 @@ router.get("/theme/assets/content", async (req, res) => {
 /**
  * POST /api/theme/assets/update
  * Safely writes/updates a theme file (Backup created before write).
+ * [DISABLED IN PHASE 11.0 Gated Security Model] All theme writes must go through the Theme Editor Apply conversational flow.
  */
 router.post("/theme/assets/update", async (req: any, res: any) => {
-  try {
-    const { themeId, assetKey, value } = req.body;
-    if (!themeId || typeof themeId !== "string") {
-      return res.status(400).json({ error: "Missing themeId parameter.", code: "MISSING_THEME_ID" });
-    }
-    if (!assetKey || typeof assetKey !== "string") {
-      return res.status(400).json({ error: "Missing assetKey parameter.", code: "MISSING_ASSET_KEY" });
-    }
-    if (value === undefined || typeof value !== "string") {
-      return res.status(400).json({ error: "Missing asset content 'value' string.", code: "MISSING_VALUE" });
-    }
-
-    // Path Safety Gating
-    if (!validateAssetPath(assetKey)) {
-      return res.status(403).json({ error: "Forbidden. Writing outside allowed folders or path traversal detected.", code: "UNSAFE_PATH" });
-    }
-
-    const tenantCtx = await validateThemeTenant(req, res);
-    if (!tenantCtx) return;
-    const { cleanShop } = tenantCtx;
-
-    const result = await updateThemeAsset({
-      shopDomain: cleanShop,
-      themeId,
-      assetKey,
-      value,
-      operator: "Shop Owner"
-    });
-
-    res.json({
-      ok: true,
-      ...result
-    });
-  } catch (error: any) {
-    console.error("Write asset failed:", error.message);
-    res.status(500).json({ error: error.message || "Failed to write theme asset.", code: "ASSET_WRITE_FAILED" });
-  }
+  return res.status(403).json({
+    error: "Direct write operations are disabled. Theme edits must go through the Theme Editor approval/apply conversational flow.",
+    code: "DIRECT_WRITE_DISABLED"
+  });
 });
 
 export default router;

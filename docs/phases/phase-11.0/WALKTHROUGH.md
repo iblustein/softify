@@ -1,6 +1,6 @@
-# Technical Walkthrough — Phase 11.0: Simplified Merchant UI & Theme Editor AI Agent MVP
+# Technical Walkthrough — Phase 11.0: Simplified Merchant UI & Theme Editor AI Agent MVP (Corrective Hardening Pass)
 
-This document details the implementation of Phase 11.0, focusing on the simplification of Softify's merchant control center around a single primary experience: the **Theme Editor AI Agent MVP**. It walks through the key architectural changes, premium UI components, backend routing integrations, and validation milestones.
+This document details the implementation of Phase 11.0, focusing on the simplification of Softify's merchant control center around a single primary experience: the **Theme Editor AI Agent MVP**. It walks through the key architectural changes, premium UI components, backend routing integrations, strict security gates, and validation milestones.
 
 ---
 
@@ -42,10 +42,41 @@ We adhered strictly to code reuse policies, avoiding parallel frameworks and ext
 
 ---
 
-## 4. Verification Accomplishments
+## 4. Corrective Hardening Accomplishments
+
+As part of the final Phase 11.0 hardening check, several major security and correctness fixes were implemented:
+
+### A. Removed Yambasurf from Mock Theme Mode
+- Modified `src/server/services/shopify-theme.service.ts` to completely remove `yambasurf-co-il` from all `isMockDomain` checks.
+- If OAuth is configured, `yambasurf-co-il.myshopify.com` makes actual REST API calls directly to the Shopify Admin API rather than returning sandbox success.
+
+### B. Enforced Agent Enabled State on Theme Editor Routes
+- Enforced strict agent availability checks on all Theme Editor conversational endpoints (`GET conversations`, `POST conversations`, `GET conversation`, `POST messages`, `POST plan`, `POST apply`).
+- If `theme_editor_ai_agent` is disabled for the target store connection, the controller rejects the request early with a `403 Forbidden` and `AGENT_DISABLED` code.
+
+### C. Gated Direct Theme Write Endpoint
+- Disabled the direct theme write route `POST /api/theme/assets/update` completely for merchant-facing use.
+- Any attempt to reach this endpoint returns `403 Forbidden` with a `DIRECT_WRITE_DISABLED` code, enforcing that all storefront mutations must traverse the controlled, merchant-approved, backup-snapshot conversational apply flow.
+
+### D. Configurable Gemini Model Name
+- Modified `src/server/routes/theme-chat.routes.ts` to fetch the model dynamically via `process.env.GEMINI_MODEL || "gemini-1.5-flash"`.
+- Wired the SaaS Settings API to display the exact configured active model name on the frontend.
+
+### E. Gemini Output Schema & Type Validations
+- Implemented a robust JSON schema parser on Gemini output. It validates properties and types:
+  - Validates `reply` is a string and `requiresChanges` is a boolean.
+  - If `requiresChanges` is true, validates `proposedChanges` is a non-empty array, `proposedChanges[0].assetKey` passes `validateAssetPath`, `proposedChanges[0].newValue` is a non-empty string, and validates/defaults `riskLevel` to `Low`/`Medium`/`High` (defaults to `Medium`).
+  - If any parse or validation check fails, it does **not** create a write proposal and instead returns a friendly explanation card.
+
+### F. Explicit OAuth Scope Checking
+- Added strict preflight scope checks inside Theme Editor routes. Reading/planning requires `read_themes` scope (returns `403 MISSING_READ_THEMES_SCOPE`), and applying updates requires `write_themes` (returns `403 MISSING_WRITE_THEMES_SCOPE`).
+
+---
+
+## 5. Verification Outcomes
 
 The build and verification sequences were executed to ensure full production readiness:
 - **TypeScript Compilation**: Compiled successfully under `npm run lint` with zero errors.
-- **Static Release Suitability**: Passed all 58 pre-deployment verification tests (`npm run verify:release`).
-- **Dynamic Smoke Validation**: Adjusted assertions in Test S (Multi-Agent Workspace catalog catalog size) and Test Y (controlled merchant pilot readiness agent counts) in `scripts/smoke-test.mjs` to account for the new active agent.
-- **E2E Success**: Successfully executed local smoke checks (`cmd /c "set SOFTIFY_BASE_URL=http://localhost:3000&& node scripts/smoke-test.mjs"`), passing all 32 dynamic integration checks with 100% green status.
+- **Static Release Suitability**: Passed all 59 pre-deployment verification tests (`npm run verify:release`), including the new Phase 11.0 static rules.
+- **Dynamic Smoke Validation**: Expanded `scripts/smoke-test.mjs` with **Test Z** to dynamically assert settings toggles, disabled agent route blocks, scope gates, path traversals, direct write rejections, real yambasurf Shopify REST calls, live warnings, and pre-write backups.
+- **E2E Success**: Successfully executed local smoke checks, passing all 33 dynamic integration checks with 100% green status.

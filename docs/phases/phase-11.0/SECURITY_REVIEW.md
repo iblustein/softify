@@ -1,6 +1,6 @@
-# Security Review & Trust Model — Phase 11.0: Theme Editor AI Agent MVP
+# Security Review & Trust Model — Phase 11.0: Theme Editor AI Agent MVP (Corrective Hardening Pass)
 
-This document details the security reviews, safe execution bounds, threat models, and trust boundaries implemented in **Phase 11.0 — Simplified Merchant UI & Theme Editor AI Agent MVP**. It guarantees that shop assets are edited safely and malicious injections or traversal attempts are blocked.
+This document details the security reviews, safe execution bounds, threat models, trust boundaries, and scope constraints implemented in **Phase 11.0 — Simplified Merchant UI & Theme Editor AI Agent MVP**. It guarantees that shop assets are edited safely and malicious injections or traversal attempts are blocked.
 
 ---
 
@@ -24,7 +24,7 @@ Direct theme writing poses significant risks to online stores. A bad write could
 
 ---
 
-## 2. Key Guardrail Implementations
+## 2. Hardened Guardrail Implementations
 
 ### A. Non-Leaking AI Provider System
 - **Stateless AI Execution**: The Gemini AI engine does not have access to Shopify store tokens, databases, or execution endpoints. It acts strictly as a stateless text generator that is given file schemas and responds with recommended updates.
@@ -39,23 +39,30 @@ Direct theme writing poses significant risks to online stores. A bad write could
   - `snippets/`
   - `assets/`
   - `config/`
-- **Path Traversal Gating**: Incoming asset keys are sanitized and inspected. Any key containing path traversal components (e.g. `..`, `%2e%2e`, `/etc/passwd`, hidden `.env` files) is immediately rejected with a `400 Bad Request` before calling Shopify.
+- **Path Traversal Gating**: Incoming asset keys are sanitized and inspected via `validateAssetPath`. Any key containing path traversal components (e.g. `..`, `%2e%2e`, `/etc/passwd`, hidden `.env` files) is immediately rejected with a `403 Forbidden` and `UNSAFE_PATH` code before calling Shopify.
 
-### C. Durable Snapshot Pre-Write Backups
+### C. Gemini Output Schema & Type Validation
+- **Strict Parser Protection**: Implemented a JSON schema validator directly after fetching the Gemini response.
+- **Properties check**: Ensures `reply` is a string, and `requiresChanges` is a boolean.
+- **Proposed Changes array check**: If `requiresChanges` is true, it strictly asserts that `proposedChanges` is a non-empty array, `proposedChanges[0].assetKey` passes `validateAssetPath`, `proposedChanges[0].newValue` is a non-empty string, and `riskLevel` matches standard categories (defaults to `Medium`).
+- **Fail-Safe Fallback**: If parsing or validation checks fail, the backend does **not** create a write proposal and instead saves a friendly explanation message.
+
+### D. Durable Snapshot Pre-Write Backups
 - **Restorable Backups**: Before writing a modified file to Shopify:
   1. The Softify backend pulls the existing file contents from Shopify.
   2. If the file already exists, it is saved as a snapshot record in the Firestore `theme_backups` collection, keyed by `shopDomain`, `themeId`, and `assetKey`.
   3. This ensures that even if an AI-proposed write causes errors, the merchant has a path to instantly restore the original file.
 - **Audit Logging**: Every theme write operation is logged in the `agent_audit_logs` collections with timestamp, operator ID, and a checksum of the changes.
 
-### D. Multi-Tier Consent Gating
+### E. Multi-Tier Consent Gating
 - **No Direct AI Mutations**: The AI can never modify a theme autonomously. All changes are queued as proposals in the UI.
 - **Double-Gated Live Theme Writes**: If the selected theme is the active live theme (impacts live customers), the frontend disables the "Apply Change" action until the merchant explicitly checks the live warning gate.
+- **Disabled Direct Write Path**: The endpoint `POST /api/theme/assets/update` is completely disabled for merchant-facing use, returning a `403 DIRECT_WRITE_DISABLED` error. All theme edits must traverse the merchant-approved, double-gated Apply conversational loop.
 
 ---
 
 ## 3. Scope Gating Rules
 
 Theme editing utilizes the minimum possible Shopify scopes:
-- **Authorized Scopes**: `read_themes` and `write_themes` are strictly configured for the Shopify App.
+- **Authorized Scopes**: `read_themes` and `write_themes` are strictly configured for the Shopify App. Preflight checks in conversational routes explicitly validate `read_themes` for listing/reading/planning (returns `403 MISSING_READ_THEMES_SCOPE`) and `write_themes` for applying changes (returns `403 MISSING_WRITE_THEMES_SCOPE`).
 - **Forbidden Mutations**: Price updates, customer queries, inventory edits, bulk product mutations, and payment gateway overrides remain completely unauthorized and blocked.

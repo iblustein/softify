@@ -59,8 +59,7 @@ export async function listThemes(shopDomain: string) {
   const connection = await repos.stores.getStoreConnectionByUrl(cleanShop);
 
   const isMockDomain = cleanShop.includes("glowthread-apparel") || 
-                       cleanShop.includes("luminary-essentials") ||
-                       cleanShop.includes("yambasurf-co-il");
+                       cleanShop.includes("luminary-essentials");
   const isConfigured = isShopifyOAuthConfigured();
 
   if (!isConfigured || isMockDomain) {
@@ -107,8 +106,7 @@ export async function listThemeAssets(shopDomain: string, themeId: string) {
   const connection = await repos.stores.getStoreConnectionByUrl(cleanShop);
 
   const isMockDomain = cleanShop.includes("glowthread-apparel") || 
-                       cleanShop.includes("luminary-essentials") ||
-                       cleanShop.includes("yambasurf-co-il");
+                       cleanShop.includes("luminary-essentials");
   const isConfigured = isShopifyOAuthConfigured();
 
   if (!isConfigured || isMockDomain) {
@@ -163,8 +161,7 @@ export async function getThemeAssetContent(shopDomain: string, themeId: string, 
   const connection = await repos.stores.getStoreConnectionByUrl(cleanShop);
 
   const isMockDomain = cleanShop.includes("glowthread-apparel") || 
-                       cleanShop.includes("luminary-essentials") ||
-                       cleanShop.includes("yambasurf-co-il");
+                       cleanShop.includes("luminary-essentials");
   const isConfigured = isShopifyOAuthConfigured();
 
   if (!isConfigured || isMockDomain) {
@@ -295,8 +292,7 @@ export async function updateThemeAsset(params: {
   const connection = await repos.stores.getStoreConnectionByUrl(cleanShop);
 
   const isMockDomain = cleanShop.includes("glowthread-apparel") || 
-                       cleanShop.includes("luminary-essentials") ||
-                       cleanShop.includes("yambasurf-co-il");
+                       cleanShop.includes("luminary-essentials");
   const isConfigured = isShopifyOAuthConfigured();
 
   // Fetch current value for backup

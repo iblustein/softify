@@ -109,7 +109,7 @@ async function seedInProcessDb() {
     organizationId: "demo-org-id",
     storeUrl: "glowthread-apparel.myshopify.com",
     accessTokenEncrypted: encryptedToken,
-    scopes: ["read_products", "write_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+    scopes: ["read_products", "write_products", "read_orders", "read_customers", "read_themes", "write_themes", "read_analytics"],
     status: "CONNECTED",
     connectedAt: new Date().toISOString(),
     plan: "Shopify Plus",
@@ -122,7 +122,7 @@ async function seedInProcessDb() {
     organizationId: "demo-org-id",
     storeUrl: "luminary-essentials.myshopify.com",
     accessTokenEncrypted: encryptedToken,
-    scopes: ["read_products", "write_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+    scopes: ["read_products", "write_products", "read_orders", "read_customers", "read_themes", "write_themes", "read_analytics"],
     status: "CONNECTED",
     connectedAt: new Date().toISOString(),
     plan: "Shopify Plus",
@@ -135,7 +135,7 @@ async function seedInProcessDb() {
     organizationId: "demo-org-id",
     storeUrl: "yambasurf-co-il.myshopify.com",
     accessTokenEncrypted: encryptedToken,
-    scopes: ["read_products", "write_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+    scopes: ["read_products", "write_products", "read_orders", "read_customers", "read_themes", "write_themes", "read_analytics"],
     status: "CONNECTED",
     connectedAt: new Date().toISOString(),
     plan: "Standard Plan",
@@ -148,7 +148,7 @@ async function seedInProcessDb() {
     organizationId: "demo-org-id",
     storeUrl: "scope-mismatch.myshopify.com",
     accessTokenEncrypted: encryptedToken,
-    scopes: ["read_products", "read_orders", "read_customers", "write_themes", "read_analytics"],
+    scopes: ["read_products", "read_orders", "read_customers", "read_themes", "write_themes", "read_analytics"],
     status: "CONNECTED",
     connectedAt: new Date().toISOString(),
     plan: "Standard Plan",
@@ -2847,6 +2847,225 @@ async function runSuite() {
         delete process.env.SOFTIFY_PILOT_SHOPS;
       } else {
         process.env.SOFTIFY_PILOT_SHOPS = oldPilotShops;
+      }
+    }
+  });
+
+  // Test Z: Phase 11.0 Simplified Merchant UI & Theme Editor AI Agent MVP validation
+  await check("Z. Phase 11.0 Simplified Merchant UI & Theme Editor AI Agent MVP validation", async () => {
+    const timestamp = Date.now();
+    const { getRepositories } = await import("../src/server/repositories/repository-provider.ts");
+    const { getMockBackups, clearMockBackups } = await import("../src/server/services/shopify-theme.service.ts");
+    const repos = getRepositories();
+
+    // 1. Setup mock credentials and environment variables
+    const oldGeminiModel = process.env.GEMINI_MODEL;
+    process.env.GEMINI_MODEL = "gemini-test-custom-model";
+
+    try {
+      // Install theme_editor_ai_agent as enabled for glowthread
+      await repos.agentInstallations.upsertInstallation({
+        id: "store-glowthread_theme_editor_ai_agent",
+        organizationId: "demo-org-id",
+        storeConnectionId: "store-glowthread",
+        shopDomain: "glowthread-apparel.myshopify.com",
+        agentId: "theme_editor_ai_agent",
+        enabled: true,
+        allowedTools: [
+          "shopify.theme.themes",
+          "shopify.theme.assets",
+          "shopify.theme.assets.read",
+          "shopify.theme.assets.write"
+        ]
+      });
+
+      // 2. Validate Settings provider exposes configurable Gemini model name
+      const resAiProviders = await fetch(`${baseUrl}/api/settings/ai-providers?shop=glowthread-apparel.myshopify.com&t=${timestamp}`);
+      await checkResponse(resAiProviders);
+      const aiProviders = await resAiProviders.json();
+      const geminiProvider = aiProviders.find(p => p.providerId === "gemini");
+      if (!geminiProvider) throw new Error("Missing Gemini provider in Settings.");
+      if (geminiProvider.activeModel !== "gemini-test-custom-model") {
+        throw new Error(`Expected Settings to display GEMINI_MODEL 'gemini-test-custom-model', got: ${geminiProvider.activeModel}`);
+      }
+
+      // 3. Test Agent Enablement Toggling: Disable agent
+      const resDisableAgent = await fetch(`${baseUrl}/api/settings/agents/theme_editor_ai_agent?shop=glowthread-apparel.myshopify.com`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: false })
+      });
+      await checkResponse(resDisableAgent);
+      
+      // Verification: Any Theme Editor route should now return 403 AGENT_DISABLED
+      const resDisabledChatList = await fetch(`${baseUrl}/api/agents/theme-editor/conversations?shop=glowthread-apparel.myshopify.com&t=${timestamp}`);
+      if (resDisabledChatList.status !== 403) {
+        throw new Error(`Expected disabled agent route to reject with 403, got: ${resDisabledChatList.status}`);
+      }
+      const disabledChatJson = await resDisabledChatList.json();
+      if (disabledChatJson.code !== "AGENT_DISABLED") {
+        throw new Error(`Expected AGENT_DISABLED code, got: ${JSON.stringify(disabledChatJson)}`);
+      }
+
+      // Re-enable agent
+      const resEnableAgent = await fetch(`${baseUrl}/api/settings/agents/theme_editor_ai_agent?shop=glowthread-apparel.myshopify.com`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true })
+      });
+      await checkResponse(resEnableAgent);
+
+      // 4. Test Chat validation for missing shop domain
+      const resNoShop = await fetch(`${baseUrl}/api/agents/theme-editor/conversations?t=${timestamp}`);
+      if (resNoShop.status !== 400) {
+        throw new Error(`Expected missing shop domain to reject with 400, got: ${resNoShop.status}`);
+      }
+      const noShopJson = await resNoShop.json();
+      if (noShopJson.code !== "MISSING_SHOP") {
+        throw new Error(`Expected MISSING_SHOP code, got: ${JSON.stringify(noShopJson)}`);
+      }
+
+      // 5. Test missing scopes: create theme-scope-mismatch connection
+      const mockToken = "mock-token";
+      await repos.stores.createStoreConnection({
+        id: "store-scope-theme-mismatch",
+        organizationId: "demo-org-id",
+        storeUrl: "theme-scope-mismatch.myshopify.com",
+        accessTokenEncrypted: mockToken,
+        scopes: ["read_products"], // missing read_themes and write_themes
+        status: "CONNECTED",
+        connectedAt: new Date().toISOString(),
+        plan: "Standard Plan",
+        currency: "USD"
+      });
+
+      await repos.agentInstallations.upsertInstallation({
+        id: "store-scope-theme-mismatch_theme_editor_ai_agent",
+        organizationId: "demo-org-id",
+        storeConnectionId: "store-scope-theme-mismatch",
+        shopDomain: "theme-scope-mismatch.myshopify.com",
+        agentId: "theme_editor_ai_agent",
+        enabled: true,
+        allowedTools: []
+      });
+
+      const resMissingScopes = await fetch(`${baseUrl}/api/agents/theme-editor/conversations?shop=theme-scope-mismatch.myshopify.com&t=${timestamp}`);
+      if (resMissingScopes.status !== 403) {
+        throw new Error(`Expected missing scopes to reject with 403, got: ${resMissingScopes.status}`);
+      }
+      const missingScopesJson = await resMissingScopes.json();
+      if (missingScopesJson.code !== "MISSING_READ_THEMES_SCOPE") {
+        throw new Error(`Expected MISSING_READ_THEMES_SCOPE code, got: ${JSON.stringify(missingScopesJson)}`);
+      }
+
+      // 6. Test Unsafe Asset Paths are rejected early
+      // POST Apply path traversal check
+      const resUnsafePath = await fetch(`${baseUrl}/api/agents/theme-editor/conversations/conv-test/apply?shop=glowthread-apparel.myshopify.com`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          themeId: "mock-theme-dev",
+          assetKey: "../templates/secret.json",
+          value: "{}"
+        })
+      });
+      if (resUnsafePath.status !== 403) {
+        throw new Error(`Expected unsafe path to reject with 403, got: ${resUnsafePath.status}`);
+      }
+      const unsafeJson = await resUnsafePath.json();
+      if (unsafeJson.code !== "UNSAFE_PATH") {
+        throw new Error(`Expected UNSAFE_PATH code, got: ${JSON.stringify(unsafeJson)}`);
+      }
+
+      // 7. Direct Write Endpoint is disabled / gated
+      const resDirectWrite = await fetch(`${baseUrl}/api/theme/assets/update?shop=glowthread-apparel.myshopify.com`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          themeId: "mock-theme-dev",
+          assetKey: "layout/theme.liquid",
+          value: "test"
+        })
+      });
+      if (resDirectWrite.status !== 403) {
+        throw new Error(`Expected direct write endpoint to be disabled and return 403, got: ${resDirectWrite.status}`);
+      }
+      const directWriteJson = await resDirectWrite.json();
+      if (directWriteJson.code !== "DIRECT_WRITE_DISABLED") {
+        throw new Error(`Expected DIRECT_WRITE_DISABLED, got: ${JSON.stringify(directWriteJson)}`);
+      }
+
+      // 8. yambasurf-co-il is NOT treated as mock domain (tries to call Shopify API and fails on bad token)
+      const resRealYambaThemes = await fetch(`${baseUrl}/api/theme/themes?shop=yambasurf-co-il.myshopify.com&t=${timestamp}`);
+      if (resRealYambaThemes.status !== 500) {
+        throw new Error(`Expected real API call with mock token to fail with 500, got: ${resRealYambaThemes.status}`);
+      }
+      const realYambaJson = await resRealYambaThemes.json();
+      if (!realYambaJson.error.includes("Shopify Admin REST API") && !realYambaJson.error.includes("fetch failed")) {
+        throw new Error(`Expected REST API fail error, got: ${JSON.stringify(realYambaJson)}`);
+      }
+
+      // 9. Apply requires live confirmation for live theme
+      const resLiveThemeBlocked = await fetch(`${baseUrl}/api/agents/theme-editor/conversations/conv-test/apply?shop=glowthread-apparel.myshopify.com`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          themeId: "mock-theme-active",
+          assetKey: "layout/theme.liquid",
+          value: "test content",
+          isLiveTheme: true,
+          liveConfirmation: false
+        })
+      });
+      if (resLiveThemeBlocked.status !== 400) {
+        throw new Error(`Expected live theme without confirmation to reject with 400, got: ${resLiveThemeBlocked.status}`);
+      }
+      const liveBlockedJson = await resLiveThemeBlocked.json();
+      if (liveBlockedJson.code !== "LIVE_THEME_CONFIRMATION_REQUIRED") {
+        throw new Error(`Expected LIVE_THEME_CONFIRMATION_REQUIRED, got: ${JSON.stringify(liveBlockedJson)}`);
+      }
+
+      // 10. Backup is created before write (Glowthread apparel staging apply)
+      clearMockBackups();
+      
+      // Start a real conversation first
+      const resStartConv = await fetch(`${baseUrl}/api/agents/theme-editor/conversations?shop=glowthread-apparel.myshopify.com`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      await checkResponse(resStartConv);
+      const convData = await resStartConv.json();
+
+      const resApplyMock = await fetch(`${baseUrl}/api/agents/theme-editor/conversations/${convData.id}/apply?shop=glowthread-apparel.myshopify.com`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          themeId: "mock-theme-dev",
+          assetKey: "layout/theme.liquid",
+          value: "new character content value updated by merchant",
+          isLiveTheme: false
+        })
+      });
+      await checkResponse(resApplyMock);
+
+      const mockBackups = getMockBackups();
+      if (mockBackups.length === 0) {
+        throw new Error("Expected pre-write backup snapshot to be created, but mockThemeBackups is empty.");
+      }
+      const latestBackup = mockBackups[mockBackups.length - 1];
+      if (latestBackup.assetKey !== "layout/theme.liquid" || latestBackup.themeId !== "mock-theme-dev") {
+        throw new Error(`Expected backup assetKey 'layout/theme.liquid', got: ${latestBackup.assetKey}`);
+      }
+      if (latestBackup.newValue !== "new character content value updated by merchant") {
+        throw new Error(`Expected backup newValue matching target content, got: ${latestBackup.newValue}`);
+      }
+
+      console.log("   [TEST Z] Verified settings + team dynamic enabled status, scope gates, direct write blocking, unsafe asset path rejections, yambasurf real API trigger, live warning modals, and backup pre-writes successfully!");
+    } finally {
+      if (oldGeminiModel === undefined) {
+        delete process.env.GEMINI_MODEL;
+      } else {
+        process.env.GEMINI_MODEL = oldGeminiModel;
       }
     }
   });

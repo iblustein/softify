@@ -35,6 +35,19 @@ async function validateChatTenant(req: any, res: any) {
     return null;
   }
 
+  // Validate that the Theme Editor AI Agent is installed and enabled for the connected shop
+  const installation = await repos.agentInstallations.getByShopAndAgent(cleanShop, "theme_editor_ai_agent");
+  if (!installation || !installation.enabled) {
+    res.status(403).json({ error: "Theme Editor AI Agent is disabled for this shop.", code: "AGENT_DISABLED" });
+    return null;
+  }
+
+  // Validate required read_themes OAuth scope explicitly
+  if (!connection.scopes.includes("read_themes")) {
+    res.status(403).json({ error: "Missing required 'read_themes' OAuth scope to access Theme Editor features.", code: "MISSING_READ_THEMES_SCOPE" });
+    return null;
+  }
+
   return { connection, cleanShop, repos };
 }
 
@@ -246,14 +259,74 @@ router.post("/agents/theme-editor/conversations/:conversationId/messages", async
 
     // 5. Query Gemini
     const geminiRes = await client.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: process.env.GEMINI_MODEL || "gemini-1.5-flash",
       contents: prompt,
       config: {
         responseMimeType: "application/json"
       }
     });
 
-    const parsedResponse = JSON.parse(geminiRes.text.trim());
+    let parsedResponse: any = null;
+    let parseError = false;
+    let validationErrorMsg = "";
+
+    try {
+      parsedResponse = JSON.parse(geminiRes.text.trim());
+      
+      // Basic property checks
+      if (!parsedResponse || typeof parsedResponse.reply !== "string" || typeof parsedResponse.requiresChanges !== "boolean") {
+        parseError = true;
+        validationErrorMsg = "Gemini response is missing required properties or has invalid types.";
+      } else if (parsedResponse.requiresChanges) {
+        // Validate proposedChanges structure
+        if (!Array.isArray(parsedResponse.proposedChanges) || parsedResponse.proposedChanges.length === 0) {
+          parseError = true;
+          validationErrorMsg = "requiresChanges is true but proposedChanges is empty or not an array.";
+        } else {
+          const change = parsedResponse.proposedChanges[0];
+          if (!change || !change.assetKey || typeof change.assetKey !== "string" || !validateAssetPath(change.assetKey)) {
+            parseError = true;
+            validationErrorMsg = "proposedChanges[0].assetKey is missing, invalid, or is an unsafe path.";
+          } else if (!change.newValue || typeof change.newValue !== "string" || change.newValue.trim() === "") {
+            parseError = true;
+            validationErrorMsg = "proposedChanges[0].newValue is missing or empty.";
+          } else {
+            // Validate riskLevel
+            const risks = ["Low", "Medium", "High"];
+            if (!parsedResponse.riskLevel || typeof parsedResponse.riskLevel !== "string" || !risks.includes(parsedResponse.riskLevel)) {
+              parsedResponse.riskLevel = "Medium";
+            }
+          }
+        }
+      }
+    } catch (e: any) {
+      parseError = true;
+      validationErrorMsg = e.message || "Failed to parse Gemini JSON output.";
+    }
+
+    let assistantText = "";
+    let toolInvocations: any[] = [];
+
+    if (parseError) {
+      assistantText = `⚠️ **Failed to safely generate edit plan:**\n\nI was unable to safely structure the theme customization plan due to an internal validation error:\n> *${validationErrorMsg}*\n\nPlease try rephrasing your request or narrowing down the instruction so I can generate a compliant plan.`;
+    } else {
+      assistantText = parsedResponse.reply;
+      if (parsedResponse.requiresChanges) {
+        toolInvocations = [
+          {
+            toolName: "shopify.theme.assets.write",
+            args: {
+              themeId: currentThemeId,
+              assetKey: parsedResponse.proposedChanges[0].assetKey,
+              riskLevel: parsedResponse.riskLevel || "Medium",
+              explanation: parsedResponse.changeExplanation || "Theme customization update.",
+              value: parsedResponse.proposedChanges[0].newValue
+            },
+            status: "requires_approval"
+          }
+        ];
+      }
+    }
 
     // 6. Save AI reply to database
     const assistantMessage = await repos.conversations.addConversationMessage({
@@ -262,21 +335,9 @@ router.post("/agents/theme-editor/conversations/:conversationId/messages", async
       sender: "agent",
       agentId: "theme_editor_ai_agent",
       agentName: "Theme Editor AI Agent",
-      text: parsedResponse.reply,
+      text: assistantText,
       timestamp: new Date().toISOString(),
-      toolInvocations: parsedResponse.requiresChanges ? [
-        {
-          toolName: "shopify.theme.assets.write",
-          args: {
-            themeId: currentThemeId,
-            assetKey: parsedResponse.proposedChanges[0]?.assetKey,
-            riskLevel: parsedResponse.riskLevel || "Medium",
-            explanation: parsedResponse.changeExplanation,
-            value: parsedResponse.proposedChanges[0]?.newValue
-          },
-          status: "requires_approval"
-        }
-      ] : []
+      toolInvocations
     });
 
     res.json({

@@ -1766,6 +1766,54 @@ async function runVerification() {
     }
   });
 
+  // Test 59: Phase 11.0 Simplified Merchant UI & Theme Editor AI Agent MVP static validation
+  await check("59. Phase 11.0 Simplified Merchant UI & Theme Editor AI Agent MVP static validation", async () => {
+    const fs = await import("fs");
+    const path = await import("path");
+    
+    // Check that Settings and Your Team sidebar navigation exist in App.tsx
+    const appPath = path.resolve(process.cwd(), "src/App.tsx");
+    const appContent = fs.readFileSync(appPath, "utf8");
+    if (!appContent.includes("Settings") || !appContent.includes("Your Team")) {
+      throw new Error("Phase 11 Static Check Violation: App.tsx must contain 'Settings' and 'Your Team' navigation labels.");
+    }
+    
+    // Check that legacy tech modules are hidden or commented in sidebar
+    if (appContent.includes("Orchestrator") || appContent.includes("Tool Gateway") || appContent.includes("Audit Logs")) {
+      const legacySearch = appContent.match(/<SidebarItem[^>]+label=["'](Orchestrator|Tool Gateway|Audit Logs)/g);
+      if (legacySearch && legacySearch.length > 0) {
+        throw new Error("Phase 11 Static Check Violation: Sidebar renders legacy technical modules.");
+      }
+    }
+
+    // Check that theme-chat.routes.ts exists and enforces validateChatTenant
+    const themeChatRoutesPath = path.resolve(process.cwd(), "src/server/routes/theme-chat.routes.ts");
+    const themeChatRoutesContent = fs.readFileSync(themeChatRoutesPath, "utf8");
+    if (!themeChatRoutesContent.includes("validateChatTenant")) {
+      throw new Error("Phase 11 Static Check Violation: theme-chat.routes.ts must use validateChatTenant to protect endpoints.");
+    }
+
+    // Check that GEMINI_MODEL is loaded dynamically
+    if (!themeChatRoutesContent.includes("GEMINI_MODEL")) {
+      throw new Error("Phase 11 Static Check Violation: theme-chat.routes.ts must use process.env.GEMINI_MODEL configuration.");
+    }
+
+    // Check that shopify-theme.service.ts validates asset key path traversal
+    const themeServicePath = path.resolve(process.cwd(), "src/server/services/shopify-theme.service.ts");
+    const themeServiceContent = fs.readFileSync(themeServicePath, "utf8");
+    if (!themeServiceContent.includes("validateAssetPath")) {
+      throw new Error("Phase 11 Static Check Violation: shopify-theme.service.ts must validate asset key paths.");
+    }
+
+    // Check yambasurf is not treated as mock in theme service
+    if (themeServiceContent.includes("yambasurf-co-il") && themeServiceContent.includes("isMockDomain")) {
+      const yambasurfMockRegex = /isMockDomain.*yambasurf-co-il/g;
+      if (yambasurfMockRegex.test(themeServiceContent)) {
+        throw new Error("Phase 11 Static Check Violation: shopify-theme.service.ts treats yambasurf-co-il.myshopify.com as mock theme store.");
+      }
+    }
+  });
+
   // Print PASS/FAIL Summary
   console.log(`\n\x1b[1m\x1b[36m=== RELEASE VERIFICATION SUMMARY ===\x1b[0m`);
   for (const t of tests) {
