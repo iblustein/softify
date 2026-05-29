@@ -490,36 +490,49 @@ async function runVerification() {
     }
   });
 
-  // Test 14: Validate that .github/workflows/deploy-cloud-run.yml contains "SOFTIFY_AGENT_DEV_BYPASS_SECRET"
-  await check("14. deploy-cloud-run.yml contains SOFTIFY_AGENT_DEV_BYPASS_SECRET", async () => {
+  // Test 14: Validate that .github/workflows/deploy-cloud-run.yml does NOT inject "SOFTIFY_AGENT_DEV_BYPASS_SECRET" in production deploy
+  await check("14. deploy-cloud-run.yml does NOT inject SOFTIFY_AGENT_DEV_BYPASS_SECRET", async () => {
     const fs = await import("fs");
     const path = await import("path");
     const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
     const content = fs.readFileSync(workflowPath, "utf8");
-    if (!content.includes("SOFTIFY_AGENT_DEV_BYPASS_SECRET")) {
-      throw new Error(".github/workflows/deploy-cloud-run.yml is missing 'SOFTIFY_AGENT_DEV_BYPASS_SECRET' secret propagation reference.");
+    
+    // Extract the google-github-actions/deploy-cloudrun step block to check it specifically
+    const deployStepIdx = content.indexOf("google-github-actions/deploy-cloudrun");
+    if (deployStepIdx !== -1) {
+      const deployBlock = content.slice(deployStepIdx);
+      if (deployBlock.includes("SOFTIFY_AGENT_DEV_BYPASS_SECRET")) {
+        throw new Error(".github/workflows/deploy-cloud-run.yml injects 'SOFTIFY_AGENT_DEV_BYPASS_SECRET' into production Cloud Run environment!");
+      }
     }
   });
 
-  // Test 15: Validate that .github/workflows/deploy-cloud-run.yml validates "Missing secret: SOFTIFY_AGENT_DEV_BYPASS_SECRET"
-  await check("15. deploy-cloud-run.yml validates Missing secret: SOFTIFY_AGENT_DEV_BYPASS_SECRET", async () => {
+  // Test 15: Validate that .github/workflows/deploy-cloud-run.yml does NOT validate SOFTIFY_AGENT_DEV_BYPASS_SECRET as required deployment secret
+  await check("15. deploy-cloud-run.yml does NOT validate SOFTIFY_AGENT_DEV_BYPASS_SECRET", async () => {
     const fs = await import("fs");
     const path = await import("path");
     const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
     const content = fs.readFileSync(workflowPath, "utf8");
-    if (!content.includes("Missing secret: SOFTIFY_AGENT_DEV_BYPASS_SECRET")) {
-      throw new Error(".github/workflows/deploy-cloud-run.yml is missing 'Missing secret: SOFTIFY_AGENT_DEV_BYPASS_SECRET' check.");
+    
+    const validateSecretsIdx = content.indexOf("Validate required deployment secrets");
+    if (validateSecretsIdx !== -1) {
+      const nextStepIdx = content.indexOf("- name:", validateSecretsIdx + 1);
+      const validateSecretsBlock = content.slice(validateSecretsIdx, nextStepIdx !== -1 ? nextStepIdx : undefined);
+      if (validateSecretsBlock.includes("SOFTIFY_AGENT_DEV_BYPASS_SECRET")) {
+        throw new Error(".github/workflows/deploy-cloud-run.yml validates 'SOFTIFY_AGENT_DEV_BYPASS_SECRET' as a required deployment secret!");
+      }
     }
   });
 
-  // Test 16: Validate that .github/workflows/deploy-cloud-run.yml configures "SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true"
-  await check("16. deploy-cloud-run.yml configures SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true", async () => {
+  // Test 16: Validate that .github/workflows/deploy-cloud-run.yml does NOT configure "SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true"
+  await check("16. deploy-cloud-run.yml does NOT configure SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true", async () => {
     const fs = await import("fs");
     const path = await import("path");
     const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
     const content = fs.readFileSync(workflowPath, "utf8");
-    if (!content.includes("SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true")) {
-      throw new Error(".github/workflows/deploy-cloud-run.yml is missing Cloud Run deployment config flag for 'SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true'.");
+    
+    if (content.includes("SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true") || content.includes("SOFTIFY_ALLOW_AGENT_DEV_BYPASS: \"true\"") || content.includes("SOFTIFY_ALLOW_AGENT_DEV_BYPASS=\"true\"")) {
+      throw new Error(".github/workflows/deploy-cloud-run.yml sets SOFTIFY_ALLOW_AGENT_DEV_BYPASS=true in production environment variables!");
     }
   });
 
@@ -559,14 +572,15 @@ async function runVerification() {
     }
   });
 
-  // Test 20: Validate that .github/workflows/deploy-cloud-run.yml contains gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET
-  await check("20. deploy-cloud-run.yml contains gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET", async () => {
+  // Test 20: Validate that .github/workflows/deploy-cloud-run.yml does NOT contain gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET
+  await check("20. deploy-cloud-run.yml does NOT describe SOFTIFY_AGENT_DEV_BYPASS_SECRET", async () => {
     const fs = await import("fs");
     const path = await import("path");
     const workflowPath = path.resolve(process.cwd(), ".github/workflows/deploy-cloud-run.yml");
     const content = fs.readFileSync(workflowPath, "utf8");
-    if (!content.includes("gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET")) {
-      throw new Error(".github/workflows/deploy-cloud-run.yml is missing 'gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET'.");
+    
+    if (content.includes("gcloud secrets describe SOFTIFY_AGENT_DEV_BYPASS_SECRET")) {
+      throw new Error(".github/workflows/deploy-cloud-run.yml validates SOFTIFY_AGENT_DEV_BYPASS_SECRET in Secret Manager checks!");
     }
   });
 
