@@ -99,7 +99,7 @@ export default function ApprovalQueue({
   };
 
   const handleTriggerBatchExecute = async () => {
-    if (readiness?.canExecuteMutations !== true) return;
+    if (!readiness || readiness.canExecuteMutations !== true) return;
     if (!onBatchExecute || selectedApprovalIds.length === 0) return;
     setIsConfirmingExecute(false);
 
@@ -612,9 +612,8 @@ export default function ApprovalQueue({
             ) : (
               <button
                 onClick={() => {
-                  if (readiness && readiness.canExecuteMutations === true) {
-                    setIsConfirmingExecute(true);
-                  }
+                  if (!readiness || readiness.canExecuteMutations !== true) return;
+                  setIsConfirmingExecute(true);
                 }}
                 disabled={
                   isLoading ||
@@ -727,9 +726,8 @@ export default function ApprovalQueue({
               </button>
               <button
                 onClick={() => {
-                  if (readiness && readiness.canExecuteMutations === true) {
-                    handleTriggerBatchExecute();
-                  }
+                  if (!readiness || readiness.canExecuteMutations !== true) return;
+                  handleTriggerBatchExecute();
                 }}
                 disabled={!readiness || readiness.canExecuteMutations !== true}
                 className="px-4 py-2 bg-indigo-650 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-md cursor-pointer transition font-mono uppercase text-[9px] tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"

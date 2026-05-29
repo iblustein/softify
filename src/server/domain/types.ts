@@ -183,6 +183,8 @@ export interface Conversation {
   id: string;
   organizationId: string;
   storeConnectionId: string;
+  agentId?: string;
+  shopDomain?: string;
   createdAt: string;
   updatedAt: string;
 }

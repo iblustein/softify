@@ -9,7 +9,8 @@ import {
   Coins, 
   RefreshCw,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  Settings as SettingsIcon
 } from 'lucide-react';
 import { 
   ShopifyStore, 
@@ -26,9 +27,12 @@ import ToolGateway from './components/ToolGateway';
 import ApprovalQueue from './components/ApprovalQueue';
 import AuditLogViewer from './components/AuditLogViewer';
 import AgentWorkspace from './components/AgentWorkspace';
+import Settings from './components/Settings';
+import ThemeEditorChat from './components/ThemeEditorChat';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'agents' | 'orchestrator' | 'gateway' | 'approvals' | 'logs' | 'workspace'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'settings' | 'theme_editor_chat'>('settings');
+  const [settingsAgents, setSettingsAgents] = useState<any[]>([]);
   
   // Data States
   const [store, setStore] = useState<ShopifyStore | null>(null);
@@ -104,6 +108,19 @@ export default function App() {
       setApprovals(approvalsData);
       setLogs(logsData);
       setStats(statsData);
+
+      // Fetch dynamic settings agents for the sidebar
+      if (shopData.url) {
+        try {
+          const settingsAgentsRes = await fetch(`/api/settings/agents?shop=${encodeURIComponent(shopData.url)}`);
+          if (settingsAgentsRes.ok) {
+            const settingsAgentsData = await settingsAgentsRes.json();
+            setSettingsAgents(settingsAgentsData);
+          }
+        } catch (settingsErr) {
+          console.error("Failed to fetch settings agents in App.tsx:", settingsErr);
+        }
+      }
     } catch (err: any) {
       console.error(err);
       setErrorText(err.message || 'Failed to sync dashboard status.');
@@ -674,104 +691,62 @@ export default function App() {
           </div>
 
           {/* Tabs Menu List */}
-          <nav className="flex-1 overflow-y-auto p-3 space-y-1">
-            <button
-              onClick={() => setActiveTab('dashboard')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
-                activeTab === 'dashboard' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <LayoutDashboard className="w-4 h-4 shrink-0" />
-                <span>Store Dashboard</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('workspace')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
-                activeTab === 'workspace' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Sparkles className="w-4 h-4 shrink-0 text-indigo-400 animate-pulse" />
-                <span>Agent Workspace</span>
-              </div>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('agents')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
-                activeTab === 'agents' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Users className="w-4 h-4 shrink-0" />
-                <span>Agent Registry</span>
-              </div>
-              <span className="text-4xs font-mono bg-slate-900 px-1.5 py-0.5 rounded text-slate-400">
-                {stats.activeAgentsCount} Active
+          <nav className="flex-1 overflow-y-auto p-3 space-y-4">
+            <div>
+              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block mb-2 px-3">
+                System
               </span>
-            </button>
+              <button
+                onClick={() => setActiveTab('settings')}
+                className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
+                  activeTab === 'settings' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
+                }`}
+              >
+                <SettingsIcon className="w-4 h-4 shrink-0" />
+                <span>Settings</span>
+              </button>
+            </div>
 
-            <button
-              onClick={() => setActiveTab('orchestrator')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
-                activeTab === 'orchestrator' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Cpu className="w-4 h-4 shrink-0" />
-                <span>Super Agent Chat</span>
-              </div>
-              <span className="text-4xs font-mono bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded">
-                Admin/Dev Only
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('gateway')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
-                activeTab === 'gateway' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Terminal className="w-4 h-4 shrink-0" />
-                <span>Tool Gateway</span>
-              </div>
-              <span className="text-4xs font-mono bg-slate-900 text-slate-400 px-1.5 py-0.5 rounded">
-                Admin/Dev Only
-              </span>
-            </button>
-
-            <button
-              onClick={() => setActiveTab('approvals')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
-                activeTab === 'approvals' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <FileCheck className="w-4 h-4 shrink-0" />
-                <span>Write Approvals</span>
-              </div>
-              {stats.pendingApprovalsCount > 0 && (
-                <span className="text-4xs font-bold bg-amber-600 text-amber-50 px-1.5 py-0.5 rounded-full ring-2 ring-slate-950 animate-pulse">
-                  {stats.pendingApprovalsCount}
+            <div className="pt-2 border-t border-slate-900/50">
+              <div className="flex items-center justify-between px-3 mb-2">
+                <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5" />
+                  Your Team
                 </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('logs')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
-                activeTab === 'logs' ? 'bg-indigo-600 text-white font-semibold' : 'hover:bg-slate-900 hover:text-white'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Activity className="w-4 h-4 shrink-0" />
-                <span>Control Audit Logs</span>
               </div>
-            </button>
+              
+              <div className="space-y-1">
+                {settingsAgents.filter(a => a.enabled).length === 0 ? (
+                  <div className="px-3 py-2 text-[10px] text-slate-500 italic">
+                    No active agents. Enable one in Settings.
+                  </div>
+                ) : (
+                  settingsAgents
+                    .filter(a => a.enabled)
+                    .map(agent => (
+                      <button
+                        key={agent.agentId}
+                        onClick={() => {
+                          if (agent.agentId === "theme_editor_ai_agent") {
+                            setActiveTab('theme_editor_chat');
+                          }
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-xs rounded-lg font-medium transition cursor-pointer ${
+                          activeTab === 'theme_editor_chat' && agent.agentId === "theme_editor_ai_agent"
+                            ? 'bg-indigo-600 text-white font-semibold' 
+                            : 'hover:bg-slate-900 hover:text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Cpu className="w-4 h-4 shrink-0 text-indigo-400" />
+                          <span className="truncate">{agent.name}</span>
+                        </div>
+                        <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0 animate-pulse"></span>
+                      </button>
+                    ))
+                )}
+              </div>
+            </div>
           </nav>
         </div>
 
@@ -850,63 +825,23 @@ export default function App() {
         {/* Active Route Wrapper */}
         <div className="flex-1 overflow-y-auto p-6 md:p-8">
           <div className="max-w-6xl mx-auto h-full">
-            {activeTab === 'workspace' && (
-              <AgentWorkspace 
-                shopQuery={buildShopQuery()} 
-                onRefreshStats={fetchAllData}
-              />
-            )}
-
-            {activeTab === 'dashboard' && (
-              <DashboardOverview 
-                stats={stats} 
+            {activeTab === 'settings' && (
+              <Settings 
                 store={store} 
                 isOAuthConfigured={isOAuthConfigured}
                 testShop={shopifyTestShop}
                 onConnect={handleConnectStore} 
                 onDisconnect={handleDisconnectStore} 
-                onReset={handleResetDatabase}
-                isLoading={isActionLoading}
                 onRefresh={fetchAllData}
-              />
-            )}
-
-            {activeTab === 'agents' && (
-              <AgentRegistry 
-                agents={agents} 
-                onUpdateAgent={handleUpdateAgent}
                 isLoading={isActionLoading}
               />
             )}
 
-            {activeTab === 'orchestrator' && (
-              <SuperAgentUI 
-                agents={agents} 
-                messages={messages} 
-                onSendMessage={handleSendOrchestratorMessage}
-                isLoading={isActionLoading}
-                onNavigateToApprovals={() => setActiveTab('approvals')}
+            {activeTab === 'theme_editor_chat' && (
+              <ThemeEditorChat 
+                store={store}
+                onRefreshStats={fetchAllData}
               />
-            )}
-
-            {activeTab === 'gateway' && (
-              <ToolGateway isLoading={isActionLoading} />
-            )}
-
-            {activeTab === 'approvals' && (
-              <ApprovalQueue 
-                approvals={approvals} 
-                onDecide={handleDecideApproval}
-                onExecute={handleExecuteApproval}
-                onResetFailed={handleResetFailedApproval}
-                onBatchDecide={handleBatchDecideApprovals}
-                onBatchExecute={handleBatchExecuteApprovals}
-                isLoading={isActionLoading}
-              />
-            )}
-
-            {activeTab === 'logs' && (
-              <AuditLogViewer logs={logs} />
             )}
           </div>
         </div>

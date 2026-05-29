@@ -73,6 +73,33 @@ async function seedInMemoryDb() {
         currency: "USD"
       });
 
+      // Seed theme editor agent installations as enabled for mock stores
+      const mockShops = [
+        { shop: "glowthread-apparel.myshopify.com", connId: "store-glowthread" },
+        { shop: "luminary-essentials.myshopify.com", connId: "store-luminary" },
+        { shop: "yambasurf-co-il.myshopify.com", connId: "store-yambasurf" },
+        { shop: "scope-mismatch.myshopify.com", connId: "store-scope-mismatch" }
+      ];
+
+      for (const item of mockShops) {
+        await repos.agentInstallations.upsertInstallation({
+          id: `${item.connId}_theme_editor_ai_agent`,
+          organizationId: "demo-org-id",
+          storeConnectionId: item.connId,
+          shopDomain: item.shop,
+          agentId: "theme_editor_ai_agent",
+          enabled: true,
+          allowedTools: [
+            "shopify.theme.themes",
+            "shopify.theme.assets",
+            "shopify.theme.assets.read",
+            "shopify.theme.assets.write"
+          ],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      }
+
       // Seed stuck executing approval request (stuck beyond 15 min threshold)
       await repos.approvals.createApprovalRequest({
         id: "stuck-executing-approval",

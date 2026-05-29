@@ -55,6 +55,7 @@ This document provides a highly durable and centralized technical reference for 
 - **Real-Store Product Readiness**: A sanitized, read-only connection diagnostics & readiness API (`GET /api/shop/readiness`), premium store setup readiness dashboard card (`AgentWorkspace.tsx`), explicit execute button overrides and amber-tinted "Mutations Blocked" banners on write scope deficiency (`ApprovalQueue.tsx`), and frontend UX bulk execute gating via `VITE_SOFTIFY_ALLOW_BULK_EXECUTE`.
 - **Initial Agent Set & Merchant Workflows**: Formally defined and configured the initial active production-safe multi-agent catalog (`agent_catalog_health`, `agent_product_seo`, `agent_catalog_cleanup`, `agent_merchandising_insights`, `agent_approval_operations`), enforcing strict allowed fields, hiding legacy development agents from public display, rendering prominent status change warnings inside left-card badges and drawer panels.
 - **Merchant Onboarding UX & Read-Only Pilot Polish**: Formally resolved the pilot allowlist/readiness regression, verified that `/api/pilot/readiness` allowlist checking returns true for approved pilot shops, integrated Guided Onboarding Checklist step-by-step progress cards, mounted an explicit Trust & Safety Panel, polished empty analytics states, rebranded proposed change cards to use non-jargon fields, collapsed developer tools (`Super Agent Chat`, `Tool Gateway`) under warning tags, and verified all static release checks and smoke tests pass (32/32 smoke tests passed!).
+- **Simplified Merchant UI & Theme Editor AI Agent MVP**: Product direction pivot around the Theme Editor AI Agent MVP. Lateral sidebar navigation simplified to Settings and dynamic Your Team list (driven by enabled state). Built premium Theme Editor Chat (dropdown theme selector, safe development theme targets, live storefront warning checkboxes, apply changes trigger) and SaaS Settings UI. Mounted secure backend theme-editing controller routes under `/api` Express namespace. Confirmed all pre-deployment compile and release verification checks passed (58/58 passed), and smoke test suites passed cleanly (32/32 passed).
 - **CI/CD & Production Smoke Tests**: Full verification suite passed cleanly. Static release checks passed 58/58, local in-process smoke tests passed 32/32, and actual deployed Cloud Run smoke tests passed 32/32.
 - **Production Deployment & Pilot Readiness**: Phase 10.15 is completed and approved. Formally validated compiled serverless source-based Cloud Run deployment architectures, zero-trust OIDC Workload Identity Federation (WIF) OIDC authentication (using auth@v3), environment secrets mapping (`SHOPIFY_API_SECRET`, `SHOPIFY_TOKEN_ENCRYPTION_KEY`, `SOFTIFY_AGENT_DEV_BYPASS_SECRET`), and required operational database gates. GitHub Actions Run ID [26598640767](https://github.com/iblustein/softify/actions/runs/26598640767) succeeded.
   - **Service Name**: `softify`
@@ -76,14 +77,12 @@ This document provides a highly durable and centralized technical reference for 
   - *No real production merchant onboarding or live production storefront migrations were executed during this phase.*
 
 ## Next Recommended Phase
-- **Phase 10.19 — Production Merchant Pilot Launch**: Focuses on launching the actual merchant pilot program, gather merchant feedback, and evaluate the product onboarding flow under real-world usage.
-
+- **Phase 11.1 — Theme Editor AI Agent Pilot Launch**: Focuses on launching the live merchant pilot program specifically for the Theme Editor AI Agent MVP, gathering qualitative merchant feedback, and evaluating onboarding checklist flows.
 
 ## Current Non-Goals
-- **No Theme Patching / Theme Tools**: Theme layout/CSS patching is entirely out-of-scope and disabled. No theme tools or read/write theme scopes may be used.
-- **No write_themes**: The `write_themes` scope remains strictly unauthorized and forbidden.
+- **No Unrelated Write Scopes**: Scopes like `write_products`, `write_customers`, etc. are strictly forbidden; only theme editing scopes (`read_themes`, `write_themes`) are authorized for the Theme Editor context.
 - **No Direct AI Mutations**: AI provider runtime may never invoke write tools directly on live stores; mutations must go through the merchant proposal and approval execution pipelines.
-- **No Price, Variant, Media, DescriptionHtml, or Inventory Mutations**: Excluded (only catalog text updates like `title`, `vendor`, `productType`, `status`, `tags` are authorized).
+- **No Price, Variant, Media, DescriptionHtml, or Inventory Mutations**: Excluded (only theme file asset updates and product text updates are authorized).
 - **No Auto-Execution**: Automatic execution on approval is strictly prohibited. Approved proposals must wait for explicit execution dispatches.
 - **Recovery Endpoints Shopify Containment**: Recovery reset/marking endpoints must remain state-only and are strictly forbidden from calling live Shopify APIs.
 - **No Agent Management UI**: Front-end visual dashboard for installing agents is deferred.
@@ -106,3 +105,4 @@ Update or create:
 - `/docs/ai-handoff/CHATGPT_HANDOFF_PROMPT.md`
 - `/docs/ai-handoff/NEXT_STEPS.md`
 - `/docs/PHASE_INDEX.md`
+

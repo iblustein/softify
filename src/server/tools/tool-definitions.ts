@@ -126,5 +126,33 @@ export const ENABLED_TOOLS: ToolDefinition[] = [
     parameters: '{"productId": "string", "fields": "object", "summary": "string"}',
     requiredScope: "read_products",
     riskLevel: "Medium"
+  },
+  {
+    name: "shopify.theme.themes",
+    description: "Fetch a list of available themes on the connected Shopify store.",
+    parameters: '{"shopDomain": "string?"}',
+    requiredScope: "read_themes",
+    riskLevel: "Low"
+  },
+  {
+    name: "shopify.theme.assets",
+    description: "List asset keys (files) within a specific Shopify theme.",
+    parameters: '{"shopDomain": "string?", "themeId": "string"}',
+    requiredScope: "read_themes",
+    riskLevel: "Low"
+  },
+  {
+    name: "shopify.theme.assets.read",
+    description: "Read the character content of a specific theme asset file.",
+    parameters: '{"shopDomain": "string?", "themeId": "string", "assetKey": "string"}',
+    requiredScope: "read_themes",
+    riskLevel: "Low"
+  },
+  {
+    name: "shopify.theme.assets.write",
+    description: "Write or update character content of a specific theme asset file safely (creates backup automatically).",
+    parameters: '{"shopDomain": "string?", "themeId": "string", "assetKey": "string", "value": "string"}',
+    requiredScope: "write_themes",
+    riskLevel: "High"
   }
 ];

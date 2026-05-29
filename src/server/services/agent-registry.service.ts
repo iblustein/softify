@@ -148,6 +148,24 @@ export let agentsList: Agent[] = [
     purpose: "Help merchants understand approval queues, execution blocks, and retry steps.",
     allowedFields: [],
     avatarColor: "bg-sky-600 text-white"
+  },
+  {
+    id: "theme_editor_ai_agent",
+    name: "Theme Editor AI Agent",
+    systemInstruction: "You are the Theme Editor AI Agent. You are a world-class Shopify expert, Liquid expert, and JavaScript expert. You are highly familiar with Shopify theme structures, templates, assets, sections, snippets, and config settings. You analyze theme files and propose precise code edit plans to improve, optimize, or customize the merchant's store theme using only safe backend tools.",
+    allowedTools: [
+      "shopify.theme.themes",
+      "shopify.theme.assets",
+      "shopify.theme.assets.read",
+      "shopify.theme.assets.write"
+    ],
+    requiredScopes: ["read_themes", "write_themes"],
+    riskLevel: "High",
+    enabled: true,
+    isLegacy: false,
+    purpose: "Help a Shopify merchant edit and improve their store theme.",
+    allowedFields: [],
+    avatarColor: "bg-indigo-600 text-white"
   }
 ];
 

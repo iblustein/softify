@@ -1758,8 +1758,8 @@ async function runSuite() {
     const resCat = await fetch(catUrl);
     await checkResponse(resCat);
     const catalog = await resCat.json();
-    if (!Array.isArray(catalog) || catalog.length !== 5) {
-      throw new Error(`Expected catalog to be an array of 5 agents, got: ${JSON.stringify(catalog)}`);
+    if (!Array.isArray(catalog) || catalog.length !== 6) {
+      throw new Error(`Expected catalog to be an array of 6 agents, got: ${JSON.stringify(catalog)}`);
     }
 
     // 2. Trigger run for seo_aeo_agent in RECOMMEND mode
@@ -2763,8 +2763,8 @@ async function runSuite() {
       if (typeof dataApproved.productSnapshotCount !== "number") {
         throw new Error(`Expected productSnapshotCount to be a number, got: ${typeof dataApproved.productSnapshotCount}`);
       }
-      if (dataApproved.visibleProductionAgentCount !== 5) {
-        throw new Error(`Expected visibleProductionAgentCount to be 5, got: ${dataApproved.visibleProductionAgentCount}`);
+      if (dataApproved.visibleProductionAgentCount !== 6) {
+        throw new Error(`Expected visibleProductionAgentCount to be 6, got: ${dataApproved.visibleProductionAgentCount}`);
       }
 
       // Assert warnings

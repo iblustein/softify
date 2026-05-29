@@ -172,6 +172,25 @@ export const AGENT_CATALOG = [
     purpose: "Help merchants understand approval queues, execution blocks, and retry steps.",
     allowedFields: [],
     version: "1.0.0"
+  },
+  {
+    agentId: "theme_editor_ai_agent",
+    name: "Theme Editor AI Agent",
+    description: "Shopify theme, Liquid, and JavaScript expert. Helps merchants edit and improve their storefront themes safely.",
+    category: "Theme Customization",
+    riskLevel: "High" as const,
+    executionMode: "APPROVAL_REQUIRED" as const,
+    supportedCapabilities: ["Theme editing", "Liquid parsing", "Layout adjustments", "Safety backups"],
+    requiredPermissions: ["read_themes", "write_themes"],
+    canRecommend: true,
+    canDraft: true,
+    canProposeActions: true,
+    canExecuteActions: false,
+    enabledByDefault: true,
+    isLegacy: false,
+    purpose: "Help a Shopify merchant edit and improve their store theme.",
+    allowedFields: [],
+    version: "1.0.0"
   }
 ];
 

@@ -21,22 +21,24 @@ This document outlines the goals, requirements, and scope definitions for the ne
 ### Phase 10.18 — Merchant Onboarding UX & Read-Only Pilot Polish
 - **Goal**: Fixed readiness allowlist regressions, added Guided Onboarding Checklist step-by-step progress cards, mounted an explicit Trust & Safety Panel, polished empty analytics states, rebranded proposed change cards to use non-jargon fields, collapsed developer tools under warning tags, and verified all static release checks and smoke tests pass (32/32 smoke tests passed!).
 
+### Phase 11.0 — Simplified Merchant UI & Theme Editor AI Agent MVP
+- **Goal**: Pivot the product direction around the Theme Editor AI Agent MVP. Simplify sidebar navigation to Settings and active/enabled dynamic Your Team roster. Build interactive conversational Theme Editor Chat (defaulting to safe unpublished target themes, live theme confirmation gating, side-by-side diff previews, apply actions) and SaaS Settings React panels. Connect Express backend theme asset editing routes securely under `/api`. Confirmed 100% successful compiler builds, static release passes (58/58 tests), and dynamic local smoke checks (32/32 tests).
+
 ---
 
-## 2. Next Active Milestone: Phase 10.19 — Production Merchant Pilot Launch
+## 2. Next Active Milestone: Phase 11.1 — Theme Editor AI Agent Pilot Launch
 
 ### Goal
-Formally launch the live, read-only merchant pilot program, onboarding real Shopify store owners to explore catalog recommendations and gather critical operational and copy feedback.
+Formally launch the live pilot program specifically for the Theme Editor AI Agent MVP, onboarding pilot merchants to interactively plan and execute theme updates.
 
 ### Scope
-- **Controlled Onboarding Sequence**: Guide early merchants step-by-step through the newly polished onboarding checklist.
-- **Feedback Collection Mechanics**: Deploy the qualitative feedback loops and survey templates prepared in Phase 10.16.
-- **Pilot Telemetry & Analytics Monitoring**: Audit Firestore persistent log metrics to evaluate agent recommendations utility and merchant selection conversion ratios.
+- **Controlled Onboarding Sequence**: Guide pilot merchants step-by-step through the connection of their Shopify store, provisioning of theme scopes, and onboarding checklist.
+- **Feedback Collection Mechanics**: Gather feedback on conversational plan diffs clarity, warning checkbox gates utility, and overall editing experience.
+- **Durable Backup Rollback Validation**: Verify that the pre-write database backups in `theme_backups` perform smoothly and safely under pilot production settings.
 
 ---
 
 ## 3. Explicitly Deferred Agent Scopes (Out-of-Scope)
-- **Theme Agent**: (No storefront assets modifications).
 - **Pricing Agent**: (No price mutations).
 - **Inventory Agent**: (No inventory tracking).
 - **Customer Support Agent**: (No store customer chat/interactions).
@@ -49,7 +51,7 @@ Formally launch the live, read-only merchant pilot program, onboarding real Shop
 
 ### Notes
 - **Future backlog item only. Do not implement in the current MVP roadmap.**
-- Auto-optimization will be reconsidered **only after receiving real merchant pilot feedback** from Phase 10.13 and 10.14.
+- Auto-optimization will be reconsidered **only after receiving real merchant pilot feedback** from Phase 11.0.
 - The initial future version of auto-rules must be **proposal-only** (e.g. automatically proposing draft items matching rules for manual review), before any automatic approvals or automatic executions are introduced.
 - No auto-execution is permitted under the current MVP roadmap.
 
@@ -60,11 +62,10 @@ Formally launch the live, read-only merchant pilot program, onboarding real Shop
 During both upcoming phases, the following strict architectural constraints must be maintained:
 
 - **AI Statelessness**: AI engines/providers remain stateless recommendation engines. They **must never have direct access to write tools, token decryptors, or live Shopify APIs**.
-- **Execution Boundary**: All live Shopify storefront writes are strictly mediated through the authorized `ApprovedProductMutationExecutorService` and initiated via manual merchant clicks.
+- **Execution Boundary**: All live Shopify storefront writes are strictly mediated through the authorized backend services and initiated via manual merchant clicks.
 - **Unified Tool Gateway**: All tool calls are routed through the `Tool Gateway` SDK boundary, checking `allowedTools` permissions, tenant scopes, and recursively scrubbing internal credentials.
 - **Strict Data Containment**: No raw prompts, raw model reasoning/chain-of-thought, raw Shopify payloads, raw tool arguments, tokens, secrets, or PII can be exposed to frontend dashboards or logged audits.
-- **Theme Scopes Canned**: Theme asset mutations are completely disabled (`read_themes` and `write_themes` remain strictly unauthorized).
-- **Mutation Field Capping**: Storefront writes remain strictly restricted to text fields: `title`, `vendor`, `productType`, `status`, and `tags`.
+- **Theme Scopes Isolation**: Theme asset mutations are permitted strictly for the `theme_editor_ai_agent` context under the Safe Execution Boundary. No other agents may receive theme-reading or theme-writing tools. Unrelated write scopes (e.g. `write_products`, `write_customers`) remain strictly unauthorized and blocked.
 - **State-Only Recovery**: Recovery and reset endpoints `/api/approvals/:id/reset-failed` are strictly state-only and are forbidden from calling live Shopify APIs.
 
 ---

@@ -109,6 +109,24 @@ export const AGENT_APPROVAL_OPERATIONS: AgentDefinition = {
   updatedAt: "2026-05-27T12:00:00.000Z"
 };
 
+export const AGENT_THEME_EDITOR: AgentDefinition = {
+  id: "theme_editor_ai_agent",
+  name: "Theme Editor AI Agent",
+  description: "Shopify theme, Liquid, and JavaScript expert. Helps merchants edit and improve their storefront themes safely.",
+  systemInstruction: "You are the Theme Editor AI Agent. You are a world-class Shopify expert, Liquid expert, and JavaScript expert. You are highly familiar with Shopify theme structures, templates, assets, sections, snippets, and config settings. You analyze theme files and propose precise code edit plans to improve, optimize, or customize the merchant's store theme using only safe backend tools.",
+  allowedTools: [
+    "shopify.theme.themes",
+    "shopify.theme.assets",
+    "shopify.theme.assets.read",
+    "shopify.theme.assets.write"
+  ],
+  requiredScopes: ["read_themes", "write_themes"],
+  riskLevel: "High",
+  avatarColor: "bg-indigo-600 text-white",
+  createdAt: "2026-05-29T12:00:00.000Z",
+  updatedAt: "2026-05-29T12:00:00.000Z"
+};
+
 export function getAgentDefinition(agentId: string): AgentDefinition | undefined {
   switch (agentId) {
     case "agent_product_intelligence":
@@ -123,6 +141,8 @@ export function getAgentDefinition(agentId: string): AgentDefinition | undefined
       return AGENT_MERCHANDISING_INSIGHTS;
     case "agent_approval_operations":
       return AGENT_APPROVAL_OPERATIONS;
+    case "theme_editor_ai_agent":
+      return AGENT_THEME_EDITOR;
     default:
       return undefined;
   }
